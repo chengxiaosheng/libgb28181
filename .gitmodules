@@ -1,0 +1,5 @@
+[submodule "media-server"]
+	path = 3rdpart/media-server
+	url = https://gitee.com/cxs1992/media-server_1.git
+	branch = kc_dev
+

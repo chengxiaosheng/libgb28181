@@ -3,4 +3,6 @@ project(gb28181)
 
 set(CMAKE_CXX_STANDARD 17)
 
+add_subdirectory(3rdpart)
+
 add_executable(gb28181 main.cpp)

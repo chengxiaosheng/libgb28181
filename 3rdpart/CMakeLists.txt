@@ -1,3 +1,27 @@
+
+set(SDK_HEADER
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/cstring.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/darray.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/uuid.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/uri-parse.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/cpm/param.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/sys/atomic.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/sys/locker.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include/http-parser.h
+)
+set(SDK_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/source/http-parser.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/source/uri-parse.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/source/uuid.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/source/darray.c
+)
+add_library(ireader_sdk_lib STATIC ${SDK_HEADER} ${SDK_SRC})
+target_include_directories(ireader_sdk_lib PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include)
+if (WIN32)
+    target_compile_definitions(ireader_sdk_lib PUBLIC -DOS_WINDOWS)
+endif ()
+
+
 set(SIP_SRC
 
         ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/sip-agent.c
@@ -43,9 +67,15 @@ set(SIP_SRC
 )
 
 add_library(sip STATIC ${SIP_SRC})
+target_link_libraries(sip PUBLIC ireader_sdk_lib)
 target_include_directories(sip
-        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>
-        PRIVATE
-        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>
-        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src>
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include>
+    PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include>
 )

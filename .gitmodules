@@ -3,3 +3,7 @@
 	url = https://gitee.com/cxs1992/media-server_1.git
 	branch = kc_dev
 
+[submodule "ireader-sdk"]
+	path = 3rdpart/ireader-sdk
+	url = https://gitee.com/ireader/sdk.git
+	branch = master

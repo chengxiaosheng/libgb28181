@@ -1,0 +1,111 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Object files
+*.ko
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Shared objects (inc. Windows DLLs)
+*.so.*
+
+# Executables
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+.idea
+.vscode
+release
+
+# cmake
+MakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+cmake-*
+
+.DS_Store
+
+exoips2/Makefile
+exoips2/**/Makefile
+exoips2/**/**/Makefile
+exoips2/config.log
+exoips2/config.status
+exoips2/exosip-config.h
+exoips2/stamp-h1
+exosip2/**/*.o
+exosip2/**/*.lo
+
+osip2/Makefile
+osip2/**/Makefile
+osip2/**/**/Makefile
+osip2/config.log
+osip2/config.status
+osip2/exosip-config.h
+osip2/stamp-h1
+.deps/
+.libs/
+osip2/**/*.o
+osip2/**/*.lo
+
+.vs/
+.out/
+out/

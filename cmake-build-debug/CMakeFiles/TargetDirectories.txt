@@ -1,0 +1,3 @@
+D:/Document/Projects/commom/gb28181/cmake-build-debug/CMakeFiles/gb28181.dir
+D:/Document/Projects/commom/gb28181/cmake-build-debug/CMakeFiles/edit_cache.dir
+D:/Document/Projects/commom/gb28181/cmake-build-debug/CMakeFiles/rebuild_cache.dir

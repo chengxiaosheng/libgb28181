@@ -1,0 +1,5 @@
+ToolSet: 17.0 (local)@D:\Program Files\Microsoft Visual Studio\2022\Professional
+Ninja: 1.12.1@C:\Users\Kevin\AppData\Local\Programs\CLion Nova\bin\ninja\win\x64\ninja.exe
+Options: msvc.arch=amd64_x86
+
+Options:-DCMAKE_MAKE_PROGRAM=C:/Users/Kevin/AppData/Local/Programs/CLion Nova/bin/ninja/win/x64/ninja.exe

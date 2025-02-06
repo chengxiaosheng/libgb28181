@@ -1,21 +1,42 @@
+#include "gb28181/local_server.h"
 #include <iostream>
 
-// TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or click the <icon src="AllIcons.Actions.Execute"/> icon in
-// the gutter.
-int main() {
-    // TIP Press <shortcut actionId="RenameElement"/> when your caret is at the <b>lang</b> variable name to see how
-    // CLion can help you rename it.
-    auto lang = "C++";
-    std::cout << "Hello and welcome to " << lang << "!\n";
+#include <csignal>
+#include <thread>
 
-    for (int i = 1; i <= 5; i++) {
-        // TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon
-        // src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint for you, but you can always add more by pressing
-        // <shortcut actionId="ToggleLineBreakpoint"/>.
-        std::cout << "i = " << i << std::endl;
+// 全局变量，用于检测是否收到退出信号
+std::atomic<bool> is_running{true};
+// 信号处理函数
+void signal_handler(int signal) {
+    if (signal == SIGINT || signal == SIGTERM) {
+        std::cout << "\nSignal received, shutting down...\n";
+        is_running = false; // 设置退出标志
+    }
+}
+
+int main() {
+    gb28181::sip_account account;
+    {
+        account.platform_id = "65010100002000100001";
+        account.domain = "6501010000";
+        account.name = "test platform";
+        account.host = "::";
+        account.password = "123456";
+        account.port = 5060;
+    };
+    auto local_server = std::make_shared<gb28181::LocalServer>(account);
+    local_server->run();
+
+    // 捕获 SIGINT 和 SIGTERM 信号
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+
+    // 主线程保持运行直到收到退出信号
+    std::cout << "Press Ctrl+C to exit..." << std::endl;
+    while (is_running) {
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // 防止忙等
     }
 
+    std::cout << "Server stopped." << std::endl;
     return 0;
-    // TIP See CLion help at <a href="https://www.jetbrains.com/help/clion/">jetbrains.com/help/clion/</a>. Also, you
-    // can try interactive lessons for CLion by selecting 'Help | Learn IDE Features' from the main menu.
 }

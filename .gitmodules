@@ -7,3 +7,7 @@
 	path = 3rdpart/ireader-sdk
 	url = https://gitee.com/ireader/sdk.git
 	branch = master
+[submodule "tinyxml2"]
+	path = 3rdpart/tinyxml2
+	url = https://gitee.com/mirrors/tinyxml2.git
+	branch = master

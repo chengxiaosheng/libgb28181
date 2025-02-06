@@ -8,9 +8,11 @@ set(SDK_HEADER
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/sys/atomic.h
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include/sys/locker.h
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include/http-parser.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include/http-reason.h
 )
 set(SDK_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/source/http-parser.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/source/http-reason.c
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/source/uri-parse.c
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/source/uuid.c
         ${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/source/darray.c

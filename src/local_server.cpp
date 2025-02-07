@@ -3,6 +3,7 @@
 #include <Util/logger.h>
 #include <gb28181/subordinate_platform.h>
 #include <gb28181/super_platform.h>
+#include <handler/uas_register_handler.h>
 #include <inner/sip_server.h>
 #include <sip-timer.h>
 using namespace gb28181;
@@ -26,6 +27,7 @@ void LocalServer::run() {
         server_ = std::make_shared<SipServer>(this);
     }
     server_->start(account_.port, account_.host.empty() ? "::" : account_.host.c_str(), (SipServer::Protocol)transport_type_);
+    UasRegisterHandler::Init();
     InfoL << "local server " << account_.platform_id << " running";
 
 }
@@ -45,6 +47,34 @@ void LocalServer::shutdown() {
  LocalServer::~LocalServer() {
     shutdown();
 }
+
+void LocalServer::get_subordinate_platform(
+    const std::string &platform_id, const std::function<void(std::shared_ptr<SubordinatePlatform>)> &cb) {
+        {
+            std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+            if (auto it = sub_platforms_.find(platform_id); it != sub_platforms_.end()) {
+                return cb(it->second);
+            }
+        }
+    auto weak_this = weak_from_this();
+    if (find_sub_platform_callback_) {
+        find_sub_platform_callback_(platform_id, [weak_this, platform_id, cb](const std::shared_ptr<SubordinatePlatform>& platform) {
+            if (platform == nullptr) {
+                return cb(platform);
+            }
+            if (auto this_ptr = weak_this.lock()) {
+                std::unique_lock<decltype(platform_mutex_)> lock(this_ptr->platform_mutex_);
+                if (auto it = this_ptr->sub_platforms_.find(platform_id); it != this_ptr->sub_platforms_.end()) {
+                    return cb(it->second);
+                }
+                this_ptr->sub_platforms_.emplace(platform_id, platform);
+                return cb(platform);
+            }
+            return cb(nullptr);
+        });
+    } else return cb(nullptr);
+}
+
 
 
 

@@ -23,6 +23,7 @@ int main() {
         account.host = "::";
         account.password = "123456";
         account.port = 5060;
+        account.auth_type = gb28181::SipAuthType::digest;
     };
     auto local_server = std::make_shared<gb28181::LocalServer>(account);
     local_server->run();

@@ -12,6 +12,7 @@
 #include "sip_server.h"
 
 #include "../../3rdpart/media-server/libsip/src/uas/sip-uas-transaction.h"
+#include "sip_common.h"
 
 using namespace toolkit;
 
@@ -156,36 +157,59 @@ void SipServer::get_client(
     if (session_ptr == nullptr)                                                                                        \
         return sip_unknown_host;
 
+#define RefTransaction(t)                                                                                              \
+    sip_uas_transaction_addref(t);                                                                                     \
+    std::shared_ptr<sip_uas_transaction_t> trans_ref(                                                                  \
+        t, [](sip_uas_transaction_t *p) { sip_uas_transaction_release(p); });
+
+#define RefSipMessage(m)                                                                                               \
+    std::shared_ptr<sip_message_t> req_ptr(                                                                            \
+        const_cast<sip_message_t *>(req), [](sip_message_t *req) { sip_message_destroy(req); });
+
+bool isPeerAddressBound(int sock) {
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+    if (getpeername(sock, (struct sockaddr *)&addr, &addr_len) == -1) {
+        return false;
+    }
+    return true;
+}
+
 int SipServer::send(
     void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received,
     int rport, const void *data, int bytes) {
 
     GetSipSession(param);
+    auto buffer = BufferRaw::create();
+    buffer->assign((const char *)data, bytes);
 
+    TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
+    // 判断是否绑定了对端地址，如果绑定，则直接发送
+    if (isPeerAddressBound(session_ptr->getSock()->rawFD())) {
+        session_ptr->send(std::move(buffer));
+        return sip_ok;
+    }
     std::shared_ptr<uri_t> uri(uri_parse(peer->p, peer->n), uri_free);
     if (uri == nullptr)
         return sip_unknown_host;
-    std::string host = cstrvalid(received) ? received->p : uri->host;
+    std::string host = (received && cstrvalid(received)) ? std::string(received->p, received->n) : uri->host;
     uint16_t port = rport > 0 ? rport : (uri->port ? uri->port : SIP_PORT);
+
     auto proto = get_sip_protocol(protocol);
-    auto buffer = BufferRaw::create();
-    buffer->assign((const char *)data, bytes);
     if (isIP(host.c_str())) {
-        auto addr = SockUtil::make_sockaddr(
-            cstrvalid(received) ? received->p : uri->host, rport > 0 ? rport : (uri->port ? uri->port : SIP_PORT));
-        return send_data(session_ptr, std::move(buffer), proto, addr);
+        auto addr = SockUtil::make_sockaddr(host.c_str(), port);
+        session_ptr->getSock()->send(
+            std::move(buffer), (sockaddr *)(&addr), SockUtil::get_sock_len((sockaddr *)(&addr)));
+        return sip_ok;
     } else {
         auto poller = toolkit::EventPollerPool::Instance().getPoller();
         WorkThreadPool::Instance().getExecutor()->async(
             [host, port, buffer = std::move(buffer), proto, poller, session_ptr]() mutable {
                 struct sockaddr_storage addr {};
                 if (SockUtil::getDomainIP(host.c_str(), port, addr)) {
-                    send_data(session_ptr, std::move(buffer), proto, addr);
+                    session_ptr->getSock()->send(
+                        std::move(buffer), (sockaddr *)(&addr), SockUtil::get_sock_len((sockaddr *)(&addr)));
                 }
-                // todo:: 解析失败, 如何处理？
-                poller->async([buffer = std::move(buffer), proto, addr, session_ptr]() mutable {
-                    send_data(session_ptr, std::move(buffer), proto, addr);
-                });
             });
         return sip_ok;
     }
@@ -196,71 +220,102 @@ int SipServer::onregister(
     const char *location, int expires) {
 
     GetSipSession(param);
-    // 添加引用计数
-    sip_uas_transaction_addref(t);
-    std::shared_ptr<sip_uas_transaction_t> trans_ref(t, [](sip_uas_transaction_t *p) {
-        sip_uas_transaction_release(p); // 释放引用计数
-    });
+    RefTransaction(t);
+    RefSipMessage(req);
+
+    // 设置通用 header
+    set_message_header(t);
     std::string user_str(user), location_str(location);
-    if (NoticeCenter::Instance().emitEvent(kEventOnRegister, session_ptr, trans_ref, user_str, location_str, expires)
+    if (NoticeCenter::Instance().emitEvent(
+            kEventOnRegister, session_ptr, trans_ref, req_ptr, user_str, location_str, expires)
         == 0) {
-        return sip_undefined_error;
+        set_message_agent(trans_ref.get());
+        return sip_uas_reply(trans_ref.get(), 404, nullptr, 0, session_ptr.get());
     }
     return sip_ok;
 }
 int SipServer::oninvite(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_dialog_t *dialog,
     const void *data, int bytes, void **session) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onack(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, int code, const void *data, int bytes) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 
 int SipServer::onprack(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, const void *data, int bytes) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onupdate(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, const void *data, int bytes) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::oninfo(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, const struct cstring_t *package, const void *data, int bytes) {
-    return sip_undefined_error;
+    set_message_agent(t);
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onbye(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
-    return sip_undefined_error;
+    set_message_agent(t);
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::oncancel(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
-    return sip_undefined_error;
+    set_message_agent(t);
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onsubscribe(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_subscribe_t *subscribe,
     void **sub) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onnotify(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *sub,
     const struct cstring_t *event) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onpublish(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const struct cstring_t *event) {
-    return sip_undefined_error;
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    set_message_agent(t);
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onmessage(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session, const void *data,
     int bytes) {
-    return sip_undefined_error;
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    if (NoticeCenter::Instance().emitEvent(kEventOnRequest, session_ptr, trans_ref, req_ptr, session) == 0) {
+        set_message_agent(trans_ref.get());
+        return sip_uas_reply(trans_ref.get(), 404, nullptr, 0, session_ptr.get());
+    }
+    return sip_ok;
 }
 int SipServer::onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
-    return sip_undefined_error;
+    set_message_agent(t);
+    sip_message_destroy(const_cast<sip_message_t *>(req));
+    return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 
 } // namespace gb28181

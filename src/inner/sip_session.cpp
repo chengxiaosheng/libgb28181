@@ -1,6 +1,7 @@
 #include "sip_session.h"
 #include "http-parser.h"
 
+#include <gb28181/sip_common.h>
 #include <sip-agent.h>
 #include <sip-message.h>
 
@@ -139,7 +140,7 @@ std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_M
     }
     if (http_get_content_length(parser)) {
         ss << "\n";
-        ss << http_get_content(parser);
+        ss << std::string_view((char *)http_get_content(parser), http_get_content_length(parser));
     }
     return ss.str();
 }
@@ -162,8 +163,10 @@ void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
         ret = sip_message_load(request, _sip_parse.get());
         TraceP(this) << " recv: \n" << print_recv_message(_sip_parse.get(), (HTTP_PARSER_MODE)_wait_type);
         sip_agent_set_rport(request, get_peer_ip().c_str(), get_peer_port());
-        assert(0 == sip_agent_input(_sip_agent, request, this));
-        sip_message_destroy(request); // 释放sip_message_t
+        ret = sip_agent_input(_sip_agent, request, this);
+        if (ret != 0) {
+            WarnL << "input failed";
+        }
         _wait_type = 0;
     } else if (ret < 0) {
         _wait_type = 0;
@@ -172,9 +175,11 @@ void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
 }
 
 void SipSession::onError(const toolkit::SockException &err) {
-
+    if (_on_error) _on_error(err);
 }
-void SipSession::onManager() {}
+void SipSession::onManager() {
+    if (_on_manager) _on_manager();
+}
 
 } // namespace gb28181
 

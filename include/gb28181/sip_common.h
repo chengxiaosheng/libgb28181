@@ -9,6 +9,7 @@ enum SipError : int {
     sip_wrong_state = -3, // 状态~？
     sip_syntax_error = -5, // 语法错误
     sip_not_found = -6, // 未找到
+    sip_not_implemented = -7, // 为实现
     sip_no_network= -10, // 没有网络连接
     sip_port_busy = -11, // 端口被占用或忙碌
     sip_unknown_host = -12, // 未知的主机

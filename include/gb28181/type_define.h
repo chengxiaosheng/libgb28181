@@ -3,6 +3,10 @@
 #include "gb28181/sip_common.h"
 #include <string>
 
+#ifndef SIP_AGENT_STR
+#define SIP_AGENT_STR "GB/T 28181-2022"
+#endif
+
 namespace gb28181 {
 
 enum class SipAuthType : uint8_t {
@@ -29,6 +33,18 @@ enum class PlatformManufacturer : uint8_t {
 };
 
 /**
+ * GB/T 28181 标准标识
+ */
+enum class PlatformVersionType : uint8_t {
+    unknown = 0, // 未知
+    v10 = 10, // GB/T 28181-2011
+    v11 = 11, // GB/T 28181-2011 修改补充文件
+    v20 = 20, // GB/T 28181-2016
+    v30 = 30 // GB/T 28181-2022
+};
+
+
+/**
  * 平台状态
  */
 enum class PlatformStatusType : uint8_t {
@@ -40,10 +56,11 @@ enum class PlatformStatusType : uint8_t {
 };
 
 struct sip_account_status {
-    int64_t register_time { 0 }; // 注册时间
-    int64_t keepalive_time { 0 }; // 心跳时间
-    int64_t offline_time { 0 }; // 离线时间
+    uint64_t register_time { 0 }; // 注册时间
+    uint64_t keepalive_time { 0 }; // 心跳时间
+    uint64_t offline_time { 0 }; // 离线时间
     PlatformStatusType status { PlatformStatusType::offline }; // 平台状态
+    std::string error; // 错误信息
 };
 
 /**
@@ -56,13 +73,13 @@ struct sip_account {
     std::string host; // 平台地址
     std::string password; // 密码
     uint16_t port { 5060 }; // 平台端口
+    SipAuthType auth_type { SipAuthType::none }; // 认证方式
 };
 
 /**
  * 下级平台账户信息
  */
 struct subordinate_account : public sip_account {
-    SipAuthType auth_type { SipAuthType::none }; // 认证方式
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
@@ -73,7 +90,6 @@ struct subordinate_account : public sip_account {
  * 上级平台账户信息
  */
 struct super_account : public sip_account {
-    SipAuthType auth_type { SipAuthType::none }; // 认证方式
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型

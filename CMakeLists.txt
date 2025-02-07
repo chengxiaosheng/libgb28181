@@ -25,6 +25,14 @@ target_include_directories(${PROJECT_NAME}
 )
 add_subdirectory(3rdpart)
 target_link_libraries(${PROJECT_NAME} PRIVATE sip)
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DENABLE_OPENSSL)
+
+find_package(OpenSSL 1.1 REQUIRED)
+target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::SSL)
+target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::Crypto)
+
+find_package(Iconv REQUIRED)
+target_link_libraries(${PROJECT_NAME} PUBLIC Iconv::Iconv)
 
 if(TARGET ZLToolKit)
     target_link_libraries(${PROJECT_NAME} PUBLIC ZLToolKit)

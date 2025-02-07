@@ -29,6 +29,13 @@ public:
      return _sip_server.lock();
   }
 
+  inline void set_on_manager(std::function<void()> cb) {
+    _on_manager = std::move(cb);
+  }
+  inline void set_on_error(std::function<void(const toolkit::SockException &ex)> cb) {
+    _on_error = std::move(cb);
+  }
+
 protected:
   void onSockConnect(const toolkit::SockException &ex);
 
@@ -43,14 +50,12 @@ private:
   std::weak_ptr<SipServer> _sip_server;
   std::shared_ptr<toolkit::Timer> _timer;
   friend class SipServer;
+
+  std::function<void()> _on_manager;
+  std::function<void(const toolkit::SockException &)> _on_error;
 };
 
 }
-
-
-class sip_session {
-
-};
 
 
 

@@ -6,8 +6,8 @@
 namespace gb28181 {
 class UasRegisterHandler {
 public:
-    static UasRegisterHandler &Instance();
-    ~UasRegisterHandler();
+    UasRegisterHandler() = default;
+    ~UasRegisterHandler() = default;
 
     static void Init();
 

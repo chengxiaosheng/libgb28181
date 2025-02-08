@@ -4,8 +4,12 @@
 namespace gb28181 {
 class UasMessageHandler {
 public:
+  static UasMessageHandler &Instance();
+  ~UasMessageHandler();
+
 
 private:
+  UasMessageHandler();
 };
 }
 

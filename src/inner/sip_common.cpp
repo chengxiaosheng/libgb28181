@@ -6,6 +6,8 @@
 
 #include "sip-message.h"
 #include "sip_common.h"
+
+#include <algorithm>
 #include <sip-uac.h>
 #include <sip-uas.h>
 
@@ -14,6 +16,19 @@
 #include <Util/util.h>
 
 namespace gb28181 {
+
+bool CaseInsensitiveCompare::operator()(const char *s1, const char *s2) const {
+    std::string a(s1);
+    std::string b(s2);
+    std::transform(a.begin(), a.end(), b.begin(), ::tolower);
+    std::transform(b.begin(), b.end(), a.begin(), ::tolower);
+    return a == b;
+}
+bool CaseInsensitiveCompare::operator()(const std::string &s1, const std::string &s2) const {
+
+}
+
+
 
 void set_message_agent(struct sip_uac_transaction_t* transaction) {
     sip_uac_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);

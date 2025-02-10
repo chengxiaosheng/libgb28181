@@ -18,6 +18,7 @@ struct sip_dialog_t;
 #endif
 
 namespace gb28181 {
+class SubordinatePlatformImpl;
 struct sip_agent_param;
 class SipSession;
 class SipServer;
@@ -26,22 +27,24 @@ struct sip_agent_param {
     std::shared_ptr<SipServer> server_ptr;
 };
 
-class SipServer : public std::enable_shared_from_this<SipServer> {
+class SipServer final: public LocalServer, public std::enable_shared_from_this<SipServer> {
 public:
     using Ptr = std::shared_ptr<SipServer>;
     using onRecv = std::function<void(const toolkit::Buffer::Ptr &buf)>;
-    enum Protocol { UDP = 1, TCP = 2, Both = 3 };
 
-    SipServer(LocalServer *local_server);
-    ~SipServer();
+    SipServer(local_account account);
+    ~SipServer() override;
 
-    void start(uint16_t local_port, const char *local_ip = "::", Protocol protocol = Protocol::Both);
-    void shutdown();
+    void run() override;
+    void shutdown() override;
+    const sip_account &get_account() const override { return account_; }
+    void set_passwd(const std::string &passwd) override { account_.password = passwd; }
+    void set_name(const std::string &name) override { account_.name = name; }
+    void set_platform_id(const std::string &id) override { account_.platform_id = id; }
+    void set_allow_auto_register(bool allow_auto_register) override { account_.allow_auto_register = allow_auto_register; }
+    bool allow_auto_register() const override { return account_.allow_auto_register; }
+    void reload_account(sip_account account) override;
 
-    /**
-     * 获取本地端口
-     */
-    uint16_t getPort();
 
     /**
      * 获取一个客户端连接
@@ -54,18 +57,24 @@ public:
      * 在udp下，此处复用了udp监听的sock，理论上是可行的
      */
     void get_client(
-        Protocol protocol, const std::string &host, uint16_t port,
+        TransportType protocol, const std::string &host, uint16_t port,
         const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> &cb);
 
     inline std::shared_ptr<sip_agent_t> get_sip_agent() const { return sip_; }
 
-    inline LocalServer* get_server() const {
-        return local_server_;
-    }
+    std::shared_ptr<SubordinatePlatform> get_subordinate_platform(const std::string &platform_id) override;
+    std::shared_ptr<SuperPlatform> get_super_platform(const std::string &platform_id) override;
+    void add_subordinate_platform(subordinate_account &&account) override;
+    void add_super_platform(super_account &&account) override;
+
+    void set_new_subordinate_account_callback(subordinate_account_callback cb) override { new_subordinate_account_callback_ = std::move(cb); }
+    void new_subordinate_account(const std::shared_ptr<subordinate_account> &account, std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb);
+
+
 
 private:
     static int send_data(
-        const std::shared_ptr<SipSession> &session_ptr, toolkit::Buffer::Ptr data, Protocol protocol,
+        const std::shared_ptr<SipSession> &session_ptr, toolkit::Buffer::Ptr data, TransportType protocol,
         sockaddr_storage &addr);
     void init_agent();
 
@@ -105,15 +114,19 @@ private:
     static int onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session);
 
 private:
-    Protocol protocol_ { Protocol::Both };
+    std::string local_ip_{"::"};
+    local_account account_; // 本地账户信息
     std::atomic_bool running_ { false };
-    std::string local_ip_;
     toolkit::UdpServer::Ptr udp_server_ { nullptr };
     toolkit::TcpServer::Ptr tcp_server_ { nullptr };
     std::shared_ptr<sip_uas_handler_t> handler_ { nullptr };
     std::shared_ptr<sip_agent_t> sip_ { nullptr };
     std::unordered_map<toolkit::EventPoller *, std::weak_ptr<toolkit::Socket>> udp_sockets_;
-    LocalServer* local_server_ { nullptr };
+
+    std::unordered_map<std::string, std::shared_ptr<SuperPlatform>> super_platforms_; // 上级平台
+    std::unordered_map<std::string, std::shared_ptr<SubordinatePlatformImpl>> sub_platforms_; // 下级平台
+    std::shared_mutex platform_mutex_;
+    subordinate_account_callback new_subordinate_account_callback_; // 查找下级平台?
     friend class SipSession;
 };
 } // namespace gb28181

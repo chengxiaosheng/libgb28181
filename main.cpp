@@ -15,7 +15,7 @@ void signal_handler(int signal) {
 }
 
 int main() {
-    gb28181::sip_account account;
+    gb28181::local_account account;
     {
         account.platform_id = "65010100002000100001";
         account.domain = "6501010000";
@@ -24,8 +24,12 @@ int main() {
         account.password = "123456";
         account.port = 5060;
         account.auth_type = gb28181::SipAuthType::digest;
+        account.allow_auto_register = true;
     };
-    auto local_server = std::make_shared<gb28181::LocalServer>(account);
+    auto local_server = gb28181::LocalServer::new_local_server(account);
+    local_server->set_new_subordinate_account_callback([](std::shared_ptr<gb28181::LocalServer> server, std::shared_ptr<gb28181::subordinate_account> account, std::function<void(bool)> allow_cb) {
+        allow_cb(true);
+    });
     local_server->run();
 
     // 捕获 SIGINT 和 SIGTERM 信号

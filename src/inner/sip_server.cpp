@@ -1,6 +1,7 @@
 #include "gb28181/sip_common.h"
 #include "sip-agent.h"
 #include "sip-transport.h"
+#include "subordinate_platform_impl.h"
 #include "uri-parse.h"
 #include <Thread/WorkThreadPool.h>
 #include <Util/NoticeCenter.h>
@@ -11,31 +12,37 @@
 #include "inner/sip_session.h"
 #include "sip_server.h"
 
-#include "../../3rdpart/media-server/libsip/src/uas/sip-uas-transaction.h"
 #include "sip_common.h"
+
+#include <gb28181/super_platform.h>
+#include <handler/uas_message_handler.h>
+#include <sip-message.h>
 
 using namespace toolkit;
 
 namespace gb28181 {
 
-static SipServer::Protocol get_sip_protocol(const struct cstring_t *protocol) {
+static TransportType get_sip_protocol(const struct cstring_t *protocol) {
     if (!protocol)
-        return SipServer::Protocol::UDP;
+        return TransportType::udp;
     if (strcasestr(protocol->p, "udp"))
-        return SipServer::Protocol::UDP;
+        return TransportType::udp;
     if (strcasestr(protocol->p, "tcp"))
-        return SipServer::Protocol::TCP;
-    return SipServer::Protocol::UDP;
+        return TransportType::tcp;
+    return TransportType::udp;
 }
 
-SipServer::SipServer(LocalServer *local_server)
-    : handler_(std::make_shared<sip_uas_handler_t>())
-    , local_server_(local_server)
+SipServer::SipServer(local_account account)
+    : LocalServer()
+    , account_(std::move(account))
+    , handler_(std::make_shared<sip_uas_handler_t>())
 
 {
+    if (!account_.host.empty()) {
+        local_ip_ = account_.host;
+    }
     init_agent();
 }
-
 void SipServer::init_agent() {
     handler_->send = send;
     handler_->onregister = onregister;
@@ -55,17 +62,75 @@ void SipServer::init_agent() {
     sip_ = std::shared_ptr<sip_agent_t>(
         sip_agent_create(handler_.get()), [](sip_agent_t *agent) { sip_agent_destroy(agent); });
 }
+std::shared_ptr<LocalServer> LocalServer::new_local_server(local_account account) {
+    return std::make_shared<SipServer>(std::move(account));
+}
+
+
+std::shared_ptr<SubordinatePlatform> SipServer::get_subordinate_platform(const std::string &platform_id) {
+    std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+    if (auto it = sub_platforms_.find(platform_id); it != sub_platforms_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+std::shared_ptr<SuperPlatform> SipServer::get_super_platform(const std::string &platform_id) {
+    std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+    if (auto it = super_platforms_.find(platform_id); it != super_platforms_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+void SipServer::add_subordinate_platform(subordinate_account &&account) {
+    std::string platform_id = account.platform_id;
+    std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+    auto platform = std::make_shared<SubordinatePlatformImpl>(std::move(account));
+    sub_platforms_[platform_id] = platform;
+}
+void SipServer::add_super_platform(super_account &&account) {
+    std::string platform_id = account.platform_id;
+    std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+    auto platform = std::make_shared<SuperPlatform>();
+    super_platforms_[platform_id] = platform;
+}
+void SipServer::reload_account(sip_account account) {
+
+}
+
+void SipServer::new_subordinate_account(
+    const std::shared_ptr<subordinate_account> &account, std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb) {
+    if (new_subordinate_account_callback_) {
+        auto weak_this = weak_from_this();
+        new_subordinate_account_callback_(shared_from_this(), account, [weak_this, account, allow_cb](bool allow) {
+            if (!allow) return allow_cb(nullptr);
+            if (auto this_ptr = weak_this.lock()) {
+                if (auto platform = this_ptr->get_subordinate_platform(account->platform_id)) {
+                    return allow_cb(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform));
+                }
+                std::shared_ptr<SubordinatePlatformImpl> platform = std::make_shared<SubordinatePlatformImpl>(*account);;
+                {
+                    std::unique_lock<decltype(platform_mutex_)> lock(this_ptr->platform_mutex_);
+                    this_ptr->sub_platforms_[account->platform_id] = platform;
+                }
+                return allow_cb(platform);
+            }
+            return allow_cb(nullptr);
+        });
+    } else {
+        allow_cb(nullptr);
+    }
+}
 
 int SipServer::send_data(
-    const std::shared_ptr<SipSession> &session_ptr, toolkit::Buffer::Ptr data, Protocol protocol,
+    const std::shared_ptr<SipSession> &session_ptr, toolkit::Buffer::Ptr data, TransportType protocol,
     sockaddr_storage &addr) {
     if (!session_ptr)
         return sip_unknown_host;
-    if (session_ptr->is_udp() && protocol == SipServer::Protocol::UDP) {
+    if (session_ptr->is_udp() && protocol == TransportType::udp) {
         // udp 需要指定目标地址
         session_ptr->getSock()->send(std::move(data), (sockaddr *)&addr);
         return sip_ok;
-    } else if (!session_ptr->is_udp() && protocol == SipServer::Protocol::TCP) {
+    } else if (!session_ptr->is_udp() && protocol == TransportType::tcp) {
         session_ptr->send(std::move(data));
         return sip_ok;
     }
@@ -74,15 +139,14 @@ int SipServer::send_data(
 
 SipServer::~SipServer() = default;
 
-void SipServer::start(uint16_t local_port, const char *local_ip, Protocol protocol) {
+void SipServer::run() {
     if (running_.exchange(true)) {
         WarnL << "Server already started";
         return;
     }
-    local_ip_ = local_ip;
     auto poller = EventPollerPool::Instance().getPoller();
     auto weak_this = weak_from_this();
-    if (protocol & Protocol::UDP) {
+    if (account_.transport_type == TransportType::both || account_.transport_type == TransportType::udp) {
         udp_server_ = std::make_shared<UdpServer>();
         udp_server_->setOnCreateSocket(
             [weak_this](const EventPoller::Ptr &poller, const Buffer::Ptr &buf, struct sockaddr *addr, int addr_len) {
@@ -92,16 +156,17 @@ void SipServer::start(uint16_t local_port, const char *local_ip, Protocol protoc
                 }
                 return socket;
             });
-        udp_server_->start<SipSession>(local_port, local_ip, [weak_this](const std::shared_ptr<SipSession> &session) {
-            session->_sip_server = weak_this;
-            session->_sip_agent = weak_this.lock()->sip_.get();
-        });
+        udp_server_->start<SipSession>(
+            account_.port, local_ip_, [weak_this](const std::shared_ptr<SipSession> &session) {
+                session->_sip_server = weak_this;
+                session->_sip_agent = weak_this.lock()->sip_.get();
+            });
         udp_server_->setOnCreateSocket({});
     }
-    if (protocol & Protocol::TCP) {
+    if (account_.transport_type == TransportType::both || account_.transport_type == TransportType::tcp) {
         tcp_server_ = std::make_shared<TcpServer>();
         tcp_server_->start<SipSession>(
-            local_port, local_ip, 1024, [weak_this](const std::shared_ptr<SipSession> &session) {
+            account_.port, local_ip_, 1024, [weak_this](const std::shared_ptr<SipSession> &session) {
                 session->_sip_server = weak_this;
                 session->_sip_agent = weak_this.lock()->sip_.get();
             });
@@ -113,20 +178,11 @@ void SipServer::shutdown() {
     tcp_server_.reset();
 }
 
-uint16_t SipServer::getPort() {
-    if (udp_server_) {
-        return udp_server_->getPort();
-    } else if (tcp_server_) {
-        return tcp_server_->getPort();
-    }
-    return 0;
-}
-
 void SipServer::get_client(
-    Protocol protocol, const std::string &host, uint16_t port,
+    TransportType protocol, const std::string &host, uint16_t port,
     const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> &cb) {
     auto poller = EventPollerPool::Instance().getPoller();
-    if (protocol == UDP && udp_server_) {
+    if (protocol == TransportType::udp && udp_server_) {
         auto sock_ptr = udp_sockets_[poller.get()].lock();
         if (!sock_ptr) {
             sock_ptr->bindUdpSock(udp_server_->getPort(), local_ip_);
@@ -136,7 +192,7 @@ void SipServer::get_client(
         session->_sip_agent = sip_.get();
         // udp下，只是作为发送，不需要绑定数据接收逻辑~
         cb({}, session);
-    } else if (protocol == TCP && tcp_server_) {
+    } else if (protocol == TransportType::tcp && tcp_server_) {
         auto sock_ptr = Socket::createSocket(poller, false);
         auto session = std::make_shared<SipSession>(sock_ptr);
         session->_sip_server = weak_from_this();
@@ -226,13 +282,7 @@ int SipServer::onregister(
     // 设置通用 header
     set_message_header(t);
     std::string user_str(user), location_str(location);
-    if (NoticeCenter::Instance().emitEvent(
-            kEventOnRegister, session_ptr, trans_ref, req_ptr, user_str, location_str, expires)
-        == 0) {
-        set_message_agent(trans_ref.get());
-        return sip_uas_reply(trans_ref.get(), 404, nullptr, 0, session_ptr.get());
-    }
-    return sip_ok;
+    return on_uas_register(session_ptr, trans_ref, req_ptr, user_str, location_str, expires);
 }
 int SipServer::oninvite(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_dialog_t *dialog,
@@ -306,11 +356,9 @@ int SipServer::onmessage(
     GetSipSession(param);
     RefTransaction(t);
     RefSipMessage(req);
-    if (NoticeCenter::Instance().emitEvent(kEventOnRequest, session_ptr, trans_ref, req_ptr, session) == 0) {
-        set_message_agent(trans_ref.get());
-        return sip_uas_reply(trans_ref.get(), 404, nullptr, 0, session_ptr.get());
-    }
-    return sip_ok;
+    // 设置通用 header
+    set_message_header(t);
+    return on_uas_message(session_ptr, trans_ref, req_ptr, session);
 }
 int SipServer::onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
     set_message_agent(t);

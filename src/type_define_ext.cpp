@@ -8,6 +8,27 @@
 #include <algorithm>
 
 namespace gb28181 {
+
+std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type) {
+#define EXPAND_XX(type, name, value, str) case gb28181::MessageCmdType::name:  os << str; break;
+    switch (type) {
+        GB28181_XML_CMD_MAP(EXPAND_XX)
+#undef EXPAND_XX
+        default: os << "Unknown"; break;
+    }
+    return os;
+}
+std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type) {
+#define EXPAND_XX(type, name, value, str) case gb28181::MessageRootType::name:  os << str; break;
+    switch (type) {
+        GB28181_XML_ROOT_MAP(EXPAND_XX)
+#undef EXPAND_XX
+        default: os << "Unknown"; break;
+    }
+    return os;
+}
+
+
 #define EXPAND_XX(type, name, value, str)                                                                              \
     case type::name: return str;
 #define GET_ENUM_TYPE_STR(map)                                                                                         \
@@ -266,17 +287,34 @@ void new_xml_element(ItemEventType val, tinyxml2::XMLElement *root, const char *
 void new_xml_element(TargetTraceType val, tinyxml2::XMLElement *root, const char *key) {
     MAKE_ENUM_XML_ELE(TargetTraceType, TargetTraceTypeMap)
 }
+void new_xml_element(DutyStatusType val, tinyxml2::XMLElement *root, const char *key) {
+    MAKE_ENUM_XML_ELE(DutyStatusType, DutyStatusTypeMap)
+}
 #undef MAKE_ENUM_XML_ELE
 #undef GET_ENUM_NAME
 #undef EXPEND_ENUM_XX_NAME
 
 void new_xml_element(const DeviceIdArr& val, tinyxml2::XMLElement *root, const char *key) {
-    if (val.DeviceId.empty() || root == nullptr || key == nullptr || key[0] == '\0') return;
+    if (val.DeviceID.empty() || root == nullptr || key == nullptr || key[0] == '\0') return;
     auto ele = root->InsertNewChildElement(key);
-    for (auto &it : val.DeviceId) {
-        auto sub_ele = ele->InsertNewChildElement("DeviceId");
+    for (auto &it : val.DeviceID) {
+        auto sub_ele = ele->InsertNewChildElement("DeviceID");
         sub_ele->SetText(it.c_str());
     }
+}
+void new_xml_element(const DeviceStatusAlarmStatusItem& val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0') return;
+    auto ele = root->InsertNewChildElement("key");
+    new_xml_element(val.DeviceID, ele, "DeviceID");
+    new_xml_element(val.DutyStatus, ele, "DutyStatus");
+}
+void new_xml_element(const DeviceStatusAlarmStatus& val, tinyxml2::XMLElement *root, const char *key) {
+    if (val.Item.empty() || root == nullptr || key == nullptr || key[0] == '\0') return;
+    auto ele = root->InsertNewChildElement(key);
+    for (auto &it : val.Item) {
+        new_xml_element(it, ele, "Item");
+    }
+    ele->SetAttribute("Num", val.Item.size());
 }
 
 #define MAKE_NEW_XML_ELE                                                                                               \
@@ -438,6 +476,10 @@ MAKE_GET_ENUM_TYPE_FUNC(TargetTraceType, TargetTraceTypeMap);
 bool from_xml_element(TargetTraceType &val, const tinyxml2::XMLElement *root, const char *key) {
     FROM_ENUM_XML_ELE(TargetTraceType);
 }
+MAKE_GET_ENUM_TYPE_FUNC(DutyStatusType, DutyStatusTypeMap);
+bool from_xml_element(DutyStatusType &val, const tinyxml2::XMLElement *root, const char *key) {
+    FROM_ENUM_XML_ELE(DutyStatusType);
+}
 #undef MAKE_GET_ENUM_TYPE_FUNC
 #undef FROM_ENUM_XML_ELE
 
@@ -445,12 +487,29 @@ bool from_xml_element(DeviceIdArr &val, const tinyxml2::XMLElement *root, const 
     if (!key || key[0] == '\0' || root == nullptr)
         return false;
     if (auto ele = root->FirstChildElement(key)) {
-        auto sub_ele = ele->FirstChildElement("DeviceId");
+        auto sub_ele = ele->FirstChildElement("DeviceID");
         while (sub_ele && sub_ele->GetText()) {
-            val.DeviceId.emplace_back(sub_ele->GetText());
-            sub_ele = sub_ele->NextSiblingElement("DeviceId");
+            val.DeviceID.emplace_back(sub_ele->GetText());
+            sub_ele = sub_ele->NextSiblingElement("DeviceID");
         }
-        return !val.DeviceId.empty();
+        return !val.DeviceID.empty();
+    }
+    return false;
+}
+
+bool from_xml_element(DeviceStatusAlarmStatus& val, const tinyxml2::XMLElement *root, const char *key) {
+    if (!key || key[0] == '\0' || root == nullptr) return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        auto sub_ele = ele->FirstChildElement("Item");
+        while (sub_ele) {
+            DeviceStatusAlarmStatusItem item;
+            if (from_xml_element(item.DeviceID, sub_ele, "DeviceID") && from_xml_element(item.DutyStatus, sub_ele, "DutyStatus")) {
+                val.Item.emplace_back(std::move(item));
+            }
+            sub_ele = sub_ele->NextSiblingElement("Item");
+        }
+        val.Num = val.Item.size();
+        return true;
     }
     return false;
 }

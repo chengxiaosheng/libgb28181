@@ -26,11 +26,13 @@ public:
      * @return
      */
     inline CharEncodingType encoding() const { return encoding_; }
+    void encoding(CharEncodingType encoding) { encoding_ = encoding; }
     /**
      * GB/T 28181 SN
      * @return
      */
     inline int sn() const { return sn_; }
+    void sn(int sn) {sn_ = sn; }
     /**
      * 设备/平台编码
      * @return

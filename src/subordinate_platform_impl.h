@@ -2,9 +2,25 @@
 #define gb28181_src_SUBORDINATE_PLATFORM_IMPL_H
 #include "gb28181/subordinate_platform.h"
 #include "gb28181/type_define.h"
+
+#include <functional>
 #include <memory>
 
 #ifdef __cplusplus
+namespace gb28181 {
+class MessageBase;
+}
+namespace gb28181 {
+class DeviceStatusMessageResponse;
+}
+namespace gb28181 {
+class DeviceStatusMessageRequest;
+class DeviceInfoMessageResponse;
+class DeviceInfoMessageRequest;
+}
+namespace gb28181 {
+class KeepaliveMessageRequest;
+}
 extern "C" {
   struct timeval;
 }
@@ -35,6 +51,11 @@ public:
 
   void set_status(PlatformStatusType status, std::string error);
 
+public:
+  int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
+  void on_device_info(std::shared_ptr<DeviceInfoMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
+  void on_device_status(std::shared_ptr<DeviceStatusMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
+
 private:
   subordinate_account account_; // 账户信息
   // 连接信息 0 udp 1 tcp
@@ -43,6 +64,8 @@ private:
   std::shared_ptr<toolkit::Timer> keepalive_timer_;
   // local_server
   std::weak_ptr<LocalServer> local_server_weak_;
+
+  std::function<void(std::shared_ptr<SubordinatePlatform>, std::shared_ptr<KeepaliveMessageRequest>)> on_keep_alive_callback_;
 
 };
 

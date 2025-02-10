@@ -78,6 +78,11 @@ struct sip_account {
     SipAuthType auth_type { SipAuthType::none }; // 认证方式
 };
 
+struct local_account : public sip_account {
+    bool allow_auto_register { false }; // 是否允许自动注册
+    TransportType transport_type { TransportType::both }; // 监听的网络
+};
+
 /**
  * 下级平台账户信息
  */
@@ -161,12 +166,34 @@ enum class MessageCmdType : uint8_t {
     XX(SubscribeType, MobilePosition, 3, "MobilePosition")                                                             \
     XX(SubscribeType, PTZPosition, 4, "PTZPosition")
 
+#define DeviceControlSubCommandTypeMap(XX)                                                                             \
+    XX(ControlSubCommandType, PTZCmd, 1, "PTZCmd")                                                                     \
+    XX(ControlSubCommandType, TeleBoot, 1, "TeleBoot")                                                                 \
+    XX(ControlSubCommandType, RecordCmd, 1, "RecordCmd")                                                               \
+    XX(ControlSubCommandType, GuardCmd, 1, "GuardCmd")                                                                 \
+    XX(ControlSubCommandType, AlarmCmd, 1, "AlarmCmd")                                                                 \
+    XX(ControlSubCommandType, IFrameCmd, 1, "IFrameCmd")                                                               \
+    XX(ControlSubCommandType, DragZoomIn, 1, "DragZoomIn")                                                             \
+    XX(ControlSubCommandType, DragZoomOut, 1, "DragZoomOut")                                                           \
+    XX(ControlSubCommandType, HomePosition, 1, "HomePosition")                                                         \
+    XX(ControlSubCommandType, PTZPreciseCtrl, 1, "PTZPreciseCtrl")                                                     \
+    XX(ControlSubCommandType, DeviceUpgrade, 1, "DeviceUpgrade")                                                       \
+    XX(ControlSubCommandType, FormatSDCard, 1, "FormatSDCard")                                                         \
+    XX(ControlSubCommandType, TargetTrack, 1, "TargetTrack")
+
+enum class DeviceControlSubCommandType : uint8_t {
+    invalid = 0,
+#define XX(type, name, value, str) name = value,
+    GB28181_XML_CMD_MAP(XX)
+#undef XX
+};
+
 /**
  * 订阅类型枚举
  */
 enum class SubscribeType : uint8_t {
     invalid = 0,
-#define XX(type, name, value) name = value,
+#define XX(type, name, value, str) name = value,
     SubscribeTypeMap(XX)
 #undef XX
 };
@@ -319,8 +346,32 @@ enum class TargetTraceType : uint8_t {
 #undef XX
 };
 
+#define DutyStatusTypeMap(XX)                                                                                          \
+    XX(DutyStatusType, ONDUTY, 1, "ONDUTY")                                                                            \
+    XX(DutyStatusType, OFFDUTY, 2, "OFFDUTY")                                                                          \
+    XX(DutyStatusType, ALARM, 3, "ALARM")
+enum class DutyStatusType : uint8_t {
+    invalid = 0,
+#define XX(type, name, value, str) name = value,
+    DutyStatusTypeMap(XX)
+#undef XX
+};
+
 struct DeviceIdArr {
-    std::vector<std::string> DeviceId;
+    std::vector<std::string> DeviceID;
+};
+
+// 报警设备列表项
+struct DeviceStatusAlarmStatusItem {
+    // 报警设备编码
+    std::string DeviceID;
+    // 设备报警状态
+    DutyStatusType DutyStatus { DutyStatusType::invalid };
+};
+// 报警设备状态
+struct DeviceStatusAlarmStatus {
+    std::vector<DeviceStatusAlarmStatusItem> Item;
+    int32_t Num { 0 };
 };
 
 /**
@@ -579,7 +630,7 @@ private:
     }
 
 private:
-    mutable uint8_t _command[] { 0xA5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    mutable uint8_t _command[8] { 0xA5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t _value1 { 0 };
     uint8_t _value3 { 0 };
     uint16_t _value2 { 0 };
@@ -775,7 +826,7 @@ struct RegionListItem {
     // 区域左上角、右下角坐标(lx,ly,rx,ry,单位像素)，格式如“20，30,50,60"(必选)
     PointType Point {};
 };
-struct GB28181_EXPORT RegionListInfo {
+struct RegionListInfo {
     // 当前区域个数，当无区域时取值为 0(必选)
     int Num {};
     // 区域(必选)

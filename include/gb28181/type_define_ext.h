@@ -7,7 +7,12 @@ namespace tinyxml2 {
 class XMLElement;
 }
 
+
+
 namespace gb28181 {
+
+std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type);
+std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type);
 
 CharEncodingType getCharEncodingType(const char *decl);
 MessageRootType getRootType(const char *val);
@@ -42,8 +47,14 @@ void new_xml_element(GuardType val, tinyxml2::XMLElement *root, const char *key)
 void new_xml_element(StatusType val, tinyxml2::XMLElement *root, const char *key);
 void new_xml_element(ItemEventType val, tinyxml2::XMLElement *root, const char *key);
 void new_xml_element(TargetTraceType val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(DutyStatusType val, tinyxml2::XMLElement *root, const char *key);
+
 
 void new_xml_element(const DeviceIdArr& val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const DeviceStatusAlarmStatusItem& val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const DeviceStatusAlarmStatus& val, tinyxml2::XMLElement *root, const char *key);
+
+
 
 
 void new_xml_element(std::optional<int8_t> val, tinyxml2::XMLElement *root, const char *key);
@@ -80,8 +91,10 @@ bool from_xml_element(GuardType &val, const tinyxml2::XMLElement *root, const ch
 bool from_xml_element(StatusType &val, const tinyxml2::XMLElement *root, const char *key);
 bool from_xml_element(ItemEventType &val, const tinyxml2::XMLElement *root, const char *key);
 bool from_xml_element(TargetTraceType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(DutyStatusType &val, const tinyxml2::XMLElement *root, const char *key);
 
 bool from_xml_element(DeviceIdArr &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(DeviceStatusAlarmStatus& val, const tinyxml2::XMLElement *root, const char *key);
 
 
 bool from_xml_element(std::optional<int8_t> &val, const tinyxml2::XMLElement *root, const char *key);

@@ -20,6 +20,17 @@ enum SipError : int {
     sip_ok = 0, // 无错误
 };
 
+namespace Broadcast {
+constexpr const char kEventSubKeepalive[] = "kEventSubKeepalive";
+#define kEventSubKeepaliveArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<KeepaliveMessageRequest> message
+constexpr const char kEventOnDeviceInfoRequest[] = "kEventOnDeviceInfoRequest";
+#define kEventOnDeviceInfoRequestArgs std::shared_ptr<SubordinatePlatform> platform,std::shared_ptr<DeviceInfoMessageRequest> message, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)> callback
+constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusRequest";
+#define kEventOnDeviceStatusRequestArgs std::shared_ptr<SubordinatePlatform> platform,std::shared_ptr<DeviceStatusMessageRequest> message, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> callback
+
+
+
+}
 
 }
 

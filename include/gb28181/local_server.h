@@ -18,45 +18,82 @@ class SuperPlatform;
 namespace gb28181 {
 class SipServer;
 
-class LocalServer : public std::enable_shared_from_this<LocalServer> {
+class LocalServer {
 public:
-    explicit LocalServer(sip_account account);
-    ~LocalServer();
+    using subordinate_account_callback = std::function<void(
+        std::shared_ptr<LocalServer> server, std::shared_ptr<subordinate_account> account,
+        std::function<void(bool)> allow_cb)>;
+    virtual ~LocalServer() = default;
 
-    void run();
-    void shutdown();
+    /**
+     * 创建一个本地监听服务
+     * @param account
+     * @return
+     */
+    static std::shared_ptr<LocalServer> new_local_server(local_account account);
+
+    /**
+     * 启动服务
+     */
+    virtual void run() = 0;
+    /**
+     * 关闭服务
+     */
+    virtual void shutdown() = 0;
 
     /**
      *
      * @return 获取账户信息
      */
-    inline const sip_account &get_account() const { return account_; }
+    virtual const sip_account &get_account() const = 0;
 
-    inline void set_passwd(const std::string &passwd) { account_.password = passwd; }
-    inline void set_name(const std::string &name) { account_.name = name; }
-    inline void set_platform_id(const std::string &id) { account_.platform_id = id; }
-    void reload_account(sip_account account);
+    virtual void set_passwd(const std::string &passwd) = 0;
+    virtual void set_name(const std::string &name) = 0;
+    virtual void set_platform_id(const std::string &id) = 0;
+    virtual void reload_account(sip_account account) = 0;
 
-    void get_subordinate_platform(const std::string &platform_id, const std::function<void(std::shared_ptr<SubordinatePlatform>)> &cb);
+    /**
+     * 获取指定下级平台
+     * @param platform_id
+     * @return
+     */
+    virtual std::shared_ptr<SubordinatePlatform> get_subordinate_platform(const std::string &platform_id) = 0;
+    /**
+     * 获取指定上级平台
+     * @param platform_id
+     * @return
+     */
+    virtual std::shared_ptr<SuperPlatform> get_super_platform(const std::string &platform_id) = 0;
 
-    inline bool allow_auto_register() const {
-        return allow_auto_register_;
-    }
-    inline void set_allow_auto_register(bool allow_auto_register) { allow_auto_register_ = allow_auto_register; }
+    /**
+     * 允许自动注册
+     * @return
+     */
+    virtual bool allow_auto_register() const = 0;
+    /**
+     * 允许自动注册
+     * @param allow_auto_register
+     */
+    virtual void set_allow_auto_register(bool allow_auto_register) = 0;
+    /**
+     * 添加下级平台
+     * @param account
+     */
+    virtual void add_subordinate_platform(subordinate_account &&account) = 0;
+    /**
+     * 添加上级平台
+     * @param account
+     */
+    virtual void add_super_platform(super_account &&account) = 0;
 
+    /**
+     * 设置平台自动注册回调
+     * @param cb
+     */
+    virtual void set_new_subordinate_account_callback(subordinate_account_callback cb) = 0;
 
-
-private:
-    sip_account account_;
-    std::atomic_bool running_; // 是否正在运行
-    bool allow_auto_register_{true};
-    TransportType transport_type_{TransportType::both};
-    std::shared_ptr<SipServer> server_; // sip服务
-    std::unordered_map<std::string, std::shared_ptr<SuperPlatform>> super_platforms_; // 上级平台
-    std::unordered_map<std::string, std::shared_ptr<SubordinatePlatform>> sub_platforms_; // 下级平台
-    std::shared_mutex platform_mutex_;
-
-    std::function<void(const std::string &platform_id, std::function<void(std::shared_ptr<SubordinatePlatform>)> cb)> find_sub_platform_callback_;
+protected:
+    LocalServer() = default;
 };
 
 } // namespace gb28181

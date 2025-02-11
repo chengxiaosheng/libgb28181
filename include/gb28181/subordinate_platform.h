@@ -2,16 +2,19 @@
 #define gb28181_include_gb28181_SUBORDINATE_PLATFORM_H
 #include "gb28181/type_define.h"
 namespace gb28181 {
+class DeviceInfoMessageRequest;
+}
+namespace gb28181 {
 class SubordinatePlatform {
 public:
     virtual ~SubordinatePlatform() = default;
     virtual void shutdown() = 0;
-
     /**
      * @brief  获取账户信息
      * @return
      */
     virtual const subordinate_account & account() const = 0;
+
 
 private:
 };

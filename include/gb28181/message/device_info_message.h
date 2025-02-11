@@ -8,7 +8,7 @@ public:
     explicit DeviceInfoMessageRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit DeviceInfoMessageRequest(MessageBase &&messageBase)
-        : MessageBase(messageBase) {}
+        : MessageBase(std::move(messageBase)) {}
     explicit DeviceInfoMessageRequest(const std::string &device_id);
 };
 
@@ -17,7 +17,7 @@ public:
     explicit DeviceInfoMessageResponse(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit DeviceInfoMessageResponse(MessageBase &&messageBase)
-        : MessageBase(messageBase) {}
+        : MessageBase(std::move(messageBase)) {}
     explicit DeviceInfoMessageResponse(const std::string &device_id, ResultType result = ResultType::OK);
 
     /**

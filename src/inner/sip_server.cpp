@@ -17,6 +17,7 @@
 #include <gb28181/super_platform.h>
 #include <handler/uas_message_handler.h>
 #include <sip-message.h>
+#include <super_platform_impl.h>
 
 using namespace toolkit;
 
@@ -90,7 +91,7 @@ void SipServer::add_subordinate_platform(subordinate_account &&account) {
 void SipServer::add_super_platform(super_account &&account) {
     std::string platform_id = account.platform_id;
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
-    auto platform = std::make_shared<SuperPlatform>();
+    auto platform = std::make_shared<SuperPlatformImpl>(std::move(account));
     super_platforms_[platform_id] = platform;
 }
 void SipServer::reload_account(sip_account account) {
@@ -180,12 +181,13 @@ void SipServer::shutdown() {
 
 void SipServer::get_client(
     TransportType protocol, const std::string &host, uint16_t port,
-    const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> &cb) {
+    const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb) {
     auto poller = EventPollerPool::Instance().getPoller();
     if (protocol == TransportType::udp && udp_server_) {
         auto sock_ptr = udp_sockets_[poller.get()].lock();
         if (!sock_ptr) {
-            sock_ptr->bindUdpSock(udp_server_->getPort(), local_ip_);
+            cb(SockException(Err_other, "not found"), nullptr);
+            return;
         }
         auto session = std::make_shared<SipSession>(sock_ptr);
         session->_sip_server = weak_from_this();

@@ -8,7 +8,7 @@ public:
     explicit DeviceStatusMessageRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit DeviceStatusMessageRequest(MessageBase &&messageBase)
-        : MessageBase(messageBase) {}
+        : MessageBase(std::move(messageBase)) {}
     explicit DeviceStatusMessageRequest(const std::string &device_id);
 };
 
@@ -17,7 +17,7 @@ public:
     explicit DeviceStatusMessageResponse(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit DeviceStatusMessageResponse(MessageBase &&messageBase)
-        : MessageBase(messageBase) {}
+        : MessageBase(std::move(messageBase)) {}
     explicit DeviceStatusMessageResponse(
         const std::string &device_id, ResultType result = ResultType::OK, OnlineType online = OnlineType::ONLINE,
         ResultType status = ResultType::OK);

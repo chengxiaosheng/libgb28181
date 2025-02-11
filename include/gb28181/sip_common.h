@@ -20,6 +20,19 @@ enum SipError : int {
     sip_ok = 0, // 无错误
 };
 
+/** is the status code informational */
+#define SIP_IS_SIP_INFO(x) (((x) >= 100) && ((x) < 200))
+/** is the status code OK ?*/
+#define SIP_IS_SIP_SUCCESS(x) (((x) >= 200) && ((x) < 300))
+/** is the status code a redirect */
+#define SIP_IS_SIP_REDIRECT(x) (((x) >= 300) && ((x) < 400))
+/** is the status code a error (client or server) */
+#define SIP_IS_SIP_ERROR(x) (((x) >= 400) && ((x) < 600))
+/** is the status code a client error  */
+#define SIP_IS_SIP_CLIENT_ERROR(x) (((x) >= 400) && ((x) < 500))
+/** is the status code a server error  */
+#define SIP_IS_SIP_SERVER_ERROR(x) (((x) >= 500) && ((x) < 600))
+
 namespace Broadcast {
 constexpr const char kEventSubKeepalive[] = "kEventSubKeepalive";
 #define kEventSubKeepaliveArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<KeepaliveMessageRequest> message

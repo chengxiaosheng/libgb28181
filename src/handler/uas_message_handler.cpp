@@ -15,6 +15,7 @@
 #include <inner/sip_session.h>
 #include <iostream>
 #include <sip-message.h>
+#include <sip-transport.h>
 #include <sip-uac.h>
 #include <sip-uas.h>
 #include <subordinate_platform_impl.h>
@@ -110,12 +111,7 @@ int on_uas_message(
         WarnL << "sip_server has been destroyed";
         return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
     }
-    auto platform_ptr
-        = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
-    if (!platform_ptr) {
-        WarnL << "platform was not found";
-        return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
-    }
+
     auto xml_ptr = std::make_shared<tinyxml2::XMLDocument>();
     if (xml_ptr->Parse((const char *)req->payload, req->size) != tinyxml2::XML_SUCCESS) {
         WarnL << "XML parse error (" << xml_ptr->ErrorID() << ":" << xml_ptr->ErrorName() << ")" << xml_ptr->ErrorStr()
@@ -175,6 +171,27 @@ int on_uas_message(
     //     }
     //     WarnL << "make reply message failed, " << message->get_error();
     // };
+
+
+
+    // 如果是应答消息，一定来自下级平台
+    if (message.root() == MessageRootType::Response) {
+        auto platform_ptr= std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
+        if (!platform_ptr) {
+            WarnL << "platform was not found";
+            return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
+        }
+        auto ret = platform_ptr->on_response(std::move(message), transaction, req);
+        if (ret == 0) {
+            return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
+        }
+        if (ret > 0) {
+            return sip_uas_reply(transaction.get(), ret, nullptr, 0, session.get());
+        }
+        return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
+    }
+
+    auto platform_ptr= std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
     auto handler = std::make_shared<UasMessageHandler>(session, platform_ptr);
     return handler->run(std::move(message), transaction, req);
     //
@@ -227,6 +244,9 @@ int UasMessageHandler::run(MessageBase &&request, std::shared_ptr<sip_uas_transa
     } else if (request.root() == MessageRootType::Control) {
         const auto &command = request.command();
         if (command == MessageCmdType::DeviceControl) {}
+    } else if (request.root() == MessageRootType::Response) { // 是应答消息
+
+        return 0;
     }
     switch (request.command()) {
         case MessageCmdType::DeviceControl: break;
@@ -274,7 +294,7 @@ int UasMessageHandler::run(MessageBase &&request, std::shared_ptr<sip_uas_transa
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session_.get());
     }
     if (request_->command() == MessageCmdType::Keepalive) {
-        if (auto ret = platform_->on_keep_alive(get_request<KeepaliveMessageRequest>())) {
+        if (auto ret = platform_->on_keep_alive(std::dynamic_pointer_cast<KeepaliveMessageRequest>(request_))) {
             completed_.exchange(true);
             return sip_uas_reply(transaction.get(), ret, nullptr, 0, session_.get());
         }
@@ -292,10 +312,15 @@ int UasMessageHandler::run(MessageBase &&request, std::shared_ptr<sip_uas_transa
 void UasMessageHandler::response(
     std::shared_ptr<MessageBase> response, const std::function<void(bool, std::string)> &rcb, bool end) {
 
-    auto trans = sip_uac_message(session_->getSipServer()->get_sip_agent().get(), from_.data(), to_.data(), [](void* param, const struct sip_message_t* reply, struct sip_uac_transaction_t* t, int code) {
-        return 0;
-    }, session_.get());
-    sip_uac_send(trans,)
+    sip_transport_t transport{
+        SipSession::sip_via,
+        SipSession::sip_send
+    };
+    std::shared_ptr<sip_uac_transaction_t> transaction_ptr(sip_uac_message(session_->getSipServer()->get_sip_agent().get(),from_.c_str(),to_.c_str(), nullptr, nullptr), [](sip_uac_transaction_t *t) {
+        sip_uac_transaction_release(t);
+    });
+    sip_uac_send(transaction_ptr.get(),nullptr,0, &transport,session_.get());
+
 }
 
 

@@ -36,6 +36,9 @@ public:
     _on_error = std::move(cb);
   }
 
+  static int sip_send(void* transport, const void* data, size_t bytes);
+  static int sip_via(void* transport, const char* destination, char protocol[16], char local[128], char dns[128]);
+
 protected:
   void onSockConnect(const toolkit::SockException &ex);
 
@@ -49,6 +52,7 @@ private:
   sip_agent_t * _sip_agent{};
   std::weak_ptr<SipServer> _sip_server;
   std::shared_ptr<toolkit::Timer> _timer;
+  std::string local_ip_;
   friend class SipServer;
 
   std::function<void()> _on_manager;

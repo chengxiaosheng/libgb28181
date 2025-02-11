@@ -6,21 +6,19 @@ namespace gb28181 {
 class UasMessage {
 public:
     virtual ~UasMessage() = default;
-    virtual std::shared_ptr<MessageBase> get_request();
-  template<class T, typename = std::enable_if_t<std::is_base_of<MessageBase, T>::value>>
-      std::shared_ptr<T> get_request() {
-    return std::dynamic_pointer_cast<T>(get_request());
-  }
+    virtual std::shared_ptr<MessageBase> get_request() = 0;
+    template <class T, typename = std::enable_if_t<std::is_base_of<MessageBase, T>::value>>
+    std::shared_ptr<T> get_request() {
+        return std::dynamic_pointer_cast<T>(get_request());
+    }
 
 protected:
-    UasMessage();
+    UasMessage() = default;
 };
 
-}
+} // namespace gb28181
 
-#endif //gb28181_src_message_UAS_MESSAGE_H
-
-
+#endif // gb28181_src_message_UAS_MESSAGE_H
 
 /**********************************************************************************************************
 文件名称:   uas_message.h

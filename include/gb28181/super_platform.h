@@ -4,9 +4,8 @@
 namespace gb28181 {
 class SuperPlatform {
 public:
-
-  void shutdown();
-private:
+    virtual ~SuperPlatform() = default;
+    virtual void shutdown() = 0;
 };
 } // namespace gb28181
 

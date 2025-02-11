@@ -58,7 +58,7 @@ public:
      */
     void get_client(
         TransportType protocol, const std::string &host, uint16_t port,
-        const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> &cb);
+        const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
 
     inline std::shared_ptr<sip_agent_t> get_sip_agent() const { return sip_; }
 

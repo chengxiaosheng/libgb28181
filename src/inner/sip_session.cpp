@@ -110,6 +110,29 @@ void SipSession::onSockConnect(const toolkit::SockException &ex) {
     });
 }
 
+int SipSession::sip_via(void *transport, const char *destination, char protocol[16], char local[128], char dns[128]) {
+    if (transport == nullptr) return -1;
+    auto session = static_cast<SipSession *>(transport);
+    snprintf(protocol, 16, "%s", session->is_udp() ? "UDP" : "TCP");
+    if (session->local_ip_.empty())
+    {
+        session->local_ip_ = toolkit::SockUtil::get_local_ip();
+    }
+    memcpy(local, session->local_ip_.c_str(), session->local_ip_.size());
+    return 0;
+}
+
+int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
+    if (transport == nullptr) return -1;
+    auto session = static_cast<SipSession *>(transport);
+    auto buffer = toolkit::BufferRaw::create();
+    buffer->assign((const char *)data, bytes);
+    TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
+    session->send(std::move(buffer));
+    return 0;
+}
+
+
 std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_MODE mode) {
     std::stringstream ss;
     int i, r;
@@ -146,7 +169,14 @@ std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_M
 }
 
 void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
-    TraceL << "recv " << buffer->size() << " bytes";
+    TraceL << "recv " << buffer->size() << " bytes" << ", local: " << get_local_ip() << ", remote: " << get_peer_ip();
+    if (local_ip_.empty()) {
+        struct sockaddr_in localAddr{};
+        socklen_t addrLen = sizeof(localAddr);
+        if (getsockname(getSock()->rawFD(), (struct sockaddr*)&localAddr, &addrLen) >= 0) {
+            local_ip_ = SockUtil::inet_ntoa((struct sockaddr*)&localAddr);
+        }
+    }
     if (_wait_type == 0) {
         if (strncasecmp("SIP", buffer->data(), 3) == 0) {
             http_parser_reset(_sip_parse.get(), HTTP_PARSER_RESPONSE);

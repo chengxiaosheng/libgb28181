@@ -6,7 +6,7 @@ DeviceInfoMessageRequest::DeviceInfoMessageRequest(const std::string &device_id)
     : MessageBase() {
     device_id_ = device_id;
     root_ = MessageRootType::Query;
-    cmd_ = MessageCmdType::Keepalive;
+    cmd_ = MessageCmdType::DeviceInfo;
 }
 
  DeviceInfoMessageResponse::DeviceInfoMessageResponse(const std::string &device_id, ResultType result) : MessageBase(), result_(result) {

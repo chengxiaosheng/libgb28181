@@ -4,32 +4,33 @@
 #include "gb28181/super_platform.h"
 #include <gb28181/type_define.h>
 #include <memory>
-#include <mutex>
 #include <platform_helper.h>
 
 namespace gb28181 {
 class SipServer;
-class SuperPlatformImpl final: public SuperPlatform , public PlatformHelper {
+class SuperPlatformImpl final
+    : public SuperPlatform
+    , public PlatformHelper {
 public:
-  SuperPlatformImpl(super_account account, const std::shared_ptr<SipServer> &server);
+    SuperPlatformImpl(super_account account, const std::shared_ptr<SipServer> &server);
+    void shutdown() override;
+    ~SuperPlatformImpl() override;
+    std::shared_ptr<SuperPlatformImpl> shared_from_this() {
+        return std::dynamic_pointer_cast<SuperPlatformImpl>(PlatformHelper::shared_from_this());
+    }
+    std::weak_ptr<SuperPlatformImpl> weak_from_this() { return shared_from_this(); }
+
+    const super_account &account() const override { return account_; }
+    void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
+    gb28181::sip_account &sip_account() const override { return *(gb28181::sip_account *)&account_; }
+    bool update_local_via(std::string host, uint16_t port) override;
 
 private:
-  super_account account_;
-  std::recursive_mutex sip_session_mutex_;
-  std::shared_ptr<SipSession> sip_session_[2];
-  std::weak_ptr<SipServer> local_server_weak_;
-  std::atomic_int32_t platform_sn_{1};
-
-
+    super_account account_;
 };
-}
+} // namespace gb28181
 
-
-
-
-#endif //gb28181_src_SUPER_PLATFORM_IMPL_H
-
-
+#endif // gb28181_src_SUPER_PLATFORM_IMPL_H
 
 /**********************************************************************************************************
 文件名称:   super_platform_impl.h

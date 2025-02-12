@@ -34,10 +34,26 @@ enum SipError : int {
 #define SIP_IS_SIP_SERVER_ERROR(x) (((x) >= 500) && ((x) < 600))
 
 namespace Broadcast {
+//下级平台心跳
 constexpr const char kEventSubKeepalive[] = "kEventSubKeepalive";
 #define kEventSubKeepaliveArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<KeepaliveMessageRequest> message
+
+// 下级平台在线状态变更
+constexpr const char kEventSubordinatePlatformStatus[] = "kEventSubordinatePlatformStatus";
+#define kEventSubordinatePlatformStatusArgs std::shared_ptr<SubordinatePlatform> platform , PlatformStatusType status, const std::string& message
+
+// 下级平台本地联系信息变更
+constexpr const char kEventSubordinatePlatformContactChanged[] = "kEventSubordinatePlatformContactChanged";
+#define kEventSubordinatePlatformContactChangedArgs std::shared_ptr<SubordinatePlatform> platform , const std::string& host,uint16_t port
+
+// 上级平台本地联系信息变更
+constexpr const char kEventSuperPlatformContactChanged[] = "kEventSuperPlatformContactChanged";
+#define kEventSuperPlatformContactChangedArgs std::shared_ptr<SuperPlatform> platform , const std::string& host,uint16_t port
+
+
 constexpr const char kEventOnDeviceInfoRequest[] = "kEventOnDeviceInfoRequest";
 #define kEventOnDeviceInfoRequestArgs std::shared_ptr<SubordinatePlatform> platform,std::shared_ptr<DeviceInfoMessageRequest> message, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)> callback
+
 constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusRequest";
 #define kEventOnDeviceStatusRequestArgs std::shared_ptr<SubordinatePlatform> platform,std::shared_ptr<DeviceStatusMessageRequest> message, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> callback
 

@@ -54,6 +54,7 @@ bool MessageBase::parse_to_xml(bool coercion) {
         default: xml_ptr_->InsertFirstChild(xml_ptr_->NewDeclaration(R"(xml version="1.0" encoding="UTF-8")")); break;
     }
     auto root = xml_ptr_->NewElement(getRootTypeString(root_));
+    xml_ptr_->InsertEndChild(root);
     auto ele = root->InsertNewChildElement("CmdType");
     ele->SetText(getCmdTypeString(cmd_));
     ele = root->InsertNewChildElement("SN");

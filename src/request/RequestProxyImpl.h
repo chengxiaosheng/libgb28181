@@ -30,6 +30,8 @@ public:
     RequestProxyImpl(
         const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request,
         RequestType type);
+    ~RequestProxyImpl();
+    void set_sn(int sn) { request_sn_ = sn; }
     Status status() const override { return status_; }
     RequestType type() const override { return request_type_; }
     std::string error() const override { return error_; }
@@ -39,12 +41,10 @@ public:
     uint64_t response_end_time() const override { return response_end_time_; }
     void set_reply_callback(ReplyCallback cb) override { reply_callback_ = std::move(cb); }
     void set_response_callback(ResponseCallback cb) override { response_callback_ = std::move(cb); }
-    int timeout() const override { return timeout_; }
-    void set_timeout(int sec) override { timeout_ = sec; }
     void send(std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
     const std::vector<std::shared_ptr<MessageBase>> &all_response() const override { return responses_; }
-
-    inline void set_sip_session(const std::shared_ptr<SipSession> &session_ptr) { send_session_ = session_ptr; }
+    void set_sip_session(const std::shared_ptr<SipSession> &session_ptr) { send_session_ = session_ptr; }
+    friend std::ostream &operator<<(std::ostream &os, const RequestProxyImpl &proxy);
 
 protected:
     virtual int on_response(const std::shared_ptr<MessageBase> &response);
@@ -65,7 +65,6 @@ protected:
     std::shared_ptr<sip_uac_transaction_t> uac_transaction_;
     std::string error_;
     int reply_code_ { 0 };
-    int timeout_ { 0 };
     int request_sn_ { 0 };
     Status status_ { Init };
     RequestType request_type_ { RequestType::invalid };
@@ -75,9 +74,11 @@ protected:
     ResponseCallback response_callback_; // 应答回调
 
 private:
-    int on_response(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,std::shared_ptr<sip_message_t> request);
+    int on_response(
+        MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,
+        std::shared_ptr<sip_message_t> request);
     static int on_recv_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code);
-    friend class SubordinatePlatformImpl;
+    friend class PlatformHelper;
 };
 } // namespace gb28181
 

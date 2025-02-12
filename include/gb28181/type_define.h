@@ -90,6 +90,8 @@ struct subordinate_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
+    uint16_t local_port{0}; // 本地端口 会根据via头域的值而改变
+    std::string local_host; // 本地host, 会根据via头域的值而改变
     sip_account_status plat_status;
 };
 /**
@@ -99,6 +101,8 @@ struct super_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
+    uint16_t local_port{0}; // 本地端口 会根据via头域的值而改变
+    std::string local_host; // 本地host, 会根据via头域的值而改变
     int register_expired { 60 * 60 * 24 }; // 注册过期时间
     int keepalive_interval { 30 }; // 心跳间隔
     int keepalive_times { 3 }; // 心跳超时次数
@@ -113,6 +117,10 @@ struct ExtendData {
     std::string value;
     std::vector<ExtendData> children;
 };
+
+#define SIP_CONTENT_TYPE_MAP(XX) \
+    XX(SipContentType, XML, 1, "Application/MANSCDP+xml") \
+    XX(SipContentType, SDP, 1, "Application/sdp") \
 
 #define GB28181_XML_ROOT_MAP(XX)                                                                                       \
     XX(MessageRootType, Query, 1, "Query")                                                                             \
@@ -648,10 +656,14 @@ struct PtzCmdParams {
     std::string CruiseTrackName;
 };
 
+struct DeviceConfigBase {
+    virtual ~DeviceConfigBase() = default;
+};
+
 /**
  * 基本参数配置
  */
-struct BasicParamCfgType {
+struct BasicParamCfgType : public DeviceConfigBase {
     /**
      * @brief 设备名称(可选)
      */
@@ -673,7 +685,7 @@ struct BasicParamCfgType {
 /**
  * 视频参数范围配置
  */
-struct VideoParamOptCfgType {
+struct VideoParamOptCfgType : DeviceConfigBase {
     /**
      * @brief 下载速度
      */
@@ -734,7 +746,7 @@ struct AudioParamInfo {
     //  声音识别特征参数开关，取值 0-关闭;1-打开(必选)
     int AudioRecognitionFlag;
 };
-struct SVACEncodeCfgType {
+struct SVACEncodeCfgType : DeviceConfigBase {
     //  感兴趣区域参数(必选)
     std::optional<ROIParmaInfo> ROIParma;
     // SVC参数(可选)
@@ -754,7 +766,7 @@ struct SVCParamInfo {
     std::optional<int> SVCTimeSupportMode;
 };
 
-struct SVACDecodeCfgType {
+struct SVACDecodeCfgType : DeviceConfigBase {
     // SVC参数(可选)--
     std::optional<SVCParamInfo> SVCParam;
     // 监控专用信息参数(可选)
@@ -774,7 +786,7 @@ struct VideoParamAttributeCfgTypeItem {
     // 视频码率配置值(固定码率时必选),取值应符合附录 G中SDP 字段规定
     std::string VideoBitRate;
 };
-struct VideoParamAttributeCfgType {
+struct VideoParamAttributeCfgType : DeviceConfigBase {
     std::vector<VideoParamAttributeCfgTypeItem> Item {};
     int Num { 0 };
 };
@@ -800,7 +812,7 @@ struct VideoRecordPlanCfgTypeRecordSchedule {
     // 每天录像计划时间段(必选);每天支持最多8个时间段
     std::vector<VideoRecordPlanCfgTypeRecordScheduleTimeSegment> TimeSegment;
 };
-struct VideoRecordPlanCfgType {
+struct VideoRecordPlanCfgType : DeviceConfigBase {
     // 是否启用时间计划录像配置:0-否1-是(必选)-
     int8_t RecordEnable {};
     // 码流类型:0-主码流,1-子码流 1,2-子码流 2,以此类推(必选)
@@ -810,7 +822,7 @@ struct VideoRecordPlanCfgType {
     // 一个星期的录像计划,可配置 7天,对应周一至周日,每天最大支持 8 个时间段配置(必选）
     std::vector<VideoRecordPlanCfgTypeRecordSchedule> RecordSchedule;
 };
-struct VideoAlarmRecordCfgType {
+struct VideoAlarmRecordCfgType : DeviceConfigBase {
     // 是否启用报警录像配置:-否，1-是(必选)
     int RecordEnable {};
     // 码流编号:0-主码流,1-子码流 1,2-子码流 2,以此类推(必选)
@@ -832,7 +844,12 @@ struct RegionListInfo {
     // 区域(必选)
     std::vector<RegionListItem> Item;
 };
-struct PictureMaskClgType {
+
+struct FrameMirrorCfgType : DeviceConfigBase {
+    FrameMirrorType FrameMirror {};
+};
+
+struct PictureMaskClgType : DeviceConfigBase {
     // 面面遮挡开关,取值 0-关闭,1-打开(必选)
     int On { 0 };
     // 区域总数(必选)
@@ -840,7 +857,7 @@ struct PictureMaskClgType {
     // 区域列表 可选
     std::optional<RegionListInfo> RegionList {};
 };
-struct AlarmReportCfgType {
+struct AlarmReportCfgType  : DeviceConfigBase{
     // 移动侦测事件上报开关，取值 0-关闭，1-打开(必选)
     int8_t MotionDetection { 0 };
     // 区域入侵事件上报开关,取值 0-关闭,1-打开(必选)
@@ -857,7 +874,7 @@ struct OSDCfgTypeTextItem {
     // 字体大小
     std::optional<int> FontSize {};
 };
-struct OSDCfgType {
+struct OSDCfgType : DeviceConfigBase {
     // 配置窗口长度像素值(必选)-
     uint16_t Length { 0 };
     // 配置窗口宽度像素值(必选)
@@ -879,7 +896,7 @@ struct OSDCfgType {
     // 显示文字，可选
     std::vector<OSDCfgTypeTextItem> Item {};
 };
-struct SnapShotCfgType {
+struct SnapShotCfgType : DeviceConfigBase {
     //  连拍张数(必选),最多 10 张，当手动抓拍时，取值为 1
     int SnapNum {};
     // 单张抓拍间隔时间,单位:秒(必选),取值范围;最短 1秒

@@ -42,7 +42,7 @@ int on_uas_message(
 class UasMessageHandler : public UasMessage, public std::enable_shared_from_this<UasMessageHandler> {
 public:
     ~UasMessageHandler() = default;
-    UasMessageHandler(const std::shared_ptr<SipSession> &session, const std::shared_ptr<SubordinatePlatformImpl> &platform);
+    UasMessageHandler(const std::shared_ptr<SipSession> &session);
     int run(MessageBase && request, std::shared_ptr<sip_uas_transaction_t> transaction, const std ::shared_ptr<sip_message_t> &sip);
     void response(std::shared_ptr<MessageBase> response, const std::function<void(bool, std::string)> &rcb, bool end = true);
 

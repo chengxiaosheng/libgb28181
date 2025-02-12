@@ -6,6 +6,7 @@
 extern "C" {
   struct http_parser_t;
   struct sip_agent_t;
+  struct sip_transport_t;
 }
 #endif
 
@@ -39,6 +40,8 @@ public:
   static int sip_send(void* transport, const void* data, size_t bytes);
   static int sip_via(void* transport, const char* destination, char protocol[16], char local[128], char dns[128]);
 
+  static sip_transport_t * get_transport();
+
 protected:
   void onSockConnect(const toolkit::SockException &ex);
 
@@ -53,6 +56,7 @@ private:
   std::weak_ptr<SipServer> _sip_server;
   std::shared_ptr<toolkit::Timer> _timer;
   std::string local_ip_;
+  uint16_t local_port_{0};
   friend class SipServer;
 
   std::function<void()> _on_manager;

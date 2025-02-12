@@ -7,6 +7,9 @@
 #define SIP_HEADER_X_GB_VERSION "X-GB-Ver" // GB/T 28181-2022 -> 附录J 协议版本标识
 #define SIP_HEADER_DATE "Date"
 #define SIP_HEADER_EXPIRES "Expires"
+#define SIP_HEADER_CONTENT_TYPE "Content-Type"
+#define SIP_CONTENT_TYPE_XML "Application/MANSCDP+xml"
+#define SIP_CONTENT_TYPE_SDP "Application/sdp"
 #include <gb28181/type_define.h>
 
 #ifdef __cplusplus
@@ -19,15 +22,23 @@ extern "C" {
 
 namespace gb28181 {
 
+enum SipContentType {
+  SipContentType_XML,
+  SipContentType_SDP
+};
+
 void set_message_agent(struct sip_uac_transaction_t* transaction);
 void set_message_gbt_version(struct sip_uac_transaction_t* transaction, PlatformVersionType version = PlatformVersionType::v30);
 void set_message_header(struct sip_uac_transaction_t* transaction);
+void set_message_content_type(struct sip_uac_transaction_t* transaction, enum SipContentType content_type);
 
 void set_message_agent(struct sip_uas_transaction_t * transaction);
 void set_message_gbt_version(struct sip_uas_transaction_t * transaction,PlatformVersionType version = PlatformVersionType::v30);
 void set_message_date(struct sip_uas_transaction_t * transaction);
 void set_message_expires(struct sip_uas_transaction_t * transaction, int expires);
 void set_message_header(struct sip_uas_transaction_t* transaction);
+void set_message_content_type(struct sip_uas_transaction_t *transaction, enum SipContentType content_type);
+
 
 
 PlatformVersionType get_message_gbt_version(struct sip_message_t* msg);

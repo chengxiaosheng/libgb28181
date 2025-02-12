@@ -7,7 +7,9 @@ class RequestConfigDownloadImpl : public RequestProxyImpl {
 public:
     RequestConfigDownloadImpl(
         const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request)
-        : RequestProxyImpl(platform, request, RequestType::MultipleResponses) {}
+        : RequestProxyImpl(platform, request, RequestType::MultipleResponses) {
+
+    }
 
 protected:
     int on_response(const std::shared_ptr<MessageBase> &response) override;

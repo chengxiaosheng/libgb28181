@@ -8,7 +8,6 @@
 #include <memory>
 #include <mutex>
 
-
 namespace toolkit {
 class SockException;
 }
@@ -22,7 +21,7 @@ class DeviceInfoMessageRequest;
 class KeepaliveMessageRequest;
 class DeviceStatusMessageResponse;
 
-}
+} // namespace gb28181
 
 namespace toolkit {
 class Timer;
@@ -32,55 +31,56 @@ namespace gb28181 {
 class SipSession;
 class LocalServer;
 
-
-class SubordinatePlatformImpl final: public SubordinatePlatform, public PlatformHelper {
+class SubordinatePlatformImpl final
+    : public SubordinatePlatform
+    , public PlatformHelper {
 public:
-  explicit SubordinatePlatformImpl(subordinate_account account, const std::shared_ptr<SipServer> &server);
-  ~SubordinatePlatformImpl() override;
+    explicit SubordinatePlatformImpl(subordinate_account account, const std::shared_ptr<SipServer> &server);
+    ~SubordinatePlatformImpl() override;
 
-  void shutdown() override;
+    void shutdown() override;
 
-  std::shared_ptr<SubordinatePlatformImpl> shared_from_this() {
-    return std::dynamic_pointer_cast<SubordinatePlatformImpl>(PlatformHelper::shared_from_this());
-  }
-  std::weak_ptr<SubordinatePlatformImpl> weak_from_this() {
-    return shared_from_this();
-  }
+    void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
 
-  inline const subordinate_account &account() const override {
-    return account_;
-  }
-  gb28181::sip_account &sip_account() override {
-    return account_;
-  }
+    std::shared_ptr<SubordinatePlatformImpl> shared_from_this() {
+        return std::dynamic_pointer_cast<SubordinatePlatformImpl>(PlatformHelper::shared_from_this());
+    }
+    std::weak_ptr<SubordinatePlatformImpl> weak_from_this() { return shared_from_this(); }
 
-  void set_status(PlatformStatusType status, std::string error);
+    inline const subordinate_account &account() const override { return account_; }
+    gb28181::sip_account &sip_account() const override { return *(gb28181::sip_account *)&account_; }
 
+    void set_status(PlatformStatusType status, std::string error);
+
+    void
+    query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) override;
+    void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) override;
+
+
+    bool update_local_via(std::string host, uint16_t port) override;
 
 public:
-  int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
-  void on_device_info(std::shared_ptr<DeviceInfoMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
-  void on_device_status(std::shared_ptr<DeviceStatusMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
+    int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
+    void on_device_info(
+        std::shared_ptr<DeviceInfoMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
+    void on_device_status(
+        std::shared_ptr<DeviceStatusMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
 
-
-  int on_response(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
+    int on_notify(
+        MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,
+        std::shared_ptr<sip_message_t> request) override;
 
 private:
-  subordinate_account account_; // 账户信息
-  // 心跳检测
-  std::shared_ptr<toolkit::Timer> keepalive_timer_;
-  std::function<void(std::shared_ptr<SubordinatePlatform>, std::shared_ptr<KeepaliveMessageRequest>)> on_keep_alive_callback_;
-  std::atomic_int32_t platform_sn_{1};
-
-
+    subordinate_account account_; // 账户信息
+    // 心跳检测
+    std::shared_ptr<toolkit::Timer> keepalive_timer_;
+    std::function<void(std::shared_ptr<SubordinatePlatform>, std::shared_ptr<KeepaliveMessageRequest>)>
+        on_keep_alive_callback_;
 };
 
-}
+} // namespace gb28181
 
-
-#endif //gb28181_src_SUBORDINATE_PLATFORM_IMPL_H
-
-
+#endif // gb28181_src_SUBORDINATE_PLATFORM_IMPL_H
 
 /**********************************************************************************************************
 文件名称:   subordinate_platform_impl.h

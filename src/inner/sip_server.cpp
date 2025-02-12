@@ -8,7 +8,6 @@
 #include <sip-uac.h>
 #include <sip-uas.h>
 
-#include "inner/sip_event.h"
 #include "inner/sip_session.h"
 #include "sip_server.h"
 
@@ -85,13 +84,13 @@ std::shared_ptr<SuperPlatform> SipServer::get_super_platform(const std::string &
 void SipServer::add_subordinate_platform(subordinate_account &&account) {
     std::string platform_id = account.platform_id;
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
-    auto platform = std::make_shared<SubordinatePlatformImpl>(std::move(account));
+    auto platform = std::make_shared<SubordinatePlatformImpl>(std::move(account), shared_from_this());
     sub_platforms_[platform_id] = platform;
 }
 void SipServer::add_super_platform(super_account &&account) {
     std::string platform_id = account.platform_id;
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
-    auto platform = std::make_shared<SuperPlatformImpl>(std::move(account));
+    auto platform = std::make_shared<SuperPlatformImpl>(std::move(account), shared_from_this());
     super_platforms_[platform_id] = platform;
 }
 void SipServer::reload_account(sip_account account) {
@@ -108,7 +107,7 @@ void SipServer::new_subordinate_account(
                 if (auto platform = this_ptr->get_subordinate_platform(account->platform_id)) {
                     return allow_cb(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform));
                 }
-                std::shared_ptr<SubordinatePlatformImpl> platform = std::make_shared<SubordinatePlatformImpl>(*account);;
+                std::shared_ptr<SubordinatePlatformImpl> platform = std::make_shared<SubordinatePlatformImpl>(*account, this_ptr);;
                 {
                     std::unique_lock<decltype(platform_mutex_)> lock(this_ptr->platform_mutex_);
                     this_ptr->sub_platforms_[account->platform_id] = platform;

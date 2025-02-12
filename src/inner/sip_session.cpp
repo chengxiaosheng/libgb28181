@@ -4,6 +4,7 @@
 #include <gb28181/sip_common.h>
 #include <sip-agent.h>
 #include <sip-message.h>
+#include <sip-transport.h>
 
 using namespace toolkit;
 
@@ -118,7 +119,7 @@ int SipSession::sip_via(void *transport, const char *destination, char protocol[
     {
         session->local_ip_ = toolkit::SockUtil::get_local_ip();
     }
-    memcpy(local, session->local_ip_.c_str(), session->local_ip_.size());
+    snprintf(local, 128, "%s:%d", session->local_ip_.c_str(), session->get_local_port());
     return 0;
 }
 
@@ -131,6 +132,13 @@ int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
     session->send(std::move(buffer));
     return 0;
 }
+sip_transport_t *SipSession::get_transport() {
+    static sip_transport_t transport;
+    transport.send = SipSession::sip_send;
+    transport.via = SipSession::sip_via;
+    return &transport;
+}
+
 
 
 std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_MODE mode) {

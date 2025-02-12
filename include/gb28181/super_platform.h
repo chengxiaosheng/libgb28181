@@ -1,11 +1,14 @@
 #ifndef gb28181_include_gb28181_SUPER_PLATFORM_H
 #define gb28181_include_gb28181_SUPER_PLATFORM_H
-
+#include "gb28181/type_define.h"
 namespace gb28181 {
 class SuperPlatform {
 public:
     virtual ~SuperPlatform() = default;
     virtual void shutdown() = 0;
+    virtual const super_account &account() const = 0;
+    virtual void set_encoding(CharEncodingType encoding) = 0;
+
 };
 } // namespace gb28181
 

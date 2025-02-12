@@ -1,6 +1,9 @@
 #ifndef gb28181_include_gb28181_SUBORDINATE_PLATFORM_H
 #define gb28181_include_gb28181_SUBORDINATE_PLATFORM_H
 #include "gb28181/type_define.h"
+#include "message/request_proxy.h"
+
+#include <functional>
 namespace gb28181 {
 class DeviceInfoMessageRequest;
 }
@@ -13,8 +16,14 @@ public:
      * @brief  获取账户信息
      * @return
      */
-    virtual const subordinate_account & account() const = 0;
+    virtual const subordinate_account &account() const = 0;
 
+    virtual void set_encoding(CharEncodingType encoding) = 0;
+
+    virtual void query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret)
+        = 0;
+
+    virtual void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
 
 private:
 };

@@ -3,23 +3,45 @@
 #include "RequestCatalogImpl.h"
 #include "RequestConfigDownloadImpl.h"
 #include "subordinate_platform_impl.h"
+#include "super_platform_impl.h"
 
 #include <Network/Session.h>
 #include <gb28181/message/device_info_message.h>
 #include <gb28181/message/device_status_message.h>
 #include <gb28181/message/message_base.h>
 #include <gb28181/sip_common.h>
+#include <gb28181/type_define_ext.h>
+#include <inner/sip_common.h>
+#include <inner/sip_session.h>
 #include <sip-message.h>
 #include <sip-uac.h>
 
 using namespace gb28181;
+
+std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxyImpl &proxy) {
+    os << "(";
+    std::visit(
+        [&](auto platform) {
+            os << platform->account().platform_id << ":" << proxy.request_->root() << ":" << proxy.request_->command();
+        },
+        proxy.platform_);
+    if (proxy.request_sn_)
+        os << ":" << proxy.request_sn_;
+    os << ") ";
+    return os;
+}
 
 RequestProxyImpl::RequestProxyImpl(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, RequestType type)
     : RequestProxy()
     , platform_(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform))
     , request_(request)
-    , request_type_(type) {}
+    , request_type_(type) {
+    DebugL << *this;
+}
+RequestProxyImpl::~RequestProxyImpl() {
+    DebugL << *this;
+}
 
 std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request) {
@@ -53,22 +75,26 @@ int RequestProxyImpl::on_recv_reply(
     if (param == nullptr)
         return 0;
     auto request = static_cast<RequestProxyImpl *>(param);
+    if (auto via = sip_vias_get(&reply->vias, 0)) {
+        std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
+        std::visit([&](auto & platform) {
+            platform->update_local_via(host, static_cast<uint16_t>(via->rport));
+        }, request->platform_);
+    }
     std::shared_ptr<sip_message_t> sip_message(const_cast<sip_message_t *>(reply), [](sip_message_t *reply) {
         if (reply) {
             sip_message_destroy(reply);
         }
     });
-    sip_uac_transaction_addref(t);
-    std::shared_ptr<sip_uac_transaction_t> uac_transaction(
-        t, [](sip_uac_transaction_t *t) { sip_uac_transaction_release(t); });
     request->on_reply(sip_message, code);
     return 0;
 }
 void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int code) {
     reply_time_ = toolkit::getCurrentMicrosecond();
     reply_code_ = code;
+    uac_transaction_.reset();
     if (SIP_IS_SIP_SUCCESS(code)) {
-        status_ = request_type_ == NoResponse ?  Succeeded : Replied;
+        status_ = request_type_ == NoResponse ? Succeeded : Replied;
     } else {
         error_ = code == 0 || !sip_message ? "no reply" : "status code = " + std::to_string(code);
         status_ = code == 0 || !sip_message ? Timeout : Failed;
@@ -80,25 +106,23 @@ void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int 
     if (status_ != Replied) {
         on_completed();
     }
-
 }
 void RequestProxyImpl::on_completed() {
     if (!result_flag_.test_and_set()) {
         // 1. 移除请求map
         // 2. 发送结果回调
         // 3. 清理数据回调与结果回调
-        std::visit([&](auto &&platform) {
-            platform->remove_request_proxy(request_sn_);
-        }, platform_);
+        uac_transaction_.reset();
+        auto this_ptr = shared_from_this();
         if (rcb_) {
-            rcb_(shared_from_this());
+            rcb_(this_ptr);
         }
         reply_callback_ = nullptr;
-        rcb_ = nullptr;
         response_callback_ = nullptr;
+        rcb_ = nullptr;
+        std::visit([&](auto &&platform) { platform->remove_request_proxy(request_sn_); }, platform_);
     }
 }
-
 
 void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
 
@@ -107,19 +131,19 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
         status_ = Failed;
         return on_completed();
     }
-
     struct sip_agent_t *sip_agent = nullptr;
     std::string from, to;
-    CharEncodingType encoding_type{ CharEncodingType::gb2312 };
+    CharEncodingType encoding_type { CharEncodingType::gb2312 };
     std::visit(
         [&](auto &platform) {
-            platform->get_sip_agent();
-            from = platform->get_from();
-            to = platform->get_to();
-            request_sn_ = platform->get_request_sn();
+            sip_agent = platform->get_sip_agent();
+            from = platform->get_from_uri();
+            to = platform->get_to_uri();
+            request_sn_ = platform->get_new_sn();
             encoding_type = platform->account().encoding;
         },
         platform_);
+
     uac_transaction_ = std::shared_ptr<sip_uac_transaction_t>(
         sip_uac_message(sip_agent, from.c_str(), to.c_str(), RequestProxyImpl::on_recv_reply, this),
         [](sip_uac_transaction_t *t) {
@@ -129,30 +153,57 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
     rcb_ = std::move(rcb);
     request_->sn(request_sn_);
     request_->encoding(encoding_type);
-    if (!request_->parse_to_xml() ) {
+    set_message_content_type(uac_transaction_.get(), SipContentType_XML);
+    set_message_header(uac_transaction_.get());
+    if (!request_->parse_to_xml()) {
         error_ = "make request payload failed, error = " + request_->get_error();
         status_ = Failed;
         return on_completed();
     }
-    auto payload = request_->str();
-    sip_uac_send(uac_transaction_.get(), payload.data(), payload.size(),)
+    std::visit(
+        [&](auto &platform) {
+            platform->add_request_proxy(request_sn_, shared_from_this());
+            platform->get_session(
+                [this_ptr = shared_from_this()](const toolkit::SockException &e, std::shared_ptr<SipSession> &session) {
+                    if (e) {
+                        this_ptr->status_ = Failed;
+                        this_ptr->error_ = "failed to obtain or create a connection";
+                        return this_ptr->on_completed();
+                    }
+                    auto payload = this_ptr->request_->str();
+                    this_ptr->send_time_ = toolkit::getCurrentMicrosecond();
+                    if (0
+                        != sip_uac_send(
+                            this_ptr->uac_transaction_.get(), payload.data(), payload.size(),
+                            SipSession::get_transport(), session.get())) {
+                        this_ptr->status_ = Failed;
+                        this_ptr->error_ = "failed to send request, call sip_uac_send failed";
+                        return this_ptr->on_completed();
+                    }
+                });
+        },
+        platform_);
 }
 
 int RequestProxyImpl::on_response(const std::shared_ptr<MessageBase> &response) {
     bool completed = request_type_ == OneResponse;
     if (completed) {
-        response_begin_time_ = toolkit::getCurrentMicrosecond();
+        response_end_time_ = toolkit::getCurrentMicrosecond();
+        status_ = Succeeded;
     }
-    int code = 0;
+    int code = 200;
     if (response_callback_) {
         code = response_callback_(shared_from_this(), response, completed);
     }
-    if (request_type_ == OneResponse) {
-        on_completed();
+    if (completed) {
+        toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this()]() {
+            this_ptr->on_completed();
+        }, false);
     }
-    return code;
+    return code ? code : 400;
 }
-int RequestProxyImpl::on_response(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
+int RequestProxyImpl::on_response(
+    MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
     std::shared_ptr<MessageBase> response;
     switch (message.command()) {
         case MessageCmdType::DeviceControl: break;
@@ -195,7 +246,6 @@ int RequestProxyImpl::on_response(MessageBase &&message, std::shared_ptr<sip_uas
     }
     return on_response(std::move(response));
 }
-
 
 /**********************************************************************************************************
 文件名称:   RequestProxyImpl.cpp

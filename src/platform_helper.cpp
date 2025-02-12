@@ -1,11 +1,17 @@
 #include "platform_helper.h"
 
+#include <gb28181/message/message_base.h>
 #include <inner/sip_server.h>
 #include <inner/sip_session.h>
+#include <request/RequestProxyImpl.h>
 
+namespace gb28181 {
+class MessageBase;
+}
 using namespace gb28181;
 
 void add_session(const std::shared_ptr<SipSession> &session);
+
 
 void PlatformHelper::add_session(const std::shared_ptr<SipSession> &session) {
     std::lock_guard<decltype(sip_session_mutex_)> lck(sip_session_mutex_);
@@ -70,9 +76,6 @@ struct sip_agent_t *PlatformHelper::get_sip_agent() {
     return server->get_sip_agent().get();
 }
 std::string PlatformHelper::get_from_uri() {
-    if (from_uri_.empty()) {
-        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + toolkit::SockUtil::get_local_ip() + ":" + std::to_string(get_sip_server()->get_account().port);
-    }
     return from_uri_;
 }
 std::string PlatformHelper::get_to_uri() {
@@ -83,11 +86,46 @@ std::string PlatformHelper::get_to_uri() {
 }
 
 void PlatformHelper::add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy) {
-    std::m
-}
-void PlatformHelper::remove_request_proxy(int32_t sn) {
+    std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
+    request_map_[sn] = proxy;
 
 }
+void PlatformHelper::remove_request_proxy(int32_t sn) {
+    std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
+    request_map_.erase(sn);
+}
+
+int PlatformHelper::on_response(
+    MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
+    std::shared_ptr<RequestProxyImpl> proxy;
+    {
+        std::shared_lock<decltype(request_map_mutex_)> lock_guard(request_map_mutex_);
+        auto it = request_map_.find(message.sn());
+        if (it != request_map_.end()) {
+            proxy = it->second;
+        }
+    }
+    if (proxy) {
+        return proxy->on_response(std::move(message), std::move(transaction), std::move(request));
+    }
+    return 0;
+}
+
+int PlatformHelper::on_query(
+    MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
+    return 400;
+}
+int PlatformHelper::on_notify(
+    MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
+    return 400;
+
+}
+int PlatformHelper::on_control(
+    MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
+    return 400;
+}
+
+
 
 
 

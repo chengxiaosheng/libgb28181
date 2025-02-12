@@ -42,8 +42,8 @@ public:
      * 获取第一个应答
      * @return
      */
-    const std::shared_ptr<MessageBase> & response() const {
-        auto &list = all_response();
+    const std::shared_ptr<MessageBase>  response() const {
+        auto list = all_response();
         if (list.empty()) return nullptr;
         return list.front();
     }
@@ -104,8 +104,6 @@ public:
      * @param sec
      */
     virtual void set_timeout(int sec) = 0;
-
-    virtual int timeout() const = 0;
 
     /**
      * 构建一个请求

@@ -3,6 +3,7 @@
 #include <Util/NoticeCenter.h>
 #include <gb28181/message/device_info_message.h>
 #include <gb28181/message/device_status_message.h>
+#include <gb28181/message/keepalive_message.h>
 #include <gb28181/sip_common.h>
 #include <inner/sip_server.h>
 #include <inner/sip_session.h>
@@ -12,8 +13,15 @@
 using namespace gb28181;
 
 SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, const std::shared_ptr<SipServer> &server)
-    : account_(std::move(account)) {
+    : SubordinatePlatform(), PlatformHelper(), account_(std::move(account)) {
     local_server_weak_ = server;
+    if (account_.local_host.empty()) {
+        account_.local_host = toolkit::SockUtil::get_local_ip();
+    }
+    if (account_.local_port == 0) {
+        account_.local_port = server->get_account().port;
+    }
+    from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":" + std::to_string(account_.local_port);
 }
 
 SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
@@ -29,7 +37,10 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
     if (status == PlatformStatusType::online) {
         account_.plat_status.register_time = toolkit::getCurrentMicrosecond();
     }
-    // todo: 广播平台在线状态
+    // 异步广播平台在线状态
+    toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this(), status, error]() {
+        toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSubordinatePlatformStatus, this_ptr, status, error);
+    },false);
 }
 
 
@@ -103,21 +114,66 @@ void SubordinatePlatformImpl::on_device_status(
 }
 
 
-int SubordinatePlatformImpl::on_response(
+int SubordinatePlatformImpl::on_notify(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
-    std::shared_ptr<RequestProxyImpl> proxy;
-    {
-        std::shared_lock<decltype(request_map_mutex_)> lock_guard(request_map_mutex_);
-        auto it = request_map_.find(message.sn());
-        if (it != request_map_.end()) {
-            proxy = it->second;
-        }
+    if (message.command() == MessageCmdType::Keepalive) {
+        auto keepalive_request = std::make_shared<KeepaliveMessageRequest>(std::move(message));
+        return on_keep_alive(keepalive_request);
     }
-    if (proxy) {
-        return proxy->on_response(std::move(message), std::move(transaction), std::move(request));
+    if (message.command() == MessageCmdType::Alarm) {
+        return 200;
+    }
+    if (message.command() == MessageCmdType::MediaStatus) {
+        return 200;
+    }
+    if (message.command() == MessageCmdType::MobilePosition) {
+        return 200;
+    }
+    if (message.command() == MessageCmdType::UploadSnapShotFinished) {
+        return 200;
+    }
+    if (message.command() == MessageCmdType::VideoUploadNotify) {
+        return 200;
+    }
+    if (message.command() == MessageCmdType::DeviceUpgradeResult) {
+        return 200;
     }
     return 0;
 }
+
+
+bool SubordinatePlatformImpl::update_local_via(std::string host, uint16_t port) {
+    bool changed = false;
+    if (!host.empty() && account_.local_host != host) {
+        account_.local_host = host;
+        changed = true;
+    }
+    if (port && account_.local_port != port) {
+        account_.local_port = port;
+        changed = true;
+    }
+    if (changed) {
+        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":" + std::to_string(account_.local_port);
+        // 通知上层应用？
+        toolkit::EventPollerPool::Instance().getExecutor()->async([this_ptr = shared_from_this()]() {
+            toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSubordinatePlatformContactChanged, this_ptr, this_ptr->account_.local_host, this_ptr->account_.local_port);
+        }, false);
+    }
+    return changed;
+}
+
+void SubordinatePlatformImpl::query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
+    auto request = std::make_shared<DeviceInfoMessageRequest>(device_id.empty() ? account_.platform_id : device_id);
+    RequestProxy::newRequestProxy(shared_from_this(),request)->send(std::move(ret));
+}
+
+void SubordinatePlatformImpl::query_device_status(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
+    auto request = std::make_shared<DeviceStatusMessageRequest>(device_id.empty() ? account_.platform_id : device_id);
+    RequestProxy::newRequestProxy(shared_from_this(),request)->send(std::move(ret));
+}
+
+
 
 /**********************************************************************************************************
 文件名称:   subordinate_platform_impl.cpp

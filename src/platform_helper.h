@@ -20,13 +20,14 @@ namespace toolkit {
 class SockException;
 }
 namespace gb28181 {
+class MessageBase;
 class RequestProxyImpl;
 class SipServer;
 class SipSession;
 class PlatformHelper : public std::enable_shared_from_this<PlatformHelper> {
 public:
     virtual ~PlatformHelper() = default;
-    virtual sip_account &sip_account() = 0;
+    virtual sip_account &sip_account() const = 0;
     virtual void get_session(
         const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,
         bool udp = true);
@@ -45,12 +46,16 @@ public:
      */
     virtual int32_t get_new_sn();
 
+    virtual bool update_local_via(std::string host, uint16_t port) = 0;
     virtual std::string get_from_uri();
     virtual std::string get_to_uri();
 
     void add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy);
     void remove_request_proxy(int32_t sn);
-
+    int on_response(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
+    virtual int on_notify(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
+    virtual int on_query(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
+    virtual int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
 protected:
     // 连接信息 0 udp 1 tcp
     std::recursive_mutex sip_session_mutex_;

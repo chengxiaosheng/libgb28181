@@ -9,8 +9,9 @@
 
 namespace gb28181 {
 
-std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type) {
-#define EXPAND_XX(type, name, value, str) case gb28181::MessageCmdType::name:  os << str; break;
+std::ostream &operator<<(std::ostream &os, const gb28181::MessageCmdType &type) {
+#define EXPAND_XX(type, name, value, str)                                                                              \
+    case gb28181::MessageCmdType::name: os << str; break;
     switch (type) {
         GB28181_XML_CMD_MAP(EXPAND_XX)
 #undef EXPAND_XX
@@ -18,8 +19,9 @@ std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type) 
     }
     return os;
 }
-std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type) {
-#define EXPAND_XX(type, name, value, str) case gb28181::MessageRootType::name:  os << str; break;
+std::ostream &operator<<(std::ostream &os, const gb28181::MessageRootType &type) {
+#define EXPAND_XX(type, name, value, str)                                                                              \
+    case gb28181::MessageRootType::name: os << str; break;
     switch (type) {
         GB28181_XML_ROOT_MAP(EXPAND_XX)
 #undef EXPAND_XX
@@ -27,7 +29,6 @@ std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type)
     }
     return os;
 }
-
 
 #define EXPAND_XX(type, name, value, str)                                                                              \
     case type::name: return str;
@@ -259,7 +260,7 @@ void new_xml_element(DeviceConfigType val, tinyxml2::XMLElement *root, const cha
     std::stringstream ss;
     for (auto &it : DeviceConfigTypeMap_) {
         if (static_cast<std::underlying_type<DeviceConfigType>::type>(it.first) & int_val) {
-            ss << "BasicParam/";
+            ss << it.second << "/";
         }
     }
     std::string str = ss.str();
@@ -294,27 +295,236 @@ void new_xml_element(DutyStatusType val, tinyxml2::XMLElement *root, const char 
 #undef GET_ENUM_NAME
 #undef EXPEND_ENUM_XX_NAME
 
-void new_xml_element(const DeviceIdArr& val, tinyxml2::XMLElement *root, const char *key) {
-    if (val.DeviceID.empty() || root == nullptr || key == nullptr || key[0] == '\0') return;
+void new_xml_element(const DeviceIdArr &val, tinyxml2::XMLElement *root, const char *key) {
+    if (val.DeviceID.empty() || root == nullptr || key == nullptr || key[0] == '\0')
+        return;
     auto ele = root->InsertNewChildElement(key);
     for (auto &it : val.DeviceID) {
         auto sub_ele = ele->InsertNewChildElement("DeviceID");
         sub_ele->SetText(it.c_str());
     }
 }
-void new_xml_element(const DeviceStatusAlarmStatusItem& val, tinyxml2::XMLElement *root, const char *key) {
-    if (root == nullptr || key == nullptr || key[0] == '\0') return;
+void new_xml_element(const DeviceStatusAlarmStatusItem &val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
     auto ele = root->InsertNewChildElement("key");
     new_xml_element(val.DeviceID, ele, "DeviceID");
     new_xml_element(val.DutyStatus, ele, "DutyStatus");
 }
-void new_xml_element(const DeviceStatusAlarmStatus& val, tinyxml2::XMLElement *root, const char *key) {
-    if (val.Item.empty() || root == nullptr || key == nullptr || key[0] == '\0') return;
+void new_xml_element(const DeviceStatusAlarmStatus &val, tinyxml2::XMLElement *root, const char *key) {
+    if (val.Item.empty() || root == nullptr || key == nullptr || key[0] == '\0')
+        return;
     auto ele = root->InsertNewChildElement(key);
     for (auto &it : val.Item) {
         new_xml_element(it, ele, "Item");
     }
     ele->SetAttribute("Num", val.Item.size());
+}
+
+void new_xml_element(const BasicParamCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->Name, ele, "Name");
+    new_xml_element(val->Expiration, ele, "Expiration");
+    new_xml_element(val->HeartBeatInterval, ele, "HeartBeatInterval");
+    new_xml_element(val->HeartBeatCount, ele, "HeartBeatCount");
+}
+void new_xml_element(const VideoParamOptCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->DownloadSpeed, ele, "DownloadSpeed");
+    new_xml_element(val->Resolution, ele, "Resolution");
+}
+void new_xml_element(const SVACEncodeCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    if (val->ROIParma) {
+        auto roi = ele->InsertNewChildElement("ROIParma");
+        new_xml_element(val->ROIParma->ROIFlag, roi, "ROIFlag");
+        new_xml_element(val->ROIParma->ROINumber, roi, "ROINumber");
+        for (auto &it : val->ROIParma->Item) {
+            auto item = roi->InsertNewChildElement("Item");
+            new_xml_element(it.ROISeq, item, "ROISeq");
+            new_xml_element(it.TopLeft, item, "TopLeft");
+            new_xml_element(it.BottomRight, item, "BottomRight");
+            new_xml_element(it.ROIQP, item, "ROIQP");
+        }
+    }
+    if (val->SVACParam) {
+        auto svac = ele->InsertNewChildElement("SVACParam");
+        new_xml_element(val->SVACParam->SVCSpaceDomainMode, svac, "SVCSpaceDomainMode");
+        new_xml_element(val->SVACParam->SVCTimeDomainMode, svac, "SVCTimeDomainMode");
+        new_xml_element(val->SVACParam->SSVCRatioValue, svac, "SSVCRatioValue");
+        new_xml_element(val->SVACParam->SVCSpaceSupportMode, svac, "SVCSpaceSupportMode");
+        new_xml_element(val->SVACParam->SVCTimeSupportMode, svac, "SVCTimeSupportMode");
+        new_xml_element(val->SVACParam->SSVCRatioSupportList, svac, "SSVCRatioSupportList");
+    }
+    if (val->SurveillanceParam) {
+        auto surveil = ele->InsertNewChildElement("SurveillanceParam");
+        new_xml_element(val->SurveillanceParam->TimeFlag, surveil, "TimeFlag");
+        new_xml_element(val->SurveillanceParam->OSDFlag, surveil, "OSDFlag");
+        new_xml_element(val->SurveillanceParam->AIFlag, surveil, "AIFlag");
+        new_xml_element(val->SurveillanceParam->GISFlag, surveil, "GISFlag");
+    }
+    if (val->AudioParam) {
+        auto audio = ele->InsertNewChildElement("AudioParam");
+        new_xml_element(val->AudioParam->AudioRecognitionFlag, audio, "AudioRecognitionFlag");
+    }
+}
+void new_xml_element(const SVACDecodeCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    if (val->SVCParam) {
+        auto svc = ele->InsertNewChildElement("SVCParam");
+        new_xml_element(val->SVCParam->SVCSTMMode, svc, "SVCSTMMode");
+        new_xml_element(val->SVCParam->SVCSpaceSupportMode, svc, "SVCSpaceSupportMode");
+        new_xml_element(val->SVCParam->SVCTimeSupportMode, svc, "SVCTimeSupportMode");
+    }
+    if (val->SurveillanceParam) {
+        auto ssv = ele->InsertNewChildElement("SurveillanceParam");
+        new_xml_element(val->SurveillanceParam->TimeFlag, ssv, "TimeFlag");
+        new_xml_element(val->SurveillanceParam->OSDFlag, ssv, "OSDFlag");
+        new_xml_element(val->SurveillanceParam->AIFlag, ssv, "AIFlag");
+        new_xml_element(val->SurveillanceParam->GISFlag, ssv, "GISFlag");
+    }
+}
+void new_xml_element(const VideoParamAttributeCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val) {
+        ele->SetAttribute("Num", 0);
+        return;
+    }
+    ele->SetAttribute("Num", val->Item.size());
+    for (auto &it : val->Item) {
+        auto item = ele->InsertNewChildElement("Item");
+        new_xml_element(it.StreamNumber, item, "StreamNumber");
+        new_xml_element(it.VideoFormat, item, "VideoFormat");
+        new_xml_element(it.Resolution, item, "Resolution");
+        new_xml_element(it.FrameRate, item, "FrameRate");
+        new_xml_element(it.BitRateType, item, "BitRateType");
+        new_xml_element(it.VideoBitRate, item, "VideoBitRate");
+    }
+}
+void new_xml_element(const VideoRecordPlanCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->RecordEnable, ele, "RecordEnable");
+    new_xml_element(val->RecordScheduleSumNum, ele, "RecordScheduleSumNum");
+    for (auto &it : val->RecordSchedule) {
+        auto item = ele->InsertNewChildElement("RecordSchedule");
+        new_xml_element(it.WeekDayNum, item, "WeekDayNum");
+        new_xml_element(it.TimeSegmentSumNum, item, "TimeSegmentSumNum");
+        for (auto &t : it.TimeSegment) {
+            auto item1 = ele->InsertNewChildElement("TimeSegment");
+            new_xml_element(t.StartHour, item1, "StartHour");
+            new_xml_element(t.StartMin, item1, "StartMin");
+            new_xml_element(t.StartSec, item1, "StartSec");
+            new_xml_element(t.StopHour, item1, "StopHour");
+            new_xml_element(t.StopMin, item1, "StopMin");
+            new_xml_element(t.StopSec, item1, "StopSec");
+        }
+    }
+    new_xml_element(val->StreamNumber, ele, "StreamNumber");
+}
+void new_xml_element(const VideoAlarmRecordCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->RecordEnable, ele, "RecordEnable");
+    new_xml_element(val->StreamNumber, ele, "StreamNumber");
+    new_xml_element(val->RecordTime, ele, "RecordTime");
+    new_xml_element(val->PreRecordTime, ele, "PreRecordTime");
+}
+void new_xml_element(const PictureMaskClgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->On, ele, "On");
+    new_xml_element(val->SumNum, ele, "SumNum");
+    if (val->RegionList) {
+        auto region = ele->InsertNewChildElement("RegionList");
+        region->SetAttribute("Num", val->RegionList->Item.size());
+        for (auto &it : val->RegionList->Item) {
+            auto item = region->InsertNewChildElement("Item");
+            new_xml_element(it.Seq, ele, "Seq");
+            auto str = toolkit::str_format("%d,%d,%d,%d", it.Point.lx, it.Point.ly, it.Point.rx, it.Point.ry);
+            new_xml_element(str, ele, "Point");
+        }
+    }
+}
+void new_xml_element(const FrameMirrorCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    if (val) {
+        new_xml_element(val->FrameMirror, root, "FrameMirror");
+    } else {
+        root->InsertNewChildElement(key);
+    }
+}
+void new_xml_element(const AlarmReportCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->MotionDetection, ele, "MotionDetection");
+    new_xml_element(val->FieldDetection, ele, "FieldDetection");
+}
+
+void new_xml_element(const OSDCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->Length, ele, "Length");
+    new_xml_element(val->Width, ele, "Width");
+    new_xml_element(val->TimeX, ele, "TimeX");
+    new_xml_element(val->TimeY, ele, "TimeY");
+    new_xml_element(val->TimeEnable, ele, "TimeEnable");
+    new_xml_element(val->TextEnable, ele, "TextEnable");
+    new_xml_element(val->TimeType, ele, "TimeType");
+    new_xml_element(val->SumNum, ele, "SumNum");
+    new_xml_element(val->FontSize, ele, "FontSize");
+    for (auto &it : val->Item) {
+        auto item = ele->InsertNewChildElement("Item");
+        new_xml_element(it.Text, item, "Text");
+        new_xml_element(it.X, item, "X");
+        new_xml_element(it.Y, item, "Y");
+        new_xml_element(it.FontSize, item, "FontSize");
+    }
+}
+void new_xml_element(const SnapShotCfgType *val, tinyxml2::XMLElement *root, const char *key) {
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    if (!val)
+        return;
+    new_xml_element(val->SnapNum, ele, "SnapNum");
+    new_xml_element(val->Interval, ele, "Interval");
+    new_xml_element(val->UploadURL, ele, "UploadURL");
+    new_xml_element(val->SessionID, ele, "SessionID");
 }
 
 #define MAKE_NEW_XML_ELE                                                                                               \
@@ -497,13 +707,15 @@ bool from_xml_element(DeviceIdArr &val, const tinyxml2::XMLElement *root, const 
     return false;
 }
 
-bool from_xml_element(DeviceStatusAlarmStatus& val, const tinyxml2::XMLElement *root, const char *key) {
-    if (!key || key[0] == '\0' || root == nullptr) return false;
+bool from_xml_element(DeviceStatusAlarmStatus &val, const tinyxml2::XMLElement *root, const char *key) {
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
     if (auto ele = root->FirstChildElement(key)) {
         auto sub_ele = ele->FirstChildElement("Item");
         while (sub_ele) {
             DeviceStatusAlarmStatusItem item;
-            if (from_xml_element(item.DeviceID, sub_ele, "DeviceID") && from_xml_element(item.DutyStatus, sub_ele, "DutyStatus")) {
+            if (from_xml_element(item.DeviceID, sub_ele, "DeviceID")
+                && from_xml_element(item.DutyStatus, sub_ele, "DutyStatus")) {
                 val.Item.emplace_back(std::move(item));
             }
             sub_ele = sub_ele->NextSiblingElement("Item");
@@ -513,6 +725,191 @@ bool from_xml_element(DeviceStatusAlarmStatus& val, const tinyxml2::XMLElement *
     }
     return false;
 }
+bool from_xml_element(BasicParamCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.Name, ele, "Name");
+        from_xml_element(val.Expiration, ele, "Expiration");
+        from_xml_element(val.HeartBeatInterval, ele, "HeartBeatInterval");
+        from_xml_element(val.HeartBeatCount, ele, "HeartBeatCount");
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(VideoParamOptCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.DownloadSpeed, ele, "DownloadSpeed");
+        from_xml_element(val.Resolution, ele, "Resolution");
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(SVACEncodeCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        if (auto roi = ele->FirstChildElement("ROIParma"); roi && !roi->NoChildren()) {
+            val.ROIParma = ROIParmaInfo();
+            from_xml_element(val.ROIParma->ROIFlag, roi, "ROIFlag");
+            from_xml_element(val.ROIParma->ROINumber, roi, "ROINumber");
+            auto item = roi->FirstChildElement("Item");
+            while (item) {
+                if (item->NoChildren()) {
+                    item = item->NextSiblingElement("Item");
+                    continue;
+                }
+                ROIParmaInfoItem item_val;
+                from_xml_element(item_val.ROISeq, item, "ROISeq");
+                from_xml_element(item_val.TopLeft, item, "TopLeft");
+                from_xml_element(item_val.BottomRight, item, "BottomRight");
+                from_xml_element(item_val.ROIQP, item, "ROIQP");
+                val.ROIParma->Item.emplace_back(std::move(item_val));
+                item = item->NextSiblingElement("Item");
+            }
+        }
+        if (auto svac = ele->FirstChildElement("SVACParam"); svac && !svac->NoChildren()) {
+            val.SVACParam = SVACParamInfo();
+            from_xml_element(val.SVACParam->SVCSpaceDomainMode, svac, "SVCSpaceDomainMode");
+            from_xml_element(val.SVACParam->SVCTimeDomainMode, svac, "SVCTimeDomainMode");
+            from_xml_element(val.SVACParam->SSVCRatioValue, svac, "SSVCRatioValue");
+            from_xml_element(val.SVACParam->SVCSpaceSupportMode, svac, "SVCSpaceSupportMode");
+            from_xml_element(val.SVACParam->SVCTimeSupportMode, svac, "SVCTimeSupportMode");
+            from_xml_element(val.SVACParam->SSVCRatioSupportList, svac, "SSVCRatioSupportList");
+        }
+        if (auto item = ele->FirstChildElement("SurveillanceParam"); item && !item->NoChildren()) {
+            val.SurveillanceParam = SurveillanceParamInfo();
+            from_xml_element(val.SurveillanceParam->TimeFlag, item, "TimeFlag");
+            from_xml_element(val.SurveillanceParam->OSDFlag, item, "OSDFlag");
+            from_xml_element(val.SurveillanceParam->AIFlag, item, "AIFlag");
+            from_xml_element(val.SurveillanceParam->GISFlag, item, "GISFlag");
+        }
+        if (auto item = ele->FirstChildElement("AudioParam"); item && !item->NoChildren()) {
+            val.AudioParam = AudioParamInfo();
+            from_xml_element(val.AudioParam->AudioRecognitionFlag, item, "AudioRecognitionFlag");
+        }
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(SVACDecodeCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        if (auto item = ele->FirstChildElement("SVCParam"); item && !item->NoChildren()) {
+            val.SVCParam = SVCParamInfo();
+            from_xml_element(val.SVCParam->SVCSTMMode, item, "SVCSTMMode");
+            from_xml_element(val.SVCParam->SVCSpaceSupportMode, item, "SVCSpaceSupportMode");
+            from_xml_element(val.SVCParam->SVCTimeSupportMode, item, "SVCTimeSupportMode");
+        }
+        if (auto item = ele->FirstChildElement("SurveillanceParam"); item && !item->NoChildren()) {
+            val.SurveillanceParam = SurveillanceParamInfo();
+            from_xml_element(val.SurveillanceParam->TimeFlag, item, "TimeFlag");
+            from_xml_element(val.SurveillanceParam->OSDFlag, item, "OSDFlag");
+            from_xml_element(val.SurveillanceParam->AIFlag, item, "AIFlag");
+            from_xml_element(val.SurveillanceParam->GISFlag, item, "GISFlag");
+        }
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(VideoParamAttributeCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        auto item = ele->FirstChildElement("Item");
+        while (item) {
+            if (item->NoChildren()) {
+                item = item->NextSiblingElement("Item");
+                continue;
+            }
+            VideoParamAttributeCfgTypeItem item_val;
+            from_xml_element(item_val.StreamNumber, item, "StreamNumber");
+            from_xml_element(item_val.VideoFormat, item, "VideoFormat");
+            from_xml_element(item_val.Resolution, item, "Resolution");
+            from_xml_element(item_val.FrameRate, item, "FrameRate");
+            from_xml_element(item_val.BitRateType, item, "BitRateType");
+            from_xml_element(item_val.VideoBitRate, item, "VideoBitRate");
+            val.Item.emplace_back(std::move(item_val));
+            item = item->NextSiblingElement("Item");
+        }
+        val.Num = val.Item.size();
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(VideoRecordPlanCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.RecordEnable, ele, "RecordEnable");
+        from_xml_element(val.StreamNumber, ele, "StreamNumber");
+        from_xml_element(val.RecordScheduleSumNum, ele, "RecordScheduleSumNum");
+        auto item = ele->FirstChildElement("RecordSchedule");
+        while (item) {
+            if (item->NoChildren()) {
+                item = item->NextSiblingElement("RecordSchedule");
+                continue;
+            }
+            VideoRecordPlanCfgTypeRecordSchedule item_val;
+            from_xml_element(item_val.WeekDayNum, item, "WeekDayNum");
+            from_xml_element(item_val.TimeSegmentSumNum, item, "TimeSegmentSumNum");
+
+            auto item2 = item->FirstChildElement("TimeSegment");
+            while (item2) {
+                if (item->NoChildren()) {
+                    item2 = item2->NextSiblingElement("TimeSegment");
+                    continue;
+                }
+                VideoRecordPlanCfgTypeRecordScheduleTimeSegment item_val_t;
+                from_xml_element(item_val_t.StartHour, item2, "StartHour");
+                from_xml_element(item_val_t.StartMin, item2, "StartMin");
+                from_xml_element(item_val_t.StartSec, item2, "StartSec");
+                from_xml_element(item_val_t.StopHour, item2, "StopHour");
+                from_xml_element(item_val_t.StopMin, item2, "StopMin");
+                from_xml_element(item_val_t.StopSec, item2, "StopSec");
+                item_val.TimeSegment.emplace_back(std::move(item_val_t));
+                item2 = item2->NextSiblingElement("TimeSegment");
+            }
+            val.RecordSchedule.emplace_back(std::move(item_val));
+            item = item->NextSiblingElement("RecordSchedule");
+        }
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(VideoAlarmRecordCfgType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(PictureMaskClgType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(FrameMirrorCfgType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(AlarmReportCfgType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(OSDCfgType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(SnapShotCfgType &val, const tinyxml2::XMLElement *root, const char *key);
 
 #define MAKE_NEW_XML_ELE                                                                                               \
     if (val)                                                                                                           \

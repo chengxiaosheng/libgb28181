@@ -33,6 +33,14 @@ void set_message_header(struct sip_uac_transaction_t *transaction) {
     set_message_agent(transaction);
     set_message_gbt_version(transaction);
 }
+void set_message_content_type(struct sip_uac_transaction_t* transaction, enum SipContentType content_type) {
+    if (content_type == SipContentType_XML) {
+        sip_uac_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_XML);
+    } else if (content_type == SipContentType_SDP) {
+        sip_uac_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_SDP);
+    }
+}
+
 void set_message_agent(struct sip_uas_transaction_t *transaction) {
     sip_uas_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);
 }
@@ -57,6 +65,13 @@ void set_message_expires(struct sip_uas_transaction_t * transaction, int expires
 void set_message_header(struct sip_uas_transaction_t *transaction) {
     set_message_agent(transaction);
     set_message_gbt_version(transaction);
+}
+void set_message_content_type(struct sip_uas_transaction_t *transaction, enum SipContentType content_type) {
+    if (content_type == SipContentType_XML) {
+        sip_uas_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_XML);
+    } else if (content_type == SipContentType_SDP) {
+        sip_uas_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_SDP);
+    }
 }
 
 PlatformVersionType get_message_gbt_version(struct sip_message_t *msg) {

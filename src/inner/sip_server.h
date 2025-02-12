@@ -18,6 +18,7 @@ struct sip_dialog_t;
 #endif
 
 namespace gb28181 {
+class SuperPlatformImpl;
 class SubordinatePlatformImpl;
 struct sip_agent_param;
 class SipSession;
@@ -123,7 +124,7 @@ private:
     std::shared_ptr<sip_agent_t> sip_ { nullptr };
     std::unordered_map<toolkit::EventPoller *, std::weak_ptr<toolkit::Socket>> udp_sockets_;
 
-    std::unordered_map<std::string, std::shared_ptr<SuperPlatform>> super_platforms_; // 上级平台
+    std::unordered_map<std::string, std::shared_ptr<SuperPlatformImpl>> super_platforms_; // 上级平台
     std::unordered_map<std::string, std::shared_ptr<SubordinatePlatformImpl>> sub_platforms_; // 下级平台
     std::shared_mutex platform_mutex_;
     subordinate_account_callback new_subordinate_account_callback_; // 查找下级平台?

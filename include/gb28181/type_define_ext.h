@@ -54,6 +54,20 @@ void new_xml_element(const DeviceIdArr& val, tinyxml2::XMLElement *root, const c
 void new_xml_element(const DeviceStatusAlarmStatusItem& val, tinyxml2::XMLElement *root, const char *key);
 void new_xml_element(const DeviceStatusAlarmStatus& val, tinyxml2::XMLElement *root, const char *key);
 
+void new_xml_element(const BasicParamCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const VideoParamOptCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const SVACEncodeCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const SVACDecodeCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const VideoParamAttributeCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const VideoRecordPlanCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const VideoAlarmRecordCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const PictureMaskClgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const FrameMirrorCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const AlarmReportCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const OSDCfgType *val, tinyxml2::XMLElement *root, const char *key);
+void new_xml_element(const SnapShotCfgType *val, tinyxml2::XMLElement *root, const char *key);
+
+
 
 
 
@@ -95,6 +109,21 @@ bool from_xml_element(DutyStatusType &val, const tinyxml2::XMLElement *root, con
 
 bool from_xml_element(DeviceIdArr &val, const tinyxml2::XMLElement *root, const char *key);
 bool from_xml_element(DeviceStatusAlarmStatus& val, const tinyxml2::XMLElement *root, const char *key);
+
+bool from_xml_element(BasicParamCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(VideoParamOptCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(SVACEncodeCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(SVACDecodeCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(VideoParamAttributeCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(VideoRecordPlanCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(VideoAlarmRecordCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(PictureMaskClgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(FrameMirrorCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(AlarmReportCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(OSDCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+bool from_xml_element(SnapShotCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has);
+
+
 
 
 bool from_xml_element(std::optional<int8_t> &val, const tinyxml2::XMLElement *root, const char *key);

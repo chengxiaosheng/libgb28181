@@ -8,7 +8,7 @@ public:
     explicit BroadcastNotifyRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit BroadcastNotifyRequest(MessageBase &&messageBase)
-        : MessageBase(messageBase) {}
+        : MessageBase(std::move(messageBase)) {}
     /**
      *
      * @param source_id 语音输入设备的设备编码
@@ -41,7 +41,7 @@ public:
     explicit BroadcastNotifyResponse(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit BroadcastNotifyResponse(MessageBase &&messageBase)
-        : MessageBase(messageBase) {}
+        : MessageBase(std::move(messageBase)) {}
     explicit BroadcastNotifyResponse(std::string device_id, ResultType result = ResultType::OK);
 
     ResultType &result() { return result_; }

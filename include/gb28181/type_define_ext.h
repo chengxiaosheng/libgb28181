@@ -14,6 +14,11 @@ namespace gb28181 {
 std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type);
 std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type);
 
+DeviceConfigType operator|(const DeviceConfigType& lhs, const DeviceConfigType& rhs);
+DeviceConfigType operator&(const DeviceConfigType& lhs, const DeviceConfigType& rhs);
+DeviceConfigType& operator|=(DeviceConfigType& lhs, const DeviceConfigType& rhs);
+DeviceConfigType& operator&=(DeviceConfigType& lhs, const DeviceConfigType& rhs);
+
 CharEncodingType getCharEncodingType(const char *decl);
 MessageRootType getRootType(const char *val);
 const char *getRootTypeString(MessageRootType type);

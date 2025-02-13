@@ -1,9 +1,11 @@
 #include "subordinate_platform_impl.h"
 
 #include <Util/NoticeCenter.h>
+#include <gb28181/message/config_download_messsage.h>
 #include <gb28181/message/device_info_message.h>
 #include <gb28181/message/device_status_message.h>
 #include <gb28181/message/keepalive_message.h>
+#include <gb28181/message/preset_message.h>
 #include <gb28181/sip_common.h>
 #include <inner/sip_server.h>
 #include <inner/sip_session.h>
@@ -35,7 +37,7 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
     account_.plat_status.status = status;
     account_.plat_status.error = std::move(error);
     if (status == PlatformStatusType::online) {
-        account_.plat_status.register_time = toolkit::getCurrentMicrosecond();
+        account_.plat_status.register_time = toolkit::getCurrentMicrosecond(true);
     }
     // 异步广播平台在线状态
     toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this(), status, error]() {
@@ -49,7 +51,7 @@ int SubordinatePlatformImpl::on_keep_alive(std::shared_ptr<KeepaliveMessageReque
     if (account_.plat_status.status != PlatformStatusType::online) {
         return 0;
     }
-    account_.plat_status.keepalive_time = toolkit::getCurrentMicrosecond();
+    account_.plat_status.keepalive_time = toolkit::getCurrentMicrosecond(true);
     if (on_keep_alive_callback_) {
         toolkit::EventPollerPool::Instance().getPoller()->async(
             [this_ptr = shared_from_this(), request = std::move(request)]() {
@@ -172,6 +174,18 @@ void SubordinatePlatformImpl::query_device_status(
     auto request = std::make_shared<DeviceStatusMessageRequest>(device_id.empty() ? account_.platform_id : device_id);
     RequestProxy::newRequestProxy(shared_from_this(),request)->send(std::move(ret));
 }
+void SubordinatePlatformImpl::query_config(
+    const std::string &device_id, DeviceConfigType config_type,
+    std::function<void(std::shared_ptr<RequestProxy>)> ret) {
+    auto request = std::make_shared<ConfigDownloadRequestMessage>(device_id.empty() ? account_.platform_id : device_id, config_type);
+    RequestProxy::newRequestProxy(shared_from_this(),request)->send(std::move(ret));
+}
+void SubordinatePlatformImpl::query_preset(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
+    auto request = std::make_shared<PresetRequestMessage>(device_id.empty() ? account_.platform_id : device_id);
+    RequestProxy::newRequestProxy(shared_from_this(),request)->send(std::move(ret));
+}
+
 
 
 

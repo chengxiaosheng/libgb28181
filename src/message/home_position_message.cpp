@@ -1,5 +1,13 @@
 #include "gb28181/message/home_position_message.h"
 
+using namespace gb28181;
+
+HomePositionRequestMessage::HomePositionRequestMessage(const std::string &device_id)
+    : MessageBase() {
+    device_id_ = device_id;
+    root_ = MessageRootType::Query;
+    cmd_ = MessageCmdType::HomePositionQuery;
+}
 
 /**********************************************************************************************************
 文件名称:   home_position_message.cpp

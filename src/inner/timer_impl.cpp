@@ -29,7 +29,6 @@ sip_timer_t sip_timer_start(int timeout, sip_timer_handle handler, void* usrptr)
     if (timer_index_ == UINT32_MAX) {
         timer_index_ = 1;
     }
-    TraceL << "add sip-timer , timeout=" << timeout << ", handler=" << handler << ", usrptr=" << usrptr << ", timer_id=" << index;
     timer_map_[index] = poller->doDelayTask(timeout, [handler, usrptr, index]() {
         handler(usrptr);
         std::lock_guard<decltype(timer_mutex_)> lck(timer_mutex_);
@@ -40,7 +39,6 @@ sip_timer_t sip_timer_start(int timeout, sip_timer_handle handler, void* usrptr)
 }
 
 int sip_timer_stop(sip_timer_t* id) {
-    TraceL << "delete sip-timer, id=" << id;
     if (!id) return gb28181::sip_not_found;
     auto timer_id = (uint32_t)(uintptr_t)id;
     if (timer_id) {

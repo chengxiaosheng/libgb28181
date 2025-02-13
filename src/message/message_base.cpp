@@ -25,6 +25,9 @@ bool MessageBase::load_from_xml() {
     if (auto ele = root->FirstChildElement("DeviceID")) {
         device_id_ = ele->GetText();
     }
+    if (auto ele = root->FirstChildElement("Reason")) {
+        reason_ = ele->GetText();
+    }
     if (encoding_ == CharEncodingType::invalid) {
         if (auto decl = xml_ptr_->FirstChild(); decl && decl->ToDeclaration()) {
             if (auto enc = getCharEncodingType(decl->ToDeclaration()->Value()); enc != CharEncodingType::invalid) {
@@ -62,6 +65,10 @@ bool MessageBase::parse_to_xml(bool coercion) {
     if (device_id_ && !device_id_->empty()) {
         ele = root->InsertNewChildElement("DeviceID");
         ele->SetText(device_id_->c_str());
+    }
+    if (!reason_.empty()) {
+        ele = root->InsertNewChildElement("Reason");
+        ele->SetText(reason_.c_str());
     }
     if (!parse_detail()) {
         xml_ptr_.reset();

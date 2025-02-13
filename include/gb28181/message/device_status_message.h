@@ -38,11 +38,6 @@ public:
      */
     ResultType &status() { return status_; }
     /**
-     * 不正常工作的原因, 可选
-     * @return
-     */
-    std::string &reason() { return reason_; }
-    /**
      * 是否编码 可选
      * @return
      */
@@ -79,8 +74,6 @@ private:
     OnlineType online_ { OnlineType::invalid };
     // 是否正常工作 必选
     ResultType status_ { ResultType::invalid };
-    // 不正常工作的原因, 可选
-    std::string reason_;
     // 是否编码 可选
     StatusType encode_ { StatusType::invalid };
     // 是否录像 可选

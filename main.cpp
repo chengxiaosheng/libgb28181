@@ -50,6 +50,12 @@ int main() {
                 InfoL << "device_id = " << resp->device_id().value_or("") << ", = " << resp->model() << ", " << resp->firmware() << ", " << resp->manufacturer();
             }
         });
+        platform->query_config("", DeviceConfigType::BasicParam | DeviceConfigType::VideoParamOpt | DeviceConfigType::SVACEncodeConfig, [](const std::shared_ptr<gb28181::RequestProxy> &proxy) {
+            InfoL << "get query config result, ret = " << (int)proxy->status() << ", response_count = " << proxy->all_response().size() << ", error = " << proxy->error();
+        });
+        platform->query_preset("", [](const std::shared_ptr<gb28181::RequestProxy> &proxy) {
+            InfoL << "get query prset result, ret = " << (int)proxy->status() << ", response_count = " << proxy->all_response().size() << ", error = " << proxy->error();
+        });
     });
 
     // 捕获 SIGINT 和 SIGTERM 信号

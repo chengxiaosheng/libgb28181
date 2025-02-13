@@ -2,13 +2,16 @@
 
 #include "RequestCatalogImpl.h"
 #include "RequestConfigDownloadImpl.h"
+#include "RequestListImpl.h"
 #include "subordinate_platform_impl.h"
 #include "super_platform_impl.h"
 
 #include <Network/Session.h>
+#include <gb28181/message/config_download_messsage.h>
 #include <gb28181/message/device_info_message.h>
 #include <gb28181/message/device_status_message.h>
 #include <gb28181/message/message_base.h>
+#include <gb28181/message/preset_message.h>
 #include <gb28181/sip_common.h>
 #include <gb28181/type_define_ext.h>
 #include <inner/sip_common.h>
@@ -49,7 +52,8 @@ std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
     auto command = request->command();
     auto root = request->root();
     if (root == MessageRootType::Query) {
-        if (command == MessageCmdType::Catalog || command == MessageCmdType::ConfigDownload)
+        if (command == MessageCmdType::Catalog || command == MessageCmdType::ConfigDownload
+            || command == MessageCmdType::PresetQuery || command == MessageCmdType::CruiseTrackListQuery)
             type = MultipleResponses;
         else
             type = OneResponse;
@@ -63,10 +67,10 @@ std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
         return nullptr;
     }
     if (type == MultipleResponses) {
-        if (command == MessageCmdType::Catalog) {
-            return std::make_shared<RequestCatalogImpl>(platform, request);
+        if (command == MessageCmdType::ConfigDownload) {
+            return std::make_shared<RequestConfigDownloadImpl>(platform, request);
         }
-        return std::make_shared<RequestConfigDownloadImpl>(platform, request);
+        return std::make_shared<RequestListImpl>(platform, request);
     }
     return std::make_shared<RequestProxyImpl>(platform, request, type);
 }
@@ -77,9 +81,9 @@ int RequestProxyImpl::on_recv_reply(
     auto request = static_cast<RequestProxyImpl *>(param);
     if (auto via = sip_vias_get(&reply->vias, 0)) {
         std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
-        std::visit([&](auto & platform) {
-            platform->update_local_via(host, static_cast<uint16_t>(via->rport));
-        }, request->platform_);
+        std::visit(
+            [&](auto &platform) { platform->update_local_via(host, static_cast<uint16_t>(via->rport)); },
+            request->platform_);
     }
     std::shared_ptr<sip_message_t> sip_message(const_cast<sip_message_t *>(reply), [](sip_message_t *reply) {
         if (reply) {
@@ -90,7 +94,7 @@ int RequestProxyImpl::on_recv_reply(
     return 0;
 }
 void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int code) {
-    reply_time_ = toolkit::getCurrentMicrosecond();
+    reply_time_ = toolkit::getCurrentMicrosecond(true);
     reply_code_ = code;
     uac_transaction_.reset();
     if (SIP_IS_SIP_SUCCESS(code)) {
@@ -99,6 +103,7 @@ void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int 
         error_ = code == 0 || !sip_message ? "no reply" : "status code = " + std::to_string(code);
         status_ = code == 0 || !sip_message ? Timeout : Failed;
     }
+    on_reply_l();
     if (reply_callback_) {
         reply_callback_(shared_from_this(), code);
         reply_callback_ = {};
@@ -106,6 +111,15 @@ void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int 
     if (status_ != Replied) {
         on_completed();
     }
+    // 超时定时器
+    timer_ = std::make_shared<toolkit::Timer>(5,[this_ptr = shared_from_this()]() {
+        if (this_ptr->status_ == Replied) {
+            this_ptr->status_ = Timeout;
+            this_ptr->error_ = "the wait for a response has timed out";
+            this_ptr->on_completed();
+        }
+        return false;
+    }, nullptr);
 }
 void RequestProxyImpl::on_completed() {
     if (!result_flag_.test_and_set()) {
@@ -120,6 +134,7 @@ void RequestProxyImpl::on_completed() {
         reply_callback_ = nullptr;
         response_callback_ = nullptr;
         rcb_ = nullptr;
+        on_completed_l();
         std::visit([&](auto &&platform) { platform->remove_request_proxy(request_sn_); }, platform_);
     }
 }
@@ -171,7 +186,7 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
                         return this_ptr->on_completed();
                     }
                     auto payload = this_ptr->request_->str();
-                    this_ptr->send_time_ = toolkit::getCurrentMicrosecond();
+                    this_ptr->send_time_ = toolkit::getCurrentMicrosecond(true);
                     if (0
                         != sip_uac_send(
                             this_ptr->uac_transaction_.get(), payload.data(), payload.size(),
@@ -188,7 +203,7 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
 int RequestProxyImpl::on_response(const std::shared_ptr<MessageBase> &response) {
     bool completed = request_type_ == OneResponse;
     if (completed) {
-        response_end_time_ = toolkit::getCurrentMicrosecond();
+        response_end_time_ = toolkit::getCurrentMicrosecond(true);
         status_ = Succeeded;
     }
     int code = 200;
@@ -196,9 +211,8 @@ int RequestProxyImpl::on_response(const std::shared_ptr<MessageBase> &response) 
         code = response_callback_(shared_from_this(), response, completed);
     }
     if (completed) {
-        toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this()]() {
-            this_ptr->on_completed();
-        }, false);
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this()]() { this_ptr->on_completed(); }, false);
     }
     return code ? code : 400;
 }
@@ -217,8 +231,10 @@ int RequestProxyImpl::on_response(
             break;
         case MessageCmdType::RecordInfo: break;
         case MessageCmdType::Alarm: break;
-        case MessageCmdType::ConfigDownload: break;
-        case MessageCmdType::PresetQuery: break;
+        case MessageCmdType::ConfigDownload:
+            response = std::make_shared<ConfigDownloadResponseMessage>(std::move(message));
+            break;
+        case MessageCmdType::PresetQuery: response = std::make_shared<PresetResponseMessage>(std::move(message)); break;
         case MessageCmdType::MobilePosition: break;
         case MessageCmdType::HomePositionQuery: break;
         case MessageCmdType::CruiseTrackListQuery: break;
@@ -236,13 +252,20 @@ int RequestProxyImpl::on_response(
         WarnL << "unknown message command " << message.command();
         return 400;
     }
-    if (!response->load_from_xml()) {
-        WarnL << "load_from_xml failed, error = " << response->get_error();
-        return 400;
-    }
+    timer_.reset(); // 收到回复，立即取消超时定时器
     responses_.push_back(response);
     if (response_begin_time_ == 0) {
-        response_begin_time_ = toolkit::getCurrentMicrosecond();
+        response_begin_time_ = toolkit::getCurrentMicrosecond(true);
+    }
+    if (!response->load_from_xml()) {
+        status_ = Failed;
+        error_ = "load_from_xml failed, error = " + response->get_error();
+        WarnL << error_;
+        // 这里放入异步， 避免 on_completed 阻塞
+        toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this()]() {
+            this_ptr->on_completed();
+        }, false);
+        return 400;
     }
     return on_response(std::move(response));
 }

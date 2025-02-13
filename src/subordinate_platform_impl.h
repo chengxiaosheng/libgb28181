@@ -55,6 +55,8 @@ public:
     void
     query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) override;
     void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) override;
+    void query_config(const std::string &device_id, DeviceConfigType config_type, std::function<void(std::shared_ptr<RequestProxy>)> ret) override;
+    void query_preset(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) override;
 
 
     bool update_local_via(std::string host, uint16_t port) override;

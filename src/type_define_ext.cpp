@@ -30,6 +30,25 @@ std::ostream &operator<<(std::ostream &os, const gb28181::MessageRootType &type)
     return os;
 }
 
+DeviceConfigType operator|(const DeviceConfigType &lhs, const DeviceConfigType &rhs) {
+    return static_cast<DeviceConfigType>(
+        static_cast<std::underlying_type_t<DeviceConfigType>>(lhs)
+        | static_cast<std::underlying_type_t<DeviceConfigType>>(rhs));
+}
+DeviceConfigType operator&(const DeviceConfigType &lhs, const DeviceConfigType &rhs) {
+    return static_cast<DeviceConfigType>(
+        static_cast<std::underlying_type_t<DeviceConfigType>>(lhs)
+        & static_cast<std::underlying_type_t<DeviceConfigType>>(rhs));
+}
+DeviceConfigType &operator|=(DeviceConfigType &lhs, const DeviceConfigType &rhs) {
+    lhs = lhs | rhs;
+    return lhs;
+}
+DeviceConfigType &operator&=(DeviceConfigType &lhs, const DeviceConfigType &rhs) {
+    lhs = lhs & rhs;
+    return lhs;
+}
+
 #define EXPAND_XX(type, name, value, str)                                                                              \
     case type::name: return str;
 #define GET_ENUM_TYPE_STR(map)                                                                                         \
@@ -904,12 +923,135 @@ bool from_xml_element(VideoRecordPlanCfgType &val, const tinyxml2::XMLElement *r
     }
     return false;
 }
-bool from_xml_element(VideoAlarmRecordCfgType &val, const tinyxml2::XMLElement *root, const char *key);
-bool from_xml_element(PictureMaskClgType &val, const tinyxml2::XMLElement *root, const char *key);
-bool from_xml_element(FrameMirrorCfgType &val, const tinyxml2::XMLElement *root, const char *key);
-bool from_xml_element(AlarmReportCfgType &val, const tinyxml2::XMLElement *root, const char *key);
-bool from_xml_element(OSDCfgType &val, const tinyxml2::XMLElement *root, const char *key);
-bool from_xml_element(SnapShotCfgType &val, const tinyxml2::XMLElement *root, const char *key);
+bool from_xml_element(VideoAlarmRecordCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.RecordEnable, ele, "RecordEnable");
+        from_xml_element(val.StreamNumber, ele, "StreamNumber");
+        from_xml_element(val.RecordTime, ele, "RecordTime");
+        from_xml_element(val.PreRecordTime, ele, "PreRecordTime");
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(PictureMaskClgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.On, ele, "On");
+        from_xml_element(val.SumNum, ele, "SumNum");
+        if (auto region_list = ele->FirstChildElement("RegionList"); region_list && !region_list->NoChildren()) {
+            auto item = region_list->FirstChildElement("Item");
+            val.RegionList = RegionListInfo();
+            while (item) {
+                if (item->NoChildren()) {
+                    item = item->NextSiblingElement("Item");
+                    continue;
+                    ;
+                }
+                RegionListItem item_val;
+                from_xml_element(item_val.Seq, item, "Seq");
+                if (auto point = item->FirstChildElement("Point")) {
+                    if (sscanf_s(
+                            point->GetText(), "%d,%d,%d,%d", &item_val.Point.lx, &item_val.Point.ly, &item_val.Point.rx,
+                            &item_val.Point.ry)
+                        != 4) {
+                        WarnL << "parse PictureMask->RegionList->Item[]->Point failed, point = " << point->GetText();
+                    }
+                }
+                val.RegionList->Item.emplace_back(item_val);
+                item = item->NextSiblingElement("Item");
+            }
+            val.RegionList->Num = val.RegionList->Item.size();
+        }
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(FrameMirrorCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        return from_xml_element(val.FrameMirror, root, key);
+    }
+    return false;
+}
+bool from_xml_element(AlarmReportCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.MotionDetection, ele, "MotionDetection");
+        from_xml_element(val.FieldDetection, ele, "FieldDetection");
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(OSDCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.Length, ele, "Length");
+        from_xml_element(val.Width, ele, "Width");
+        from_xml_element(val.TimeX, ele, "TimeX");
+        from_xml_element(val.TimeY, ele, "TimeY");
+        from_xml_element(val.TimeEnable, ele, "TimeEnable");
+        from_xml_element(val.TextEnable, ele, "TextEnable");
+        from_xml_element(val.TimeType, ele, "TimeType");
+        from_xml_element(val.SumNum, ele, "SumNum");
+        from_xml_element(val.FontSize, ele, "FontSize");
+        auto item = ele->FirstChildElement("Item");
+        while (item) {
+            if (item->NoChildren()) {
+                item = item->NextSiblingElement("Item");
+                continue;
+            }
+            OSDCfgTypeTextItem item_val;
+            from_xml_element(item_val.Text, item, "Text");
+            from_xml_element(item_val.X, item, "X");
+            from_xml_element(item_val.Y, item, "Y");
+            from_xml_element(item_val.FontSize, item, "FontSize");
+            val.Item.emplace_back(std::move(item_val));
+            item = item->NextSiblingElement("Item");
+        }
+        return true;
+    }
+    return false;
+}
+bool from_xml_element(SnapShotCfgType &val, const tinyxml2::XMLElement *root, const char *key, bool &has) {
+    has = false;
+    if (!key || key[0] == '\0' || root == nullptr)
+        return false;
+    if (auto ele = root->FirstChildElement(key)) {
+        has = true;
+        if (ele->NoChildren())
+            return false;
+        from_xml_element(val.SnapNum, ele, "SnapNum");
+        from_xml_element(val.Interval, ele, "Interval");
+        from_xml_element(val.UploadURL, ele, "UploadURL");
+        from_xml_element(val.SessionID, ele, "SessionID");
+        return true;
+    }
+    return false;
+}
 
 #define MAKE_NEW_XML_ELE                                                                                               \
     if (val)                                                                                                           \

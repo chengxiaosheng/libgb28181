@@ -3,6 +3,7 @@
 #include "gb28181/message/message_base.h"
 
 #include <any>
+#include <utility>
 
 namespace gb28181 {
 class ConfigDownloadRequestMessage final : public MessageBase {
@@ -23,16 +24,18 @@ private:
     DeviceConfigType config_type_ { DeviceConfigType::invalid };
 };
 
-class ConfigDownloadResponseMessage final : public MessageBase {
+class ConfigDownloadResponseMessage : public MessageBase {
 public:
     explicit ConfigDownloadResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit ConfigDownloadResponseMessage(MessageBase &&messageBase)
         : MessageBase(std::move(messageBase)) {}
-    explicit ConfigDownloadResponseMessage(const std::string &device_id, ResultType result_type = ResultType::OK, std::unordered_map<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> config = {});
+    explicit ConfigDownloadResponseMessage(
+        const std::string &device_id, ResultType result_type = ResultType::OK,
+        std::unordered_map<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> config = {});
 
     void set_config(DeviceConfigType config_type, std::shared_ptr<DeviceConfigBase> value) {
-        configs_[config_type] = value;
+        configs_[config_type] = std::move(value);
     }
     template <class T, typename = std::enable_if_t<std::is_base_of<DeviceConfigBase, T>::value>>
     std::shared_ptr<T> get_config(DeviceConfigType config_type) const {
@@ -42,6 +45,9 @@ public:
         }
         return std::dynamic_pointer_cast<T>(it->second);
     }
+    DeviceConfigType get_config_type() const;
+
+    ResultType &result() { return result_; }
 
 protected:
     bool load_detail() override;
@@ -50,6 +56,7 @@ protected:
 private:
     ResultType result_ { ResultType::invalid };
     std::unordered_map<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> configs_;
+    friend class RequestConfigDownloadImpl;
 };
 
 } // namespace gb28181

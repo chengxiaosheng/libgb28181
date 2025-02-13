@@ -25,6 +25,10 @@ public:
 
     virtual void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
 
+    virtual void query_config(const std::string &device_id, DeviceConfigType config_type, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
+
+    virtual void query_preset(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
+
 private:
 };
 } // namespace gb28181

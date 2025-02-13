@@ -11,38 +11,42 @@ class MessageBase {
 public:
     virtual ~MessageBase() = default;
     explicit MessageBase(const std::shared_ptr<tinyxml2::XMLDocument> &xml);
+    MessageBase(MessageBase &&) = default;
+    MessageBase &operator=(MessageBase &&) = default;
     /**
      * 消息类型
      * @return
      */
-    inline MessageRootType root() const { return root_; }
+    MessageRootType root() const { return root_; }
     /**
      * 消息命令
      * @return
      */
-    inline MessageCmdType command() const { return cmd_; }
+    MessageCmdType command() const { return cmd_; }
     /**
      * xml文档字符编码
      * @return
      */
-    inline CharEncodingType encoding() const { return encoding_; }
+    CharEncodingType encoding() const { return encoding_; }
     void encoding(CharEncodingType encoding) { encoding_ = encoding; }
     /**
      * GB/T 28181 SN
      * @return
      */
-    inline int sn() const { return sn_; }
-    void sn(int sn) {sn_ = sn; }
+    int sn() const { return sn_; }
+    void sn(int sn) { sn_ = sn; }
+
+    std::string &reason() { return reason_; }
     /**
      * 设备/平台编码
      * @return
      */
-    inline const std::optional<std::string> &device_id() const { return device_id_; }
+    const std::optional<std::string> &device_id() const { return device_id_; }
     /**
      * xml 文档指针
      * @return
      */
-    inline std::shared_ptr<tinyxml2::XMLDocument> xml_ptr() const { return xml_ptr_; }
+    std::shared_ptr<tinyxml2::XMLDocument> xml_ptr() const { return xml_ptr_; }
     /**
      * 追加用户扩展数据集合， 对回复无效 仅提交请求的时候有效
      * @param data
@@ -57,9 +61,9 @@ public:
      * 获取扩展数据集， 其实没有多大的意义
      * @return
      */
-    inline std::vector<ExtendData> &extend_data() { return extend_data_; }
+    std::vector<ExtendData> &extend_data() { return extend_data_; }
 
-    inline explicit operator bool() const { return is_valid_; }
+    explicit operator bool() const { return is_valid_; }
 
     /**
      * 解析xml 文档
@@ -74,9 +78,7 @@ public:
     bool parse_to_xml(bool coercion = false);
     std::string str() const;
 
-    std::string get_error() const {
-        return error_message_;
-    }
+    std::string get_error() const { return error_message_; }
 
 protected:
     MessageBase() = default;
@@ -87,16 +89,27 @@ protected:
      * 封装后的消息太长了
      */
     virtual void payload_too_big() const {}
+
 protected:
     MessageRootType root_ { MessageRootType::invalid };
     MessageCmdType cmd_ { MessageCmdType::invalid };
     bool is_valid_ { false };
     CharEncodingType encoding_ { CharEncodingType::invalid };
     int sn_ { 1 };
+    std::string reason_;
     std::optional<std::string> device_id_;
     std::shared_ptr<tinyxml2::XMLDocument> xml_ptr_ { nullptr };
     std::vector<ExtendData> extend_data_;
     std::string error_message_;
+};
+
+class ListMessageBase : public virtual MessageBase {
+public:
+    virtual int32_t num() = 0;
+    int32_t &sum_num() { return sum_num_; }
+
+protected:
+    int32_t sum_num_ { 0 };
 };
 
 } // namespace gb28181

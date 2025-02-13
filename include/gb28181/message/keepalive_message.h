@@ -7,7 +7,7 @@ namespace gb28181 {
 class KeepaliveMessageRequest final : public MessageBase {
 public:
   explicit KeepaliveMessageRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml) : MessageBase(xml) {}
-  explicit KeepaliveMessageRequest(MessageBase &&messageBase) : MessageBase(messageBase) {}
+  explicit KeepaliveMessageRequest(MessageBase &&messageBase) : MessageBase(std::move(messageBase)) {}
   explicit KeepaliveMessageRequest(const std::string &device_id, ResultType status = ResultType::OK);
 
   ResultType & status() {

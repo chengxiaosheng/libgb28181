@@ -29,8 +29,20 @@ public:
         OneResponse = 2, // 单个应答的请求
         MultipleResponses = 3, // 多个应答的请求
     };
-    using ResponseCallback = std::function<int(std::shared_ptr<RequestProxy>, std::shared_ptr<MessageBase>, bool end)>;
-    using ReplyCallback = std::function<void(std::shared_ptr<RequestProxy>, int code)>;
+    /**
+     * 对方返回的应答
+     * @param proxy 请求代理的指针
+     * @param response 返回的消息指针
+     * @param end 是否结束（是否为最后一个）
+     * @return sip 状态码， 此状态码用以回复到对端，
+     */
+    using ResponseCallback = std::function<int(std::shared_ptr<RequestProxy> proxy, std::shared_ptr<MessageBase> response, bool end)>;
+    /**
+     * 针对请求的应答
+     * @param proxy 请求代理的指针
+     * @param code 对方回复的sip状态码
+     */
+    using ReplyCallback = std::function<void(std::shared_ptr<RequestProxy> proxy, int code)>;
 
     /**
      * 获取所有应答
@@ -42,7 +54,7 @@ public:
      * 获取第一个应答
      * @return
      */
-    const std::shared_ptr<MessageBase>  response() const {
+    virtual std::shared_ptr<MessageBase> response() {
         auto list = all_response();
         if (list.empty()) return nullptr;
         return list.front();
@@ -75,6 +87,7 @@ public:
     /**
      * 设置数据回调
      * @remark 每得到一个应答都会执行一次回调
+     * 请谨慎使用，回调是同步执行，且需要返回状态码，请不要阻塞
      */
     virtual void set_response_callback(ResponseCallback) = 0;
 
@@ -98,12 +111,6 @@ public:
      * @return
      */
     virtual uint64_t response_end_time() const = 0;
-
-    /**
-     * 设置超时时间
-     * @param sec
-     */
-    virtual void set_timeout(int sec) = 0;
 
     /**
      * 构建一个请求

@@ -177,6 +177,9 @@ int on_uas_message(
     }
     if (!has_platform) {
         WarnL << "platform was not found";
+        if (message.command() == MessageCmdType::Keepalive) {
+            return 0;
+        }
         return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
     }
     // [fold] endregion get platform

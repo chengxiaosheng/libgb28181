@@ -38,7 +38,6 @@ bool DeviceStatusMessageResponse::load_detail() {
         error_message_ = "The Status field invalid";
         return false;
     }
-    from_xml_element(reason_, root, "Reason");
     from_xml_element(encode_, root, "Encode");
     from_xml_element(record_, root, "Record");
     from_xml_element(device_time_, root, "DeviceTime");

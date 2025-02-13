@@ -220,7 +220,7 @@ enum class SubscribeStatusType : uint8_t {
     Failed // 失败
 };
 
-#define ResultTypeMap(XX) XX(ResultType, OK, 1, "OK") XX(ResultType, Error, 2, "Error")
+#define ResultTypeMap(XX) XX(ResultType, OK, 1, "OK") XX(ResultType, Error, 2, "ERROR")
 /**
  * 执行结果枚举
  */

@@ -2,11 +2,15 @@
 #define gb28181_src_request_REQUESTPROXYIMPL_H
 #include "gb28181/message/request_proxy.h"
 
+#include <Network/Buffer.h>
 #include <atomic>
 #include <variant>
 
 #ifdef __cplusplus
 
+namespace toolkit {
+class Timer;
+}
 namespace gb28181 {
 class SuperPlatformImpl;
 class SubordinatePlatformImpl;
@@ -30,7 +34,7 @@ public:
     RequestProxyImpl(
         const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request,
         RequestType type);
-    ~RequestProxyImpl();
+    ~RequestProxyImpl() override;
     void set_sn(int sn) { request_sn_ = sn; }
     Status status() const override { return status_; }
     RequestType type() const override { return request_type_; }
@@ -49,9 +53,13 @@ public:
 protected:
     virtual int on_response(const std::shared_ptr<MessageBase> &response);
 
-    virtual void on_reply(std::shared_ptr<sip_message_t> sip_message, int code);
+    void on_reply(std::shared_ptr<sip_message_t> sip_message, int code);
 
-    virtual void on_completed();
+    void on_completed();
+
+    virtual void on_reply_l() {}
+
+    virtual void on_completed_l() {}
 
 protected:
     uint64_t send_time_ { 0 };
@@ -74,6 +82,7 @@ protected:
     ResponseCallback response_callback_; // 应答回调
 
 private:
+    std::shared_ptr<toolkit::Timer> timer_; // 等待应答超时
     int on_response(
         MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,
         std::shared_ptr<sip_message_t> request);

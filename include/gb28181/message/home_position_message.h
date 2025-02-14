@@ -17,13 +17,16 @@ public:
         : MessageBase(xml) {}
     explicit HomePositionResponseMessage(MessageBase &&messageBase)
         : MessageBase(std::move(messageBase)) {}
-    explicit HomePositionResponseMessage(const std::string &device_id, HomePositionType &&home_position);
+    explicit HomePositionResponseMessage(const std::string &device_id, std::optional<HomePositionType> &&home_position);
+
+    std::optional<HomePositionType> &home_position() { return home_position_; }
 
 protected:
     bool load_detail() override;
     bool parse_detail() override;
+
 private:
-    HomePositionType home_position_;
+    std::optional<HomePositionType> home_position_;
 };
 } // namespace gb28181
 

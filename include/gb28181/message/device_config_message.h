@@ -22,7 +22,24 @@ private:
     std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> config_;
 };
 
-class DeviceConfigResponseMessage : public MessageBase {};
+class DeviceConfigResponseMessage final : public MessageBase {
+public:
+    explicit DeviceConfigResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
+        : MessageBase(xml) {}
+    explicit DeviceConfigResponseMessage(MessageBase &&messageBase)
+        : MessageBase(std::move(messageBase)) {}
+    explicit DeviceConfigResponseMessage(
+        const std::string &device_id, ResultType result = ResultType::OK, std::string reason = "");
+
+    ResultType result() const { return result_; }
+
+protected:
+    bool load_detail() override;
+    bool parse_detail() override;
+
+private:
+    ResultType result_ { ResultType::invalid };
+};
 
 } // namespace gb28181
 

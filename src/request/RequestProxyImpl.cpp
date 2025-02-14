@@ -7,11 +7,20 @@
 #include "super_platform_impl.h"
 
 #include <Network/Session.h>
+#include <gb28181/message/broadcast_message.h>
+#include <gb28181/message/catalog_message.h>
 #include <gb28181/message/config_download_messsage.h>
+#include <gb28181/message/cruise_track_message.h>
+#include <gb28181/message/device_config_message.h>
+#include <gb28181/message/device_control_message.h>
 #include <gb28181/message/device_info_message.h>
 #include <gb28181/message/device_status_message.h>
+#include <gb28181/message/home_position_message.h>
 #include <gb28181/message/message_base.h>
 #include <gb28181/message/preset_message.h>
+#include <gb28181/message/ptz_position_message.h>
+#include <gb28181/message/record_info_message.h>
+#include <gb28181/message/sd_card_status_message.h>
 #include <gb28181/sip_common.h>
 #include <gb28181/type_define_ext.h>
 #include <inner/sip_common.h>
@@ -112,14 +121,17 @@ void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int 
         on_completed();
     }
     // 超时定时器
-    timer_ = std::make_shared<toolkit::Timer>(5,[this_ptr = shared_from_this()]() {
-        if (this_ptr->status_ == Replied) {
-            this_ptr->status_ = Timeout;
-            this_ptr->error_ = "the wait for a response has timed out";
-            this_ptr->on_completed();
-        }
-        return false;
-    }, nullptr);
+    timer_ = std::make_shared<toolkit::Timer>(
+        5,
+        [this_ptr = shared_from_this()]() {
+            if (this_ptr->status_ == Replied) {
+                this_ptr->status_ = Timeout;
+                this_ptr->error_ = "the wait for a response has timed out";
+                this_ptr->on_completed();
+            }
+            return false;
+        },
+        nullptr);
 }
 void RequestProxyImpl::on_completed() {
     if (!result_flag_.test_and_set()) {
@@ -220,32 +232,40 @@ int RequestProxyImpl::on_response(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
     std::shared_ptr<MessageBase> response;
     switch (message.command()) {
-        case MessageCmdType::DeviceControl: break;
-        case MessageCmdType::DeviceConfig: break;
+        case MessageCmdType::DeviceControl:
+            response = std::make_shared<DeviceControlResponseMessage>(std::move(message));
+            break;
+        case MessageCmdType::DeviceConfig:
+            response = std::make_shared<DeviceConfigResponseMessage>(std::move(message));
+            break;
         case MessageCmdType::DeviceStatus:
             response = std::make_shared<DeviceStatusMessageResponse>(std::move(message));
             break;
-        case MessageCmdType::Catalog: break;
+        case MessageCmdType::Catalog: response = std::make_shared<CatalogResponseMessage>(std::move(message)); break;
         case MessageCmdType::DeviceInfo:
             response = std::make_shared<DeviceInfoMessageResponse>(std::move(message));
             break;
-        case MessageCmdType::RecordInfo: break;
-        case MessageCmdType::Alarm: break;
+        case MessageCmdType::RecordInfo:
+            response = std::make_shared<RecordInfoResponseMessage>(std::move(message));
+            break;
         case MessageCmdType::ConfigDownload:
             response = std::make_shared<ConfigDownloadResponseMessage>(std::move(message));
             break;
         case MessageCmdType::PresetQuery: response = std::make_shared<PresetResponseMessage>(std::move(message)); break;
-        case MessageCmdType::MobilePosition: break;
-        case MessageCmdType::HomePositionQuery: break;
-        case MessageCmdType::CruiseTrackListQuery: break;
-        case MessageCmdType::CruiseTrackQuery: break;
-        case MessageCmdType::PTZPosition: break;
-        case MessageCmdType::SDCardStatus: break;
-        case MessageCmdType::MediaStatus: break;
-        case MessageCmdType::Broadcast: break;
-        case MessageCmdType::UploadSnapShotFinished: break;
-        case MessageCmdType::VideoUploadNotify: break;
-        case MessageCmdType::DeviceUpgradeResult: break;
+        case MessageCmdType::HomePositionQuery:
+            response = std::make_shared<HomePositionResponseMessage>(std::move(message));
+            break;
+        case MessageCmdType::CruiseTrackListQuery:
+            response = std::make_shared<CruiseTrackListResponseMessage>(std::move(message));
+            break;
+        case MessageCmdType::CruiseTrackQuery:
+            response = std::make_shared<CruiseTrackResponseMessage>(std::move(message));
+            break;
+        case MessageCmdType::PTZPosition:
+            response = std::make_shared<PTZPositionResponseMessage>(std::move(message));
+            break;
+        case MessageCmdType::SDCardStatus: response = std::make_shared<SdCardResponseMessage>(std::move(message)); break;
+        case MessageCmdType::Broadcast: response = std::make_shared<BroadcastNotifyResponse>(std::move(message)); break;
         default: break;
     }
     if (!response) {
@@ -262,12 +282,11 @@ int RequestProxyImpl::on_response(
         error_ = "load_from_xml failed, error = " + response->get_error();
         WarnL << error_;
         // 这里放入异步， 避免 on_completed 阻塞
-        toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this()]() {
-            this_ptr->on_completed();
-        }, false);
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this()]() { this_ptr->on_completed(); }, false);
         return 400;
     }
-    return on_response(std::move(response));
+    return on_response(response);
 }
 
 /**********************************************************************************************************

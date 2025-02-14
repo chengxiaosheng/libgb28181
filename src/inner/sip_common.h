@@ -8,6 +8,7 @@
 #define SIP_HEADER_DATE "Date"
 #define SIP_HEADER_EXPIRES "Expires"
 #define SIP_HEADER_CONTENT_TYPE "Content-Type"
+#define SIP_HEADER_REASON "Reason"
 #define SIP_CONTENT_TYPE_XML "Application/MANSCDP+xml"
 #define SIP_CONTENT_TYPE_SDP "Application/sdp"
 #include <gb28181/type_define.h>
@@ -31,6 +32,7 @@ void set_message_agent(struct sip_uac_transaction_t* transaction);
 void set_message_gbt_version(struct sip_uac_transaction_t* transaction, PlatformVersionType version = PlatformVersionType::v30);
 void set_message_header(struct sip_uac_transaction_t* transaction);
 void set_message_content_type(struct sip_uac_transaction_t* transaction, enum SipContentType content_type);
+void set_message_reason(struct sip_uac_transaction_t* transaction, const char* reason);
 
 void set_message_agent(struct sip_uas_transaction_t * transaction);
 void set_message_gbt_version(struct sip_uas_transaction_t * transaction,PlatformVersionType version = PlatformVersionType::v30);
@@ -38,6 +40,7 @@ void set_message_date(struct sip_uas_transaction_t * transaction);
 void set_message_expires(struct sip_uas_transaction_t * transaction, int expires);
 void set_message_header(struct sip_uas_transaction_t* transaction);
 void set_message_content_type(struct sip_uas_transaction_t *transaction, enum SipContentType content_type);
+void set_message_reason(struct sip_uas_transaction_t* transaction, const char* reason);
 
 
 

@@ -4,6 +4,7 @@
 
 #include <Util/NoticeCenter.h>
 #include <Util/util.h>
+#include <gb28181/message/device_config_message.h>
 #include <gb28181/message/device_info_message.h>
 #include <gb28181/message/device_status_message.h>
 #include <gb28181/message/keepalive_message.h>
@@ -100,18 +101,21 @@ int on_uas_message(
     // 验证消息负载
     if (req->payload == nullptr) {
         WarnL << "SIP message payload is null or empty";
+        set_message_reason(transaction.get(), "payload is empty");
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
     // 验证from 标记中的用户
     auto &&platform_id = get_platform_id(req.get());
     if (platform_id.empty()) {
         ErrorL << "SIP message platform id is empty";
+        set_message_reason(transaction.get(), "unable to identify the user");
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
 
     auto sip_server = session->getSipServer();
     if (!sip_server) {
         WarnL << "sip_server has been destroyed";
+        set_message_reason(transaction.get(), "service is temporarily unavailable");
         return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
     }
 
@@ -119,6 +123,7 @@ int on_uas_message(
     if (xml_ptr->Parse((const char *)req->payload, req->size) != tinyxml2::XML_SUCCESS) {
         WarnL << "XML parse error (" << xml_ptr->ErrorID() << ":" << xml_ptr->ErrorName() << ")" << xml_ptr->ErrorStr()
               << ", xml = " << std::string_view((const char *)req->payload, req->size);
+        set_message_reason(transaction.get(), xml_ptr->ErrorStr());
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
 
@@ -126,18 +131,21 @@ int on_uas_message(
     if (!message.load_from_xml()) {
         ErrorL << "SIP message load failed: " << message.get_error()
                << "xml = " << std::string_view((const char *)req->payload, req->size);
+        set_message_reason(transaction.get(), message.get_error().c_str());
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
     if (message.root() == MessageRootType::invalid) {
         WarnL << "SIP message root is invalid";
+        set_message_reason(transaction.get(), "invalid root message");
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
     if (message.command() == MessageCmdType::invalid) {
         WarnL << "SIP message command is invalid";
+        set_message_reason(transaction.get(), "invalid Command");
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
 
-    CharEncodingType message_encoding{message.encoding()};
+    CharEncodingType message_encoding { message.encoding() };
     // [fold] region get platform
     bool from_super_platform = false;
     // 查询请求 与 设备控制 一定来自上级平台
@@ -151,7 +159,8 @@ int on_uas_message(
     if (from_super_platform) {
         platform_ = std::dynamic_pointer_cast<SuperPlatformImpl>(sip_server->get_super_platform(platform_id));
     } else {
-        platform_ = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
+        platform_
+            = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
     }
     bool has_platform = false;
     if (std::holds_alternative<std::shared_ptr<SuperPlatformImpl>>(platform_)) {
@@ -159,7 +168,7 @@ int on_uas_message(
             has_platform = true;
             if (message_encoding == CharEncodingType::invalid) {
                 message_encoding = platform->account().encoding;
-            } else if (platform->account().encoding == CharEncodingType::invalid){
+            } else if (platform->account().encoding == CharEncodingType::invalid) {
                 // 反向设置是否合理？
                 platform->set_encoding(message_encoding);
             }
@@ -180,7 +189,8 @@ int on_uas_message(
         if (message.command() == MessageCmdType::Keepalive) {
             return 0;
         }
-        return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
+        set_message_reason(transaction.get(), "user not logged in");
+        return sip_uas_reply(transaction.get(), 401, nullptr, 0, session.get());
     }
     // [fold] endregion get platform
     std::string convert_xml_str;
@@ -195,27 +205,34 @@ int on_uas_message(
         if (xml_ptr->Parse(convert_xml_str.c_str(), convert_xml_str.size()) != tinyxml2::XML_SUCCESS) {
             WarnL << "XML parse error (" << xml_ptr->ErrorID() << ":" << xml_ptr->ErrorName() << ")"
                   << xml_ptr->ErrorStr() << ", xml = " << convert_xml_str;
+            set_message_reason(transaction.get(), xml_ptr->ErrorStr());
             return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
         }
         message = MessageBase(xml_ptr);
         if (!message.load_from_xml()) {
             ErrorL << "SIP message load failed: " << message.get_error() << ", xml = " << convert_xml_str;
+            set_message_reason(transaction.get(), message.get_error().c_str());
             return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
         }
     }
 
-            DebugL
-        << "handler sip message, root = " << message.root() << ", command = " << message.command()
-        << ", sn = " << message.sn();
+    DebugL << "handler sip message, root = " << message.root() << ", command = " << message.command()
+           << ", sn = " << message.sn();
 
     // 如果是应答消息，一定来自下级平台
     int sip_code = 0;
-    std::visit([&](auto &platform) {
-        if (message.root() == MessageRootType::Response) sip_code = platform->on_response(std::move(message), transaction, req);
-        else if (message.root() == MessageRootType::Notify) sip_code = platform->on_notify(std::move(message), transaction, req);
-        else if (message.root() == MessageRootType::Control) sip_code = platform->on_control(std::move(message), transaction, req);
-        else if (message.root() == MessageRootType::Query) sip_code = platform->on_query(std::move(message), transaction, req);
-    }, platform_);
+    std::visit(
+        [&](auto &platform) {
+            if (message.root() == MessageRootType::Response)
+                sip_code = platform->on_response(std::move(message), transaction, req);
+            else if (message.root() == MessageRootType::Notify)
+                sip_code = platform->on_notify(std::move(message), transaction, req);
+            else if (message.root() == MessageRootType::Control)
+                sip_code = platform->on_control(std::move(message), transaction, req);
+            else if (message.root() == MessageRootType::Query)
+                sip_code = platform->on_query(std::move(message), transaction, req);
+        },
+        platform_);
 
     if (sip_code > 0) {
         return sip_uas_reply(transaction.get(), sip_code, nullptr, 0, session.get());
@@ -238,8 +255,9 @@ int on_uas_message(
     //         return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
     //     }
     //
-    //     auto platform_ptr= std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
-    //     if (!platform_ptr) {
+    //     auto platform_ptr=
+    //     std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id)); if
+    //     (!platform_ptr) {
     //         WarnL << "platform was not found";
     //         return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
     //     }
@@ -256,27 +274,35 @@ int on_uas_message(
     // return std::make_shared<UasMessageHandler>(session)->run(std::move(message), transaction, req);
 }
 
-UasMessageHandler::UasMessageHandler(
-    const std::shared_ptr<SipSession> &session)
+UasMessageHandler::UasMessageHandler(const std::shared_ptr<SipSession> &session)
     : UasMessage()
     , session_(session) {}
 
-int UasMessageHandler::run(MessageBase &&request, std::shared_ptr<sip_uas_transaction_t> transaction, const std ::shared_ptr<sip_message_t> &sip) {
+int UasMessageHandler::run(
+    MessageBase &&request, std::shared_ptr<sip_uas_transaction_t> transaction,
+    const std ::shared_ptr<sip_message_t> &sip) {
     if (request.root() == MessageRootType::Notify) {
         has_response_ = false;
     } else if (request.root() == MessageRootType::Control) {
         const auto &command = request.command();
-        if (command == MessageCmdType::DeviceControl) {}
+        if (command == MessageCmdType::DeviceControl) {
+        }
     } else if (request.root() == MessageRootType::Response) { // 是应答消息
 
         return 0;
     }
     switch (request.command()) {
         case MessageCmdType::DeviceControl: break;
-        case MessageCmdType::DeviceConfig: break;
-        case MessageCmdType::DeviceStatus: request_ = std::make_shared<DeviceStatusMessageRequest>(std::move(request)); break;
+        case MessageCmdType::DeviceConfig:
+            request_ = std::make_shared<DeviceConfigResponseMessage>(std::move(request));
+            break;
+        case MessageCmdType::DeviceStatus:
+            request_ = std::make_shared<DeviceStatusMessageRequest>(std::move(request));
+            break;
         case MessageCmdType::Catalog: break;
-        case MessageCmdType::DeviceInfo: request_ = std::make_shared<DeviceInfoMessageRequest>(std::move(request)); break;
+        case MessageCmdType::DeviceInfo:
+            request_ = std::make_shared<DeviceInfoMessageRequest>(std::move(request));
+            break;
         case MessageCmdType::RecordInfo: break;
         case MessageCmdType::Alarm: break;
         case MessageCmdType::ConfigDownload: break;
@@ -290,15 +316,16 @@ int UasMessageHandler::run(MessageBase &&request, std::shared_ptr<sip_uas_transa
         case MessageCmdType::Keepalive:
             request_ = std::make_shared<KeepaliveMessageRequest>(std::move(request));
             {
-            const auto message_ptr = std::make_shared<KeepaliveMessageRequest>(std::move(request));
-            if (!message_ptr->load_from_xml()) {
-                WarnL << "parse keepalive payload failed, " << message_ptr->get_error();
-                return sip_uas_reply(transaction.get(), 400, nullptr, 0, session_.get());
+                const auto message_ptr = std::make_shared<KeepaliveMessageRequest>(std::move(request));
+                if (!message_ptr->load_from_xml()) {
+                    WarnL << "parse keepalive payload failed, " << message_ptr->get_error();
+                    return sip_uas_reply(transaction.get(), 400, nullptr, 0, session_.get());
+                }
+                if (auto ret = platform_->on_keep_alive(message_ptr)) {
+                    return sip_uas_reply(transaction.get(), ret, nullptr, 0, session_.get());
+                }
             }
-            if (auto ret = platform_->on_keep_alive(message_ptr)) {
-                return sip_uas_reply(transaction.get(), ret, nullptr, 0, session_.get());
-            }
-        } break;
+            break;
         case MessageCmdType::MediaStatus: break;
         case MessageCmdType::Broadcast: break;
         case MessageCmdType::UploadSnapShotFinished: break;
@@ -335,18 +362,12 @@ int UasMessageHandler::run(MessageBase &&request, std::shared_ptr<sip_uas_transa
 void UasMessageHandler::response(
     std::shared_ptr<MessageBase> response, const std::function<void(bool, std::string)> &rcb, bool end) {
 
-    sip_transport_t transport{
-        SipSession::sip_via,
-        SipSession::sip_send
-    };
-    std::shared_ptr<sip_uac_transaction_t> transaction_ptr(sip_uac_message(session_->getSipServer()->get_sip_agent().get(),from_.c_str(),to_.c_str(), nullptr, nullptr), [](sip_uac_transaction_t *t) {
-        sip_uac_transaction_release(t);
-    });
-    sip_uac_send(transaction_ptr.get(),nullptr,0, &transport,session_.get());
-
+    sip_transport_t transport { SipSession::sip_via, SipSession::sip_send };
+    std::shared_ptr<sip_uac_transaction_t> transaction_ptr(
+        sip_uac_message(session_->getSipServer()->get_sip_agent().get(), from_.c_str(), to_.c_str(), nullptr, nullptr),
+        [](sip_uac_transaction_t *t) { sip_uac_transaction_release(t); });
+    sip_uac_send(transaction_ptr.get(), nullptr, 0, &transport, session_.get());
 }
-
-
 
 } // namespace gb28181
 

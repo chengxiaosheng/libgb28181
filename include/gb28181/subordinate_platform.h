@@ -20,14 +20,16 @@ public:
 
     virtual void set_encoding(CharEncodingType encoding) = 0;
 
-    virtual void query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret)
+    virtual void query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb)
         = 0;
 
-    virtual void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
+    virtual void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) = 0;
 
-    virtual void query_config(const std::string &device_id, DeviceConfigType config_type, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
+    virtual void query_config(const std::string &device_id, DeviceConfigType config_type, std::function<void(std::shared_ptr<RequestProxy>)> rcb) = 0;
 
-    virtual void query_preset(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) = 0;
+    virtual void query_preset(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) = 0;
+
+    virtual void device_config(const std::string &device_, std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> &&config, std::function<void(std::shared_ptr<RequestProxy>)> rcb) = 0;
 
 private:
 };

@@ -585,9 +585,10 @@ void new_xml_element(const std::optional<std::string> &val, tinyxml2::XMLElement
 }
 #undef MAKE_NEW_XML_ELE
 #define MAKE_FROM_XML_ELE(type, origin_type, func)                                                                     \
-    if (!key || key[0] == '\0' || root == nullptr)                                                                     \
+    if (root == nullptr)                                                                                               \
         return false;                                                                                                  \
-    if (auto ele = root->FirstChildElement(key)) {                                                                     \
+    auto ele = (key != nullptr && key[0] != '\0') ? root->FirstChildElement(key) : root;                               \
+    if (ele) {                                                                                                         \
         type value {};                                                                                                 \
         if (ele->func(&value) == tinyxml2::XML_SUCCESS) {                                                              \
             val = static_cast<origin_type>(value);                                                                     \
@@ -627,9 +628,9 @@ bool from_xml_element(double &val, const tinyxml2::XMLElement *root, const char 
     MAKE_FROM_XML_ELE(double, double, QueryDoubleText)
 }
 bool from_xml_element(std::string &val, const tinyxml2::XMLElement *root, const char *key) {
-    if (!key || key[0] == '\0' || root == nullptr)
+    if (root == nullptr)
         return false;
-    if (auto ele = root->FirstChildElement(key)) {
+    if (auto ele = (key != nullptr && key[0] != '\0') ? root->FirstChildElement(key) : root) {
         val = ele->GetText();
         return true;
     }
@@ -645,9 +646,9 @@ bool from_xml_element(std::string &val, const tinyxml2::XMLElement *root, const 
     }
 MAKE_GET_ENUM_TYPE_FUNC(SubscribeType, SubscribeTypeMap)
 #define FROM_ENUM_XML_ELE(type)                                                                                        \
-    if (!key || key[0] == '\0' || root == nullptr)                                                                     \
+    if (root == nullptr)                                                                                               \
         return false;                                                                                                  \
-    if (auto ele = root->FirstChildElement(key)) {                                                                     \
+    if (auto ele = (key != nullptr && key[0] != '\0') ? root->FirstChildElement(key) : root) {                         \
         val = get##type(ele->GetText());                                                                               \
     }                                                                                                                  \
     return val != type::invalid;

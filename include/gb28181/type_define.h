@@ -90,7 +90,7 @@ struct subordinate_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
-    uint16_t local_port{0}; // 本地端口 会根据via头域的值而改变
+    uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
     std::string local_host; // 本地host, 会根据via头域的值而改变
     sip_account_status plat_status;
 };
@@ -101,7 +101,7 @@ struct super_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
-    uint16_t local_port{0}; // 本地端口 会根据via头域的值而改变
+    uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
     std::string local_host; // 本地host, 会根据via头域的值而改变
     int register_expired { 60 * 60 * 24 }; // 注册过期时间
     int keepalive_interval { 30 }; // 心跳间隔
@@ -118,9 +118,9 @@ struct ExtendData {
     std::vector<ExtendData> children;
 };
 
-#define SIP_CONTENT_TYPE_MAP(XX) \
-    XX(SipContentType, XML, 1, "Application/MANSCDP+xml") \
-    XX(SipContentType, SDP, 1, "Application/sdp") \
+#define SIP_CONTENT_TYPE_MAP(XX)                                                                                       \
+    XX(SipContentType, XML, 1, "Application/MANSCDP+xml")                                                              \
+    XX(SipContentType, SDP, 1, "Application/sdp")
 
 #define GB28181_XML_ROOT_MAP(XX)                                                                                       \
     XX(MessageRootType, Query, 1, "Query")                                                                             \
@@ -454,7 +454,8 @@ public:
         AUXILIARY
     };
     PtzCmdType() = default;
-    PtzCmdType(
+    PtzCmdType(PtzCmdType &&) = default;
+    explicit PtzCmdType(
         const std::vector<CommandType> &commands, const uint8_t &value1 = 0, const uint16_t &value2 = 0,
         const uint8_t &value3 = 0)
         : _value1(value1)
@@ -572,6 +573,30 @@ public:
         }
         _valid = true;
     }
+    std::string str() const {
+        const uint8_t version = 0x00;
+        // 字节2 ： 组合码1， 高4位是版本信息，低4位是校验位， 校验位 = （字节1的高4位 + 字节1的低4位+字节2的高4位）
+        // % 16. 本文件的版本号 1.0， 版本信息 0H
+        _command[1] = ((_command[0] & 0xF) + (_command[0] >> 4) + ((version >> 4))) % 16;
+        _command[1] |= (version & 0xF0);
+
+        // 字节3 与 字节7 ， 文档中表示 字节3 = 地址低8位， 字节低4位 = 地址高4位
+        // 这里的地址是个啥？
+
+        _command[7]
+            = (_command[6] + _command[5] + _command[4] + _command[3] + _command[2] + _command[1] + _command[0]) % 256;
+        std::stringstream hexStream;
+        for (auto i : _command) {
+            hexStream << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << i;
+        }
+        return hexStream.str();
+    }
+    uint8_t value1() const { return _value1; }
+    void value1(const uint8_t value) { _value1 = value; }
+    uint16_t value2() const { return _value2; }
+    void value2(const uint16_t value) { _value2 = value; }
+    uint8_t value3() const { return _value3; }
+    void value3(const uint8_t value) { _value3 = value; }
 
 private:
     static const std::unordered_map<CommandType, uint8_t> &get_command_type() {
@@ -602,7 +627,7 @@ private:
                                                                               { switch_close, 0x8d } };
         return _command_type_map;
     }
-    inline static uint8_t hexCharToUint8(char c) {
+    static uint8_t hexCharToUint8(char c) {
         if (c >= '0' && c <= '9')
             return static_cast<uint8_t>(c - '0');
         if (c >= 'A' && c <= 'F')
@@ -611,33 +636,6 @@ private:
             return static_cast<uint8_t>(10 + (c - 'a'));
         return 0; // Invalid character, treat as 0
     }
-    inline uint8_t value1() const { return _value1; }
-    inline void value1(const uint8_t value) { _value1 = value; }
-    inline uint16_t value2() const { return _value2; }
-    inline void value2(const uint16_t value) { _value2 = value; }
-    inline uint8_t value3() const { return _value3; }
-    inline void value3(const uint8_t value) { _value3 = value; }
-
-    inline std::string str() const {
-        const uint8_t version = 0x00;
-        // 字节2 ： 组合码1， 高4位是版本信息，低4位是校验位， 校验位 = （字节1的高4位 + 字节1的低4位+字节2的高4位）
-        // % 16. 本文件的版本号 1.0， 版本信息 0H
-        _command[1] = ((_command[0] & 0xF) + (_command[0] >> 4) + ((version >> 4))) % 16;
-        _command[1] |= (version & 0xF0);
-
-        // 字节3 与 字节7 ， 文档中表示 字节3 = 地址低8位， 字节低4位 = 地址高4位
-        // 这里的地址是个啥？
-
-        _command[7]
-            = (_command[6] + _command[5] + _command[4] + _command[3] + _command[2] + _command[1] + _command[0]) % 256;
-        std::stringstream hexStream;
-        for (auto i : _command) {
-            hexStream << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << i;
-        }
-        return hexStream.str();
-    }
-
-private:
     mutable uint8_t _command[8] { 0xA5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t _value1 { 0 };
     uint8_t _value3 { 0 };
@@ -857,7 +855,7 @@ struct PictureMaskClgType : DeviceConfigBase {
     // 区域列表 可选
     std::optional<RegionListInfo> RegionList {};
 };
-struct AlarmReportCfgType  : DeviceConfigBase{
+struct AlarmReportCfgType : DeviceConfigBase {
     // 移动侦测事件上报开关，取值 0-关闭，1-打开(必选)
     int8_t MotionDetection { 0 };
     // 区域入侵事件上报开关,取值 0-关闭,1-打开(必选)
@@ -911,7 +909,7 @@ struct ItemMobilePositionType {
     // 目标设备编码(必选)
     std::string DeviceID;
     // 位置采集时间(必选)
-    uint64_t CaptureTime;
+    std::string CaptureTime;
     // 经度(必选)，WGS-84 坐标系
     double Longitude {};
     //  纬度(必选),WGS-84 坐标系
@@ -960,31 +958,32 @@ struct PTZPreciseCtrlType {
 
 struct ItemTypeInfoDetail {
     // 摄像机结构类型,标识摄像机类型;1-球机;2-半球;3-固定枪机;4-遥控枪机;5遥控半球;6-多目设备的全景/拼接通道;7-多目设备的分制通道。当为摄像机时可选
-    std::optional<std::string> PTZType;
+    std::string PTZType;
     // 摄像机光电成像类型。1-可见光成像;2-热成像:3-雷达成像:4-X
     // 光成像;5-深度光场成像;9-其他。可多值,用英文半角“/”分制。当为摄像机时可选
-    std::optional<std::string> PhotoelectricImagingType;
+    std::string PhotoelectricImagingType;
     // 摄像机采集部位类型。应符合附录 O中的规定。当为摄像机时可选。
-    std::optional<std::string> CapturePositionType;
+    std::string CapturePositionType;
     // 摄像机安装位置室外、室内属性。1-室外、2-室内。当为摄像机时可选，缺省为1
-    std::optional<int> RoomType;
+    int RoomType { 1 };
     // 摄像机补光属性。1-无补光;2-红外补光;3-白光补光;4-激光补光:9-其他。当为摄像机时可选，缺省为 1。
-    std::optional<int> SupplyLightType;
+    int SupplyLightType { 1 };
     // 摄像机监视方位(光轴方向)属性。1-东(西向东)2-西(东向西)3-南(北向南),4-北(南向北),5-东南(西北到东南)6-东北(西南到东北)7-西南(东北到西南).8-西北(东南到西北)。当为摄像机时且为固定摄像机或设置看守位摄像机时可选
     std::optional<int> DirectionType;
     // 摄像机支持的分辨率,可多值，用英文半角“/”。分辨率取值应符合附录 G中SDP f字段规定。当为摄像机时可选
-    std::optional<std::string> Resolution;
+    std::string Resolution;
     // 摄像机支持的码流编号列表，用于实时点播时指定码流编号(可选),多个取值间用英文半角“/”分割。如“0/1/2”,表示支持主码流,子码流
     // 1,子码流 2,以此类推
-    std::optional<std::string> StreamNumberList;
+    std::string StreamNumberList;
     // 下载倍速(可选),可多值，用英文半角“/”分制，如设备支持 1,2,4 倍速下载则应写为“1/2/4”
-    std::optional<std::string> DownloadSpeed;
+    std::string DownloadSpeed;
     // 空域编码能力，取值 0-不支持;1-1 级增强(1个增强层):2-2 级增强(2个增强层):3-3 级增强(3 个增强层)(可选)
-    std::optional<int> SVCSpaceSupportMode;
+    int SVCSpaceSupportMode { 0 };
     // 时域编码能力,取值 0-不支持:1-1 级增强;2-2 级增强:3-3 级增强(可选)
-    std::optional<int> SVCTimeSupportMode;
-    // SSVC 增强层与基本层比例能力，多个取值间用英文半角“/”分割。如“4;3/2:(1--1/4:1/6;1/81”等具体比例值一种或多种(可选)
-    std::optional<std::string> SSVCRatioSupportList;
+    int SVCTimeSupportMode { 0 };
+    // SSVC
+    // 增强层与基本层比例能力，多个取值间用英文半角“/”分割。如“4;3/2:(1--1/4:1/6;1/81”等具体比例值一种或多种(可选)
+    std::string SSVCRatioSupportList;
     // 移动采集设备类型(仅移动采集设备适用，必选):1-移动机器人载摄像机:2-执法记录仪:3-移动单兵设备:4-车载视频记录设备:5-无人机载摄像机:9-其他
     std::optional<int> MobileDeviceType;
     // 摄像机水平视场角(可选),取值范围大于0度小于等于 360 度
@@ -994,44 +993,44 @@ struct ItemTypeInfoDetail {
     // 摄像机可视距离(可选).单位;米
     std::optional<double> MaxViewDistance;
     // 基层组织编码(必选非基层建设时为“000000”),编码规则采用附录 E.3 中规定的格式。
-    std::optional<std::string> GrassrootsCode;
+    std::string GrassrootsCode { "000000" };
     // 监控点位类型(当为摄像机时必选),1-一类视频监控点:2-二类视频监控点:3三类视频监控点;9-其他点位
     std::optional<int> PointType;
     // 点位俗称(可选),监控点位附近如有标志性建筑,场所或监控点位处于公众约定俗成的地点，可以填写标志性建设名称和地点俗称
-    std::optional<std::string> PointCommonName;
+    std::string PointCommonName;
     // 设备MAC地址(可选),用“XX-XX-XX-XX-XX-XX”格式表达，其中“XX”表示 2位十六进制数，用英文半角“-”隔开
-    std::optional<std::string> MAC;
+    std::string MAC;
     // 1--摄像机卡口功能类型01-人脸卡口:02-人员卡口:03-机动车卡口:04-非机动车卡口;05-物品卡口;99-其他。可多值，用英文半角“/”分割。当为摄像机时可选
-    std::optional<std::string> FunctionType;
+    std::string FunctionType;
     // 摄像机视频编码格式(可选),取值应符合附录 G中SDP字段规定
-    std::optional<std::string> EncodeType;
+    std::string EncodeType;
     // 摄像机安装使用时间。一类视频监控点必选;二类、三类可选
-    std::optional<uint64_t> InstallTime;
+    std::string InstallTime;
     // 摄像机所属管理单位名称(可选)
-    std::optional<std::string> ManagementUnit;
+    std::string ManagementUnit;
     // 摄像机所属管理单位联系人的联系方式(电话号码,可多值，用英文半角“/”分制)。一类视频监控点必填;二类、三类选填
-    std::optional<std::string> ContactInfo;
+    std::string ContactInfo;
     // 录像保存天数(可选),一类视频监控点必填;二类、三类选填
-    std::optional<int> RecordSaveDays;
+    std::optional<int> RecordSaveDays { 0 };
     // 国民经济行业分类代码(可选),代码见 GB/T 4754 第5章
-    std::optional<std::string> IndustrialClassification;
+    std::string IndustrialClassification;
 };
 
 struct ItemTypeInfo {
     // 目标设备/区域/系统/业务分组/虚拟组织编码(必选)
     std::string DeviceID;
     // 设备/区城/系统/业务分组/虚拟组织名称(必选)
-    std::optional<std::string> Name;
+    std::string Name;
     // 当为设备时,设备厂商(必选)
-    std::optional<std::string> Manufacturer;
+    std::string Manufacturer;
     // 当为设备时,设备型号(必选)
-    std::optional<std::string> Model;
+    std::string Model;
     // 行政区域，可为2,4,6,8位(必选)
-    std::optional<std::string> CivilCode;
+    std::string CivilCode;
     // 警区(可选)
-    std::optional<std::string> Block;
+    std::string Block;
     // 当为设备时,安装地址(必选)
-    std::optional<std::string> Address;
+    std::string Address;
     // 当为设备时,是否有子设备(必选)1-有,0-没有
     std::optional<int> Parental;
     /**
@@ -1042,21 +1041,21 @@ struct ItemTypeInfo {
      * @remark 当为区域时,无父节点 ID;
      * @remark 可多值，用英文半角“/”分割
      */
-    std::optional<std::string> ParentID;
+    std::string ParentID;
     // 注册方式(必选)缺省为 1;1-符合 IETF RFC 3261
     // 标准的认证注册模式;2-基于口令的双向认证注册模式;3-基于数字证书的双向认证注册模式(高安全级别要求):4-基于数字证书的单向认证注册模式(高安全级别要求)
     std::optional<int> RegisterWay;
     // 摄像机安全能力等级代码(可选);A-GB 35114 前端设备安全能力 A 级BGB 35114前端设备安全能力 B级;CGB 35114
     // 前端设备安全能力C级
-    std::optional<std::string> SecurityLevelCode;
+    std::string SecurityLevelCode;
     // 保密属性(必选)缺省为 0:0-不涉密.1-涉密
     std::optional<int> Secrecy {};
     // 设备/系统IPv/IPv6 地址(可选)
-    std::optional<std::string> IPAddress;
+    std::string IPAddress;
     // 设备/系统 端口(可选)
     std::optional<int> Port;
     // 设备口令(可选)
-    std::optional<std::string> Password;
+    std::string Password;
     // 备状态(必选)
     std::optional<StatusType> Status;
     // 当为设备时，经度(一类、二类视频监控点必选)WGS-84 坐标系
@@ -1064,7 +1063,7 @@ struct ItemTypeInfo {
     // 当为设备时,纬度(一类、二类视频监控点必选)WGS-84 坐标系
     std::optional<double> Latitude;
     // 虚拟组织所属的业务分组 ID,业务分组根据特定的业务需求制定，一个业务分组包含一组特定的虚拟组织
-    std::optional<std::string> BusinessGroupID;
+    std::string BusinessGroupID;
 
     std::optional<ItemTypeInfoDetail> Info;
 
@@ -1082,7 +1081,7 @@ struct PresetList {
 };
 struct AlarmCmdInfoType {
     std::string AlarmMethod { "0" };
-    std::optional<std::string> AlarmType;
+    std::string AlarmType;
 };
 struct DragZoomType {
     // 全景播放窗口长度像素值
@@ -1090,7 +1089,7 @@ struct DragZoomType {
     // 全景播放窗口宽度像素值
     int32_t Width;
     // 跟踪框中心点横轴坐标
-    int32_t MidPointX;
+        int32_t MidPointX;
     // 跟踪框中心点纵轴坐标
     int32_t MidPointY;
     // 跟踪框长度
@@ -1119,25 +1118,50 @@ struct ItemFileType {
     // 目标设备名称
     std::string Name;
     // 文件路径名
-    std::optional<std::string> FilePath;
+    std::string FilePath;
     // 录像地址
-    std::optional<std::string> Address;
+    std::string Address;
     // 录像开始时间
-    std::optional<uint64_t> StartTime;
+    std::string StartTime;
     // 录像结束时间
-    std::optional<uint64_t> EndTime;
+    std::string EndTime;
     // 保密属性
-    std::optional<int32_t> Secrecy;
+    int32_t Secrecy{0};
     // 录像产生类型 time alarm manual
-    std::optional<std::string> Type;
+    std::string Type;
     // 录像触发者
-    std::optional<std::string> RecorderID;
+    std::string RecorderID;
     // 录像文件大小
-    std::optional<std::string> FileSize;
+    std::string FileSize;
     // 存储录像文件的设备
-    std::optional<std::string> RecordLocation;
+    std::string RecordLocation;
     // 码流类型： 0：主码流 1 子码流 2 以此类推
-    std::optional<int32_t> StreamNumber;
+    std::optional<int8_t> StreamNumber;
+};
+
+struct CruiseTrackListItemType {
+    int32_t Number{0};
+    std::string Name;
+};
+struct CruisePointType {
+    int32_t PresetIndex {0};
+    int32_t StayTime{0};
+    int32_t Speed{0};
+};
+
+struct SdCardInfoType {
+    // SD卡编号
+    int ID{0};
+    // SD卡名称
+    std::string HddName;
+    // 状态，ok-正常，formatting-格式化，unformatted-未格式化，idle-空闲，error-错误
+    std::string Status;
+    //格式化进度(可选)0-100,百分比
+    int32_t FormatProgress{0};
+    // 储容量，单位：MB
+    int32_t Capacity{0};
+    // 剩余存储容量，单位：MB
+    int32_t FreeSpace{0};
 };
 
 } // namespace gb28181

@@ -1,9 +1,40 @@
 #ifndef gb28181_include_gb28181_message_SD_CARD_STATUS_MESSAGE_H
 #define gb28181_include_gb28181_message_SD_CARD_STATUS_MESSAGE_H
+#include <gb28181/message/message_base.h>
 
-#endif //gb28181_include_gb28181_message_SD_CARD_STATUS_MESSAGE_H
+namespace gb28181 {
+class SdCardRequestMessage final : public MessageBase {
+public:
+    explicit SdCardRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
+        : MessageBase(xml) {}
+    explicit SdCardRequestMessage(MessageBase &&messageBase)
+        : MessageBase(std::move(messageBase)) {}
+    explicit SdCardRequestMessage(const std::string &device_id);
+};
 
+class SdCardResponseMessage final : public MessageBase {
+public:
+    explicit SdCardResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
+        : MessageBase(xml) {}
+    explicit SdCardResponseMessage(MessageBase &&messageBase)
+        : MessageBase(std::move(messageBase)) {}
+    explicit SdCardResponseMessage(
+        const std::string &device_id, int32_t sum_num, std::vector<SdCardInfoType> &&list,
+        ResultType result = ResultType::OK, const std::string &reason = "");
 
+protected:
+    bool load_detail() override;
+    bool parse_detail() override;
+
+private:
+    ResultType result_ { ResultType::invalid };
+    int32_t sum_num_ { 0 };
+    std::vector<SdCardInfoType> sd_cards_;
+};
+
+} // namespace gb28181
+
+#endif // gb28181_include_gb28181_message_SD_CARD_STATUS_MESSAGE_H
 
 /**********************************************************************************************************
 文件名称:   sd_card_status_message.h

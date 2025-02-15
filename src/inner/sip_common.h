@@ -48,6 +48,8 @@ PlatformVersionType get_message_gbt_version(struct sip_message_t* msg);
 std::string get_platform_id(struct sip_message_t* msg);
 std::string get_from_uri(struct sip_message_t* msg);
 std::string get_to_uri(struct sip_message_t* msg);
+std::string get_message_reason(const struct sip_message_t* transaction);
+
 
 bool verify_authorization(struct sip_message_t* msg, const std::string& user, const std::string& password);
 std::string generate_www_authentication_(const std::string& realm);

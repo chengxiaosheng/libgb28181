@@ -11,6 +11,8 @@
 #include "inner/sip_session.h"
 #include "sip_server.h"
 
+#include "request/subscribe_request_impl.h"
+#include "sip-subscribe.h"
 #include "sip_common.h"
 
 #include <gb28181/super_platform.h>
@@ -332,18 +334,32 @@ int SipServer::oncancel(void *param, const struct sip_message_t *req, struct sip
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onsubscribe(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_subscribe_t *subscribe,
-    void **sub) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
-    set_message_agent(t);
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_subscribe_t *subscribe,void **sub) {
+    set_message_header(t);
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    std::shared_ptr<sip_subscribe_t> subscribe_ptr = nullptr;
+    if (subscribe) {
+        sip_subscribe_addref(subscribe);
+        subscribe_ptr.reset(subscribe, [](struct sip_subscribe_t *ptr) {
+            if (ptr) sip_subscribe_release(ptr);
+        });
+    }
+    return SubscribeRequestImpl::recv_subscribe_request(session_ptr,req_ptr,trans_ref,subscribe_ptr, sub);
 }
+
 int SipServer::onnotify(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *sub,
     const struct cstring_t *event) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    if (auto subscribe = SubscribeRequestImpl::get_subscribe(sub)) {
+        GetSipSession(param);
+        RefTransaction(t);
+        RefSipMessage(req);
+        return subscribe->on_recv_notify(session_ptr, req_ptr, trans_ref);
+    }
+    return sip_uas_reply(t, 481, nullptr, 0, param);
 }
 int SipServer::onpublish(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const struct cstring_t *event) {
@@ -354,11 +370,11 @@ int SipServer::onpublish(
 int SipServer::onmessage(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session, const void *data,
     int bytes) {
+    set_message_header(t);
     GetSipSession(param);
     RefTransaction(t);
     RefSipMessage(req);
     // 设置通用 header
-    set_message_header(t);
     return on_uas_message(session_ptr, trans_ref, req_ptr, session);
 }
 int SipServer::onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {

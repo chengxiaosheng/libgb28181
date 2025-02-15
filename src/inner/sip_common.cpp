@@ -128,6 +128,16 @@ std::string get_to_uri(struct sip_message_t* msg) {
     return "";
 }
 
+std::string get_message_reason(const struct sip_message_t* msg) {
+    if (!msg) return "";
+    auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_REASON);
+    if (cstrvalid(hv)) {
+        return std::string(hv->p, hv->n);
+    }
+    return "";
+}
+
+
 std::unordered_map<std::string, std::string> parseAuthorizationHeader(const std::string &authHeader) {
     std::unordered_map<std::string, std::string> fields;
     size_t start = authHeader.find("Digest");

@@ -56,7 +56,7 @@ public:
         : MessageBase(xml) {}
     explicit MediaStatusNotifyMessage(MessageBase &&messageBase)
         : MessageBase(std::move(messageBase)) {}
-    explicit MediaStatusNotifyMessage(const std::string &device_id, const std::string &notify_type = "121");
+    explicit MediaStatusNotifyMessage(const std::string &device_id, std::string notify_type = "121");
     std::string &notify_type() { return notify_type_; }
 
 protected:
@@ -68,8 +68,8 @@ private:
 };
 
 /**
-* 设备实时视音频回传通知
-*/
+ * 设备实时视音频回传通知
+ */
 class VideoUploadNotifyMessage final : public MessageBase {
 public:
     explicit VideoUploadNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
@@ -96,12 +96,26 @@ private:
 
 class DeviceUpgradeResultNotifyMessage final : public MessageBase {
 public:
+    explicit DeviceUpgradeResultNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
+        : MessageBase(xml) {}
+    explicit DeviceUpgradeResultNotifyMessage(MessageBase &&messageBase)
+        : MessageBase(std::move(messageBase)) {}
+    explicit DeviceUpgradeResultNotifyMessage(
+        const std::string &device_id, std::string session_id, std::string firmware, ResultType result = ResultType::OK,
+        std::string reason = "");
+
+    ResultType &result() { return result_; }
+    std::string &session_id() { return session_id_; }
+    std::string &firmware() { return firmware_; }
+
+protected:
+    bool load_detail() override;
+    bool parse_detail() override;
+
 private:
-    ResultType result_{ResultType::invalid};
+    ResultType result_ { ResultType::invalid };
     std::string session_id_ {};
-    std::string upgrade_failed_reason_ {};
-
-
+    std::string firmware_ {};
 };
 
 } // namespace gb28181

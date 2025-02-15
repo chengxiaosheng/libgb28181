@@ -104,6 +104,109 @@ bool MobilePositionNotifyMessage::parse_detail() {
     return true;
 }
 
+MediaStatusNotifyMessage::MediaStatusNotifyMessage(const std::string &device_id, std::string notify_type)
+    : MessageBase()
+    , notify_type_(std::move(notify_type)) {
+    device_id_ = device_id;
+    root_ = MessageRootType::Notify;
+    cmd_ = MessageCmdType::MediaStatus;
+}
+bool MediaStatusNotifyMessage::load_detail() {
+    auto root = xml_ptr_->RootElement();
+    if (!from_xml_element(notify_type_, root, "NotifyType")) {
+        error_message_ = "NotifyType not found";
+        return false;
+    }
+    return true;
+}
+
+bool MediaStatusNotifyMessage::parse_detail() {
+    auto root = xml_ptr_->RootElement();
+    if (notify_type_.empty()) {
+        error_message_ = "NotifyType not found";
+        return false;
+    }
+    new_xml_element(notify_type_, root, "NotifyType");
+    return true;
+}
+
+VideoUploadNotifyMessage::VideoUploadNotifyMessage(
+    const std::string &device_id, const std::string &time, const std::optional<double> &longitude,
+    const std::optional<double> &latitude)
+    : MessageBase()
+    , time_(time)
+    , longitude_(longitude)
+    , latitude_(latitude) {
+    device_id_ = device_id;
+    root_ = MessageRootType::Notify;
+    cmd_ = MessageCmdType::VideoUploadNotify;
+}
+
+bool VideoUploadNotifyMessage::load_detail() {
+    auto root = xml_ptr_->RootElement();
+    if (!from_xml_element(time_, root, "Time")) {
+        error_message_ = "Time not found";
+        return false;
+    }
+    from_xml_element(longitude_, root, "Longitude");
+    from_xml_element(latitude_, root, "Latitude");
+    return true;
+}
+bool VideoUploadNotifyMessage::parse_detail() {
+    auto root = xml_ptr_->RootElement();
+    if (time_.empty()) {
+        time_ = toolkit::getTimeStr("%Y-%m-%dT%H:%M:%S");
+    }
+    new_xml_element(time_, root, "Time");
+    new_xml_element(longitude_, root, "Longitude");
+    new_xml_element(latitude_, root, "Latitude");
+    return true;
+}
+
+DeviceUpgradeResultNotifyMessage::DeviceUpgradeResultNotifyMessage(
+    const std::string &device_id, std::string session_id, std::string firmware, ResultType result, std::string reason)
+    : MessageBase()
+    , result_(result)
+    , session_id_(std::move(session_id))
+    , firmware_(std::move(firmware)) {
+    device_id_ = device_id;
+    reason_ = std::move(reason);
+    root_ = MessageRootType::Notify;
+    cmd_ = MessageCmdType::DeviceUpgradeResult;
+}
+
+bool DeviceUpgradeResultNotifyMessage::load_detail() {
+    auto root = xml_ptr_->RootElement();
+    if (!from_xml_element(session_id_, root, "SessionID")) {
+        error_message_ = "SessionID not found";
+        return false;
+    }
+    if (!from_xml_element(result_, root, "Result")) {
+        error_message_ = "Result not found";
+        return false;
+    }
+    from_xml_element(firmware_, root, "Firmware");
+    from_xml_element(reason_, root, "UpgradeFailedReason");
+    return true;
+}
+
+bool DeviceUpgradeResultNotifyMessage::parse_detail() {
+    auto root = xml_ptr_->RootElement();
+    if (session_id_.empty()) {
+        error_message_ = "SessionID not found";
+        return false;
+    }
+    if (result_ == ResultType::invalid) {
+        error_message_ = "Result not found";
+        return false;
+    }
+    new_xml_element(session_id_, root, "SessionID");
+    new_xml_element(result_, root, "Result");
+    new_xml_element(firmware_, root, "Firmware");
+    new_xml_element(reason_, root, "UpgradeFailedReason");
+    return true;
+}
+
 /**********************************************************************************************************
 文件名称:   notify_message.cpp
 创建时间:   25-2-14 下午7:13

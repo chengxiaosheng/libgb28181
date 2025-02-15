@@ -1,6 +1,6 @@
 #ifndef gb28181_src_request_REQUESTPROXYIMPL_H
 #define gb28181_src_request_REQUESTPROXYIMPL_H
-#include "gb28181/message/request_proxy.h"
+#include "../../include/gb28181/request/request_proxy.h"
 
 #include <Network/Buffer.h>
 #include <atomic>

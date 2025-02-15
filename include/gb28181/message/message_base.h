@@ -95,7 +95,7 @@ protected:
     MessageCmdType cmd_ { MessageCmdType::invalid };
     bool is_valid_ { false };
     CharEncodingType encoding_ { CharEncodingType::invalid };
-    int sn_ { 1 };
+    int sn_ { 0 };
     std::string reason_;
     std::optional<std::string> device_id_;
     std::shared_ptr<tinyxml2::XMLDocument> xml_ptr_ { nullptr };

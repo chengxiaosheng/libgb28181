@@ -1,5 +1,7 @@
 #include "platform_helper.h"
 
+#include "sip-uac.h"
+
 #include <gb28181/message/message_base.h>
 #include <inner/sip_server.h>
 #include <inner/sip_session.h>
@@ -94,6 +96,21 @@ void PlatformHelper::remove_request_proxy(int32_t sn) {
     std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
     request_map_.erase(sn);
 }
+
+void PlatformHelper::uac_send(
+    std::shared_ptr<sip_uac_transaction_t> transaction, std::string &&payload,
+    const std::function<void(bool, std::string)> &rcb, bool udp) {
+    get_session([transaction, payload = std::move(payload),rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession>& session) {
+        if (e) {
+            return rcb(false, e.what());
+        }
+        if (0!= sip_uac_send(transaction.get(), payload.data(), static_cast<int>(payload.size()),SipSession::get_transport(), session.get())) {
+            return rcb(false, "failed to send request, call sip_uac_send failed");
+        }
+        rcb(true, {});
+    },udp);
+}
+
 
 int PlatformHelper::on_response(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {

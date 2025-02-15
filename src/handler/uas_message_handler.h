@@ -38,29 +38,6 @@ int on_uas_message(
     const std::shared_ptr<SipSession> &session, const std ::shared_ptr<sip_uas_transaction_t> &transaction,
     const std ::shared_ptr<sip_message_t> &req, void *dialog_ptr);
 
-
-class UasMessageHandler : public UasMessage, public std::enable_shared_from_this<UasMessageHandler> {
-public:
-    ~UasMessageHandler() = default;
-    UasMessageHandler(const std::shared_ptr<SipSession> &session);
-    int run(MessageBase && request, std::shared_ptr<sip_uas_transaction_t> transaction, const std ::shared_ptr<sip_message_t> &sip);
-    void response(std::shared_ptr<MessageBase> response, const std::function<void(bool, std::string)> &rcb, bool end = true);
-
-    std::shared_ptr<MessageBase> get_request() override {
-        return request_;
-    }
-private:
-    std::shared_ptr<SipSession> session_; // 收到请求的网络session
-    std::shared_ptr<SubordinatePlatformImpl> platform_; // 目标平台指针
-    std::shared_ptr<MessageBase> request_; // 请求消息
-    std::string from_;
-    std::string to_;
-    bool has_response_{false}; // 是否需要response消息
-    std::atomic_bool completed_; // 是否已经完成
-    bool is_mutil{false}; // 是否多消息返回
-
-};
-
 } // namespace gb28181
 
 #endif // gb28181_src_handler_UAS_MESSAGE_HANDLER_H

@@ -6,10 +6,12 @@
 #include <shared_mutex>
 
 #ifdef __cplusplus
+
 extern "C" {
     struct timeval;
     struct sip_message_t;
     struct sip_uas_transaction_t;
+    struct sip_uac_transaction_t;
     struct sip_agent_t;
 }
 #endif
@@ -56,6 +58,8 @@ public:
     virtual int on_notify(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual int on_query(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
+
+    void uac_send(std::shared_ptr<sip_uac_transaction_t> transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool udp = true);
 protected:
     // 连接信息 0 udp 1 tcp
     std::recursive_mutex sip_session_mutex_;

@@ -1,7 +1,7 @@
 #ifndef gb28181_include_gb28181_SUBORDINATE_PLATFORM_H
 #define gb28181_include_gb28181_SUBORDINATE_PLATFORM_H
 #include "gb28181/type_define.h"
-#include "message/request_proxy.h"
+#include "request/request_proxy.h"
 
 #include <functional>
 namespace gb28181 {

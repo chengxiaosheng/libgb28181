@@ -33,15 +33,33 @@ void set_message_header(struct sip_uac_transaction_t *transaction) {
     set_message_agent(transaction);
     set_message_gbt_version(transaction);
 }
-void set_message_content_type(struct sip_uac_transaction_t* transaction, enum SipContentType content_type) {
+void set_message_content_type(struct sip_uac_transaction_t *transaction, enum SipContentType content_type) {
     if (content_type == SipContentType_XML) {
         sip_uac_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_XML);
     } else if (content_type == SipContentType_SDP) {
         sip_uac_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_SDP);
+    } else if (content_type == SipContentType_MANSRTSP) {
+        sip_uac_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_MANSRTSP);
     }
 }
-void set_message_reason(struct sip_uac_transaction_t* transaction, const char* reason) {
+void set_message_reason(struct sip_uac_transaction_t *transaction, const char *reason) {
     sip_uac_add_header(transaction, SIP_HEADER_REASON, reason);
+}
+void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const char *path) {
+    sip_uac_add_header(transaction, SIP_HEADER_X_PREFERRED_PATH, path);
+}
+void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const std::vector<std::string> &path) {
+    std::stringstream ss;
+    for (auto it = path.begin(); it != path.end(); ++it) {
+        if (it != path.begin()) {
+            ss << "-";
+        }
+        ss << *it;
+    }
+    auto data = ss.str();
+    if (!data.empty()) {
+        sip_uac_add_header(transaction, SIP_HEADER_X_PREFERRED_PATH, data.c_str());
+    }
 }
 
 void set_message_agent(struct sip_uas_transaction_t *transaction) {
@@ -58,10 +76,10 @@ void set_message_gbt_version(struct sip_uas_transaction_t *transaction, Platform
     }
 }
 
-void set_message_date(struct sip_uas_transaction_t * transaction) {
+void set_message_date(struct sip_uas_transaction_t *transaction) {
     sip_uas_add_header(transaction, SIP_HEADER_DATE, toolkit::getTimeStr("%Y-%m-%dT%H:%M:%S").c_str());
 }
-void set_message_expires(struct sip_uas_transaction_t * transaction, int expires) {
+void set_message_expires(struct sip_uas_transaction_t *transaction, int expires) {
     sip_uas_add_header_int(transaction, SIP_HEADER_EXPIRES, expires);
 }
 
@@ -69,14 +87,36 @@ void set_message_header(struct sip_uas_transaction_t *transaction) {
     set_message_agent(transaction);
     set_message_gbt_version(transaction);
 }
-void set_message_reason(struct sip_uas_transaction_t* transaction, const char* reason) {
+void set_message_reason(struct sip_uas_transaction_t *transaction, const char *reason) {
     sip_uas_add_header(transaction, SIP_HEADER_REASON, reason);
+}
+void set_x_route_path(struct sip_uas_transaction_t *transaction, const char *local, const char *sub) {
+    std::string path(local);
+    if (sub) {
+        path.append("-").append(sub);
+    }
+    sip_uas_add_header(transaction, SIP_HEADER_X_ROUTE_PATH, path.c_str());
+}
+void set_x_route_path(struct sip_uas_transaction_t *transaction, const std::vector<std::string> &path) {
+    std::stringstream ss;
+    for (auto it = path.begin(); it != path.end(); ++it) {
+        if (it != path.begin()) {
+            ss << "-";
+        }
+        ss << *it;
+    }
+    auto data = ss.str();
+    if (!data.empty()) {
+        sip_uas_add_header(transaction, SIP_HEADER_X_ROUTE_PATH, data.c_str());
+    }
 }
 void set_message_content_type(struct sip_uas_transaction_t *transaction, enum SipContentType content_type) {
     if (content_type == SipContentType_XML) {
         sip_uas_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_XML);
     } else if (content_type == SipContentType_SDP) {
         sip_uas_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_SDP);
+    } else if (content_type == SipContentType_MANSRTSP) {
+        sip_uas_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_MANSRTSP);
     }
 }
 
@@ -99,14 +139,14 @@ PlatformVersionType get_message_gbt_version(struct sip_message_t *msg) {
 std::string get_platform_id(struct sip_message_t *msg) {
     if (!msg)
         return "";
-    cstring_t str{};
+    cstring_t str {};
     sip_uri_username(&msg->from.uri, &str);
     if (cstrvalid(&str)) {
         return std::string(str.p, str.n);
     }
     return "";
 }
-std::string get_from_uri(struct sip_message_t* msg) {
+std::string get_from_uri(struct sip_message_t *msg) {
     if (!msg)
         return "";
     std::string str(128, '\0');
@@ -117,7 +157,7 @@ std::string get_from_uri(struct sip_message_t* msg) {
     return "";
 }
 
-std::string get_to_uri(struct sip_message_t* msg) {
+std::string get_to_uri(struct sip_message_t *msg) {
     if (!msg)
         return "";
     std::string str(128, '\0');
@@ -128,15 +168,29 @@ std::string get_to_uri(struct sip_message_t* msg) {
     return "";
 }
 
-std::string get_message_reason(const struct sip_message_t* msg) {
-    if (!msg) return "";
+std::string get_message_reason(const struct sip_message_t *msg) {
+    if (!msg)
+        return "";
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_REASON);
     if (cstrvalid(hv)) {
         return std::string(hv->p, hv->n);
     }
     return "";
 }
-
+std::vector<std::string> get_x_preferred_path(struct sip_message_t *msg) {
+    auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_X_PREFERRED_PATH);
+    if (cstrvalid(hv)) {
+        return toolkit::split(std::string(hv->p, hv->n), "-");
+    }
+    return {};
+}
+std::vector<std::string> get_x_route_path(struct sip_message_t *msg) {
+    auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_X_ROUTE_PATH);
+    if (cstrvalid(hv)) {
+        return toolkit::split(std::string(hv->p, hv->n), "-");
+    }
+    return {};
+}
 
 std::unordered_map<std::string, std::string> parseAuthorizationHeader(const std::string &authHeader) {
     std::unordered_map<std::string, std::string> fields;

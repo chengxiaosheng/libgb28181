@@ -455,6 +455,7 @@ public:
     };
     PtzCmdType() = default;
     PtzCmdType(PtzCmdType &&) = default;
+    PtzCmdType &operator=(PtzCmdType &&) = default;
     explicit PtzCmdType(
         const std::vector<CommandType> &commands, const uint8_t &value1 = 0, const uint16_t &value2 = 0,
         const uint8_t &value3 = 0)

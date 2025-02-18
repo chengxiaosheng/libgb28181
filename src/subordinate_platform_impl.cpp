@@ -146,6 +146,11 @@ int SubordinatePlatformImpl::on_notify(
     }
     return 0;
 }
+void SubordinatePlatformImpl::on_invite(
+    const std::shared_ptr<InviteRequest> &invite_request,
+    std::function<void(int, std::shared_ptr<sdp_description>)> &&resp) {
+    resp(400, nullptr);
+}
 
 bool SubordinatePlatformImpl::update_local_via(std::string host, uint16_t port) {
     bool changed = false;

@@ -1,11 +1,15 @@
 #include "subscribe_request_impl.h"
 
+#include "gb28181/message/catalog_message.h"
 #include "gb28181/message/message_base.h"
+#include "gb28181/message/mobile_position_request_message.h"
+#include "gb28181/message/ptz_position_message.h"
 #include "gb28181/sip_common.h"
 #include "inner/sip_common.h"
 #include "inner/sip_server.h"
 #include "inner/sip_session.h"
 #include "sip-message.h"
+#include "sip-subscribe.h"
 #include "sip-uac.h"
 #include "sip-uas.h"
 #include "subordinate_platform_impl.h"
@@ -22,6 +26,13 @@ static std::shared_mutex subscribe_request_map_mutex_;
 static std::unordered_map<void *, std::shared_ptr<SubscribeRequest::SubscriberNotifyReplyCallback>>
     send_notify_map_; // 存储发送通知消息的结果回调
 static std::mutex send_notify_map_mutex_;
+
+std::shared_ptr<SubscribeRequest> SubscribeRequest::new_subscribe(
+    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &message,
+    subscribe_info &&info) {
+    return std::make_shared<SubscribeRequestImpl>(
+        std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), message, std::move(info));
+}
 
 static int on_notify_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
     if (param == nullptr)
@@ -58,14 +69,74 @@ SubscribeRequestImpl::SubscribeRequestImpl(
 
 SubscribeRequestImpl::~SubscribeRequestImpl() = default;
 
-void SubscribeRequestImpl::start() {}
+void SubscribeRequestImpl::start() {
+    if (running_.load()) {
+        return;
+    }
+    add_subscribe();
+    running_.exchange(true);
+    if (incoming_) {
+        // 告知对端订阅激活
+        subscribe_send_notify(
+            nullptr,
+            [](bool, const std::string &) {
+
+            },
+            toolkit::str_format("%s;expires=%d", SIP_SUBSCRIPTION_STATE_ACTIVE, sip_subscribe_ptr_->expires));
+    } else {
+        // 如果平台在线，直接发起订阅请求
+        std::visit(
+            [&](const auto &platform) {
+                if (platform->account().plat_status.status == PlatformStatusType::online) {
+                    to_subscribe(subscribe_info_.expires);
+                }
+            },
+            platform_);
+        // 订阅平台在线状态
+        toolkit::NoticeCenter::Instance().addListener(
+            this, Broadcast::kEventSubordinatePlatformStatus,
+            [weak_this = weak_from_this()](kEventSubordinatePlatformStatusArgs) {
+                if (auto this_ptr = weak_this.lock()) {
+                    // 当平台状态为在线时发起订阅请求
+                    if (status == PlatformStatusType::online) {
+                        this_ptr->to_subscribe(this_ptr->subscribe_info_.expires);
+                    } else {
+                        this_ptr->delay_task_.reset();
+                        this_ptr->set_status(terminated, rejected, "platform offline");
+                    }
+                }
+            });
+    }
+}
 
 void SubscribeRequestImpl::shutdown(std::string reason) {
     if (!running_.load()) {
-        return;
+        if (incoming_) {
+            subscribe_send_notify(
+                nullptr,
+                [](bool, const std::string &) {
+
+                },
+                toolkit::str_format(
+                    "%s;reason=%s", SIP_SUBSCRIPTION_STATE_TERMINATED, SIP_SUBSCRIPTION_REASON_REJECTED));
+            set_status(terminated, rejected, reason);
+        }
+    } else {
+        running_.exchange(false);
+        if (incoming_) {
+            subscribe_send_notify(
+                nullptr,
+                [](bool, const std::string &) {
+
+                },
+                toolkit::str_format(
+                    "%s;reason=%s", SIP_SUBSCRIPTION_STATE_TERMINATED, SIP_SUBSCRIPTION_REASON_DEACTIVATED));
+            set_status(terminated, deactivated, reason);
+        } else {
+            to_subscribe(0);
+        }
+        delay_task_.reset();
     }
-    running_.exchange(false);
-    delay_task_.reset();
     del_subscribe();
 }
 
@@ -78,14 +149,16 @@ std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(void *
     }
     return nullptr;
 }
+
 int SubscribeRequestImpl::recv_subscribe_request(
     const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &message,
-    const std::shared_ptr<sip_uas_transaction_t> &transaction, const std::shared_ptr<sip_subscribe_t> &subscribe_ptr,
-    void **sub) {
+    const std::shared_ptr<sip_uas_transaction_t> &transaction,
+    const std::shared_ptr<struct sip_subscribe_t> &subscribe_ptr, void **sub) {
 
     // 针对已有订阅的刷新或取消
     if (auto subscribe = get_subscribe(*sub); subscribe && subscribe->sip_subscribe_ptr_ == subscribe_ptr) {
-        return subscribe->on_subscribe(message, transaction);
+        auto sip_code = subscribe->on_subscribe(message, transaction);
+        return sip_uas_reply(transaction.get(), sip_code, nullptr, 0, sip_session.get());
     }
     // 广播订阅事件到上层应用
     auto platform_id = get_platform_id(message.get());
@@ -96,18 +169,54 @@ int SubscribeRequestImpl::recv_subscribe_request(
     if (server == nullptr) {
         return sip_uas_reply(transaction.get(), 403, nullptr, 0, sip_session.get());
     }
-    auto platform_ptr = server->get_super_platform(platform_id);
+    // 得到上级平台指针
+    auto platform_ptr = std::dynamic_pointer_cast<SuperPlatformImpl>(server->get_super_platform(platform_id));
     if (platform_ptr == nullptr) {
         return sip_uas_reply(transaction.get(), 403, nullptr, 0, sip_session.get());
     }
-    // todo:: 后面再处理
 
-    return 0;
+    std::shared_ptr<MessageBase> gb_message_ptr = nullptr;
+    if (message->payload && message->size) {
+        std::shared_ptr<tinyxml2::XMLDocument> xml_ptr = std::make_shared<tinyxml2::XMLDocument>();
+        if (xml_ptr->Parse((const char *)message->payload, message->size) != tinyxml2::XML_SUCCESS) {
+            WarnL << "XML parse error (" << xml_ptr->ErrorID() << ":" << xml_ptr->ErrorName() << ")"
+                  << xml_ptr->ErrorStr()
+                  << ", xml = " << std::string_view((const char *)message->payload, message->size);
+            set_message_reason(transaction.get(), xml_ptr->ErrorStr());
+            return sip_uas_reply(transaction.get(), 400, nullptr, 0, sip_session.get());
+        }
+        gb_message_ptr = std::make_shared<MessageBase>(xml_ptr);
+        if (gb_message_ptr->load_from_xml()) {
+            if (gb_message_ptr->command() == MessageCmdType::Catalog) {
+                gb_message_ptr = std::make_shared<CatalogRequestMessage>(std::move(*gb_message_ptr));
+                gb_message_ptr->load_from_xml();
+            } else if (gb_message_ptr->command() == MessageCmdType::MobilePosition) {
+                gb_message_ptr = std::make_shared<MobilePositionRequestMessage>(std::move(*gb_message_ptr));
+                gb_message_ptr->load_from_xml();
+            } else if (gb_message_ptr->command() == MessageCmdType::PTZPosition) {
+                gb_message_ptr = std::make_shared<PTZPositionRequestMessage>(std::move(*gb_message_ptr));
+                gb_message_ptr->load_from_xml();
+            }
+        }
+    }
+    auto ptr = std::make_shared<SubscribeRequestImpl>(platform_ptr, subscribe_ptr);
+    if (0
+        == toolkit::NoticeCenter::Instance().emitEvent(
+            Broadcast::kEventOnSubscribeRequest, platform_ptr, ptr, gb_message_ptr)) {
+        return sip_uas_reply(transaction.get(), 404, nullptr, 0, sip_session.get());
+    }
+    *sub = ptr.get();
+    return sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());
 }
 
 int SubscribeRequestImpl::on_subscribe(
     const std::shared_ptr<sip_message_t> &message, const std::shared_ptr<sip_uas_transaction_t> &transaction) {
-    return 0;
+    if (sip_subscribe_ptr_->expires == 0) {
+        set_status(terminated, deactivated, "deactivated");
+        return 200;
+    }
+    set_status(active, invalid, "");
+    return 200;
 }
 
 int SubscribeRequestImpl::on_recv_notify(
@@ -203,8 +312,8 @@ void SubscribeRequestImpl::send_notify(const std::shared_ptr<MessageBase> &messa
     }
     // 如果订阅不可用，则在message 消息中发送
     else {
-        auto request = std::make_shared<RequestProxyImpl>(
-            std::get<SuperPlatformImpl>(platform_), message, RequestProxy::RequestType::NoResponse);
+        auto platform = std::get<std::shared_ptr<SuperPlatformImpl>>(platform_);
+        auto request = std::make_shared<RequestProxyImpl>(platform, message, RequestProxy::RequestType::NoResponse);
         auto callback_ptr = std::make_shared<SubscriberNotifyReplyCallback>(std::move(rcb));
         request->send([callback_ptr](const std::shared_ptr<RequestProxy> &proxy) {
             (*callback_ptr)(proxy->status() == RequestProxy::Status::Succeeded, proxy->error());
@@ -232,7 +341,7 @@ std::string SubscribeRequestImpl::get_notify_state_str() const {
             case giveup: ss << SIP_SUBSCRIPTION_REASON_GIVEUP; break;
             case expired: ss << "expired"; break;
             case invariant: ss << "invariant"; break;
-            default:
+            default: break;
         }
     }
     return ss.str();
@@ -298,9 +407,9 @@ void SubscribeRequestImpl::set_status(
     error_ = std::move(reason);
     // 状态回调放入异步执行， 避免阻塞
     if (subscriber_callback_) {
+        auto this_ptr = shared_from_this();
         toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this]() { subscriber_callback_(this_ptr, this_ptr->status_, this_ptr->error_); },
-            false);
+            [this_ptr]() { this_ptr->subscriber_callback_(this_ptr, this_ptr->status_, this_ptr->error_); }, false);
     }
 }
 
@@ -333,7 +442,8 @@ void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
     if (sip_subscribe_ptr_) {
         uac_subscribe_transaction.reset(
             sip_uac_resubscribe(
-                sip_agent, sip_subscribe_ptr_.get(), static_cast<int>(expires), SubscribeRequestImpl::on_subscribe_reply, this),
+                sip_agent, sip_subscribe_ptr_.get(), static_cast<int>(expires),
+                SubscribeRequestImpl::on_subscribe_reply, this),
             [](sip_uac_transaction_t *t) {
                 if (t)
                     sip_uac_transaction_release(t);

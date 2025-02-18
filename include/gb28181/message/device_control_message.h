@@ -270,6 +270,7 @@ private:
 };
 
 class DeviceControlResponseMessage final : public MessageBase {
+public:
     explicit DeviceControlResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
     explicit DeviceControlResponseMessage(MessageBase &&messageBase)
@@ -286,7 +287,6 @@ protected:
 private:
     ResultType result_ { ResultType::invalid };
 };
-
 
 } // namespace gb28181
 

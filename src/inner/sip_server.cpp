@@ -11,6 +11,7 @@
 #include "inner/sip_session.h"
 #include "sip_server.h"
 
+#include "request/invite_request_impl.h"
 #include "request/subscribe_request_impl.h"
 #include "sip-subscribe.h"
 #include "sip_common.h"
@@ -68,7 +69,6 @@ std::shared_ptr<LocalServer> LocalServer::new_local_server(local_account account
     return std::make_shared<SipServer>(std::move(account));
 }
 
-
 std::shared_ptr<SubordinatePlatform> SipServer::get_subordinate_platform(const std::string &platform_id) {
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
     if (auto it = sub_platforms_.find(platform_id); it != sub_platforms_.end()) {
@@ -95,21 +95,23 @@ void SipServer::add_super_platform(super_account &&account) {
     auto platform = std::make_shared<SuperPlatformImpl>(std::move(account), shared_from_this());
     super_platforms_[platform_id] = platform;
 }
-void SipServer::reload_account(sip_account account) {
-
-}
+void SipServer::reload_account(sip_account account) {}
 
 void SipServer::new_subordinate_account(
-    const std::shared_ptr<subordinate_account> &account, std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb) {
+    const std::shared_ptr<subordinate_account> &account,
+    std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb) {
     if (new_subordinate_account_callback_) {
         auto weak_this = weak_from_this();
         new_subordinate_account_callback_(shared_from_this(), account, [weak_this, account, allow_cb](bool allow) {
-            if (!allow) return allow_cb(nullptr);
+            if (!allow)
+                return allow_cb(nullptr);
             if (auto this_ptr = weak_this.lock()) {
                 if (auto platform = this_ptr->get_subordinate_platform(account->platform_id)) {
                     return allow_cb(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform));
                 }
-                std::shared_ptr<SubordinatePlatformImpl> platform = std::make_shared<SubordinatePlatformImpl>(*account, this_ptr);;
+                std::shared_ptr<SubordinatePlatformImpl> platform
+                    = std::make_shared<SubordinatePlatformImpl>(*account, this_ptr);
+                ;
                 {
                     std::unique_lock<decltype(platform_mutex_)> lock(this_ptr->platform_mutex_);
                     this_ptr->sub_platforms_[account->platform_id] = platform;
@@ -290,16 +292,34 @@ int SipServer::onregister(
 int SipServer::oninvite(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_dialog_t *dialog,
     const void *data, int bytes, void **session) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
-    set_message_agent(t);
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    set_message_header(t);
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    std::shared_ptr<sip_dialog_t> dialog_ptr(dialog, [](sip_dialog_t *dialog) {
+        if (dialog != nullptr)
+            sip_dialog_release(dialog);
+    });
+    if (dialog) {
+        sip_dialog_addref(dialog);
+    }
+    return InviteRequestImpl::on_recv_invite(session_ptr, req_ptr, trans_ref, dialog_ptr, session);
 }
 int SipServer::onack(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, int code, const void *data, int bytes) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
-    set_message_agent(t);
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    set_message_header(t);
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    std::shared_ptr<sip_dialog_t> dialog_ptr(dialog, [](sip_dialog_t *dialog) {
+        if (dialog != nullptr)
+            sip_dialog_release(dialog);
+    });
+    if (dialog) {
+        sip_dialog_addref(dialog);
+    }
+    return InviteRequestImpl::on_recv_ack(session_ptr, req_ptr, trans_ref, dialog_ptr);
 }
 
 int SipServer::onprack(
@@ -319,22 +339,29 @@ int SipServer::onupdate(
 int SipServer::oninfo(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, const struct cstring_t *package, const void *data, int bytes) {
-    set_message_agent(t);
-    sip_message_destroy(const_cast<sip_message_t *>(req));
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    set_message_header(t);
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    return InviteRequestImpl::on_recv_info(session_ptr, trans_ref, req_ptr, session);
 }
 int SipServer::onbye(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
-    set_message_agent(t);
-    sip_message_destroy(const_cast<sip_message_t *>(req));
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    set_message_header(t);
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    return InviteRequestImpl::on_recv_bye(session_ptr, req_ptr, trans_ref, session);
 }
 int SipServer::oncancel(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
-    set_message_agent(t);
-    sip_message_destroy(const_cast<sip_message_t *>(req));
-    return sip_uas_reply(t, 404, nullptr, 0, param);
+    set_message_header(t);
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    return InviteRequestImpl::on_recv_cancel(session_ptr, req_ptr, trans_ref, session);
 }
 int SipServer::onsubscribe(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_subscribe_t *subscribe,void **sub) {
+    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_subscribe_t *subscribe,
+    void **sub) {
     set_message_header(t);
     GetSipSession(param);
     RefTransaction(t);
@@ -343,10 +370,11 @@ int SipServer::onsubscribe(
     if (subscribe) {
         sip_subscribe_addref(subscribe);
         subscribe_ptr.reset(subscribe, [](struct sip_subscribe_t *ptr) {
-            if (ptr) sip_subscribe_release(ptr);
+            if (ptr)
+                sip_subscribe_release(ptr);
         });
     }
-    return SubscribeRequestImpl::recv_subscribe_request(session_ptr,req_ptr,trans_ref,subscribe_ptr, sub);
+    return SubscribeRequestImpl::recv_subscribe_request(session_ptr, req_ptr, trans_ref, subscribe_ptr, sub);
 }
 
 int SipServer::onnotify(
@@ -374,6 +402,11 @@ int SipServer::onmessage(
     GetSipSession(param);
     RefTransaction(t);
     RefSipMessage(req);
+    if (session) {
+        if (InviteRequestImpl::on_recv_message(session_ptr, trans_ref, req_ptr, session) == 0) {
+            return 0;
+        }
+    }
     // 设置通用 header
     return on_uas_message(session_ptr, trans_ref, req_ptr, session);
 }

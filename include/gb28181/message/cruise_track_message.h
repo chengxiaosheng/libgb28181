@@ -37,7 +37,7 @@ public:
         : MessageBase(std::move(messageBase)) {}
     explicit CruiseTrackListResponseMessage(
         const std::string &device_id, int32_t sum_num, std::vector<CruiseTrackListItemType> &&list,
-        ResultType result = ResultType::OK, const std::string &reason);
+        ResultType result = ResultType::OK, const std::string &reason = "");
     std::vector<CruiseTrackListItemType> &cruise_track_list() { return cruise_track_list_; }
 
 protected:
@@ -58,7 +58,7 @@ public:
         : MessageBase(std::move(messageBase)) {}
     explicit CruiseTrackResponseMessage(
         const std::string &device_id, std::string name, int32_t sum_num, std::vector<CruisePointType> &&list,
-        ResultType result = ResultType::OK, const std::string &reason);
+        ResultType result = ResultType::OK, const std::string &reason = "");
     std::vector<CruisePointType> &cruise_points() { return cruise_points_; }
 
 protected:

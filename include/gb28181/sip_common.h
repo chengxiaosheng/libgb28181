@@ -61,6 +61,9 @@ constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusReques
 constexpr const char kEventOnSubscribeNotify[] = "kEventOnSubscribeNotify";
 #define kEventOnSubscribeNotifyArgs std::shared_ptr<SubscribeRequest> subscribe, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, std::string &reason
 
+constexpr const char kEventOnSubscribeRequest[] = "kEventOnSubscribeRequest";
+#define kEventOnSubscribeRequestArgs const std::shared_ptr<SuperPlatform> platform,const std::shared_ptr<SubscribeRequest>& subscribe, const std::shared_ptr<MessageBase> &message
+
 
 
 }

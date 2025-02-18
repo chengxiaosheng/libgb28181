@@ -25,6 +25,9 @@ public:
     gb28181::sip_account &sip_account() const override { return *(gb28181::sip_account *)&account_; }
     bool update_local_via(std::string host, uint16_t port) override;
 
+protected:
+    void on_invite(const std::shared_ptr<InviteRequest> &invite_request, std::function<void(int, std::shared_ptr<sdp_description>)> &&resp) override;
+
 private:
     super_account account_;
 };

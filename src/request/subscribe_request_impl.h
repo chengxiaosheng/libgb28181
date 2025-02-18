@@ -54,7 +54,7 @@ public:
     static int recv_subscribe_request(
         const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &message,
         const std::shared_ptr<sip_uas_transaction_t> &transaction,
-        const std::shared_ptr<sip_subscribe_t> &subscribe_ptr, void **sub);
+        const std::shared_ptr<struct sip_subscribe_t> &subscribe_ptr, void **sub);
 
     /**
      * 收到一个通知
@@ -92,8 +92,8 @@ private:
         platform_; // 订阅所属平台指针
     std::shared_ptr<MessageBase> subscribe_message_; // 订阅请求的
     std::string error_; // 错误信息
-    uint64_t subscribe_time_ { 0 }; // 订阅成功的时间
-    uint64_t terminated_time_ { 0 }; // 订阅终止事件
+    uint64_t subscribe_time_ { 0 }; // 订阅成功时间
+    uint64_t terminated_time_ { 0 }; // 订阅终止时间
     subscribe_info subscribe_info_ {}; // 订阅基础信息
     SUBSCRIBER_STATUS_TYPE_E status_ { terminated }; // 订阅状态
     TERMINATED_TYPE_E terminated_type_ { invalid }; // 终止状态
@@ -101,8 +101,8 @@ private:
     std::atomic<bool> running_ { false }; // 是否正在运行
     std::shared_ptr<sip_subscribe_t> sip_subscribe_ptr_; // sip订阅指针
     SubscriberStatusCallback subscriber_callback_; // 订阅状态回调
-    SubscriberNotifyCallback notify_callback_;
-    toolkit::EventPoller::DelayTask::Ptr delay_task_;
+    SubscriberNotifyCallback notify_callback_; // 收到通知的回调
+    toolkit::EventPoller::DelayTask::Ptr delay_task_; // 延迟任务指针
 };
 } // namespace gb28181
 

@@ -6,8 +6,6 @@
 #include <atomic>
 #include <variant>
 
-#ifdef __cplusplus
-
 namespace toolkit {
 class Timer;
 }
@@ -18,6 +16,8 @@ class SubordinatePlatformImpl;
 namespace gb28181 {
 class SipSession;
 }
+
+#ifdef __cplusplus
 extern "C" {
 struct sip_agent_t;
 struct sip_uac_transaction_t;
@@ -34,6 +34,9 @@ public:
     RequestProxyImpl(
         const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request,
         RequestType type);
+    RequestProxyImpl(
+    const std::shared_ptr<SuperPlatformImpl> &platform, const std::shared_ptr<MessageBase> &request,
+    RequestType type);
     ~RequestProxyImpl() override;
     void set_sn(int sn) { request_sn_ = sn; }
     Status status() const override { return status_; }

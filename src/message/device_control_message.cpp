@@ -260,7 +260,7 @@ DeviceControlRequestMessage_HomePosition::DeviceControlRequestMessage_HomePositi
     , reset_time_(reset_time) {}
 
 bool DeviceControlRequestMessage_HomePosition::load_detail() {
-    DeviceControlRequestMessage::load_detail()();
+    DeviceControlRequestMessage::load_detail();
     auto root = xml_ptr_->RootElement();
     if (auto ele = root->FirstChildElement("HomePosition"); ele) {
         if (!from_xml_element(enabled_, ele, "Enabled")) {
@@ -292,7 +292,7 @@ DeviceControlRequestMessage_PtzPreciseCtrl::DeviceControlRequestMessage_PtzPreci
     , ptz_precise_ctrl_(ptz_precise_ctrl) {}
 
 bool DeviceControlRequestMessage_PtzPreciseCtrl::load_detail() {
-    DeviceControlRequestMessage::load_detail()();
+    DeviceControlRequestMessage::load_detail();
     auto root = xml_ptr_->RootElement();
     if (auto ele = root->FirstChildElement("PTZPreciseCtrl"); ele && !ele->NoChildren()) {
         from_xml_element(ptz_precise_ctrl_.Pan, ele, "Pan");

@@ -51,6 +51,14 @@ RequestProxyImpl::RequestProxyImpl(
     , request_type_(type) {
     DebugL << *this;
 }
+RequestProxyImpl::RequestProxyImpl(
+    const std::shared_ptr<SuperPlatformImpl> &platform, const std::shared_ptr<MessageBase> &request, RequestType type)
+    : RequestProxy()
+    , platform_(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform))
+    , request_(request)
+    , request_type_(type) {
+    DebugL << *this;
+}
 RequestProxyImpl::~RequestProxyImpl() {
     DebugL << *this;
 }
@@ -264,7 +272,9 @@ int RequestProxyImpl::on_response(
         case MessageCmdType::PTZPosition:
             response = std::make_shared<PTZPositionResponseMessage>(std::move(message));
             break;
-        case MessageCmdType::SDCardStatus: response = std::make_shared<SdCardResponseMessage>(std::move(message)); break;
+        case MessageCmdType::SDCardStatus:
+            response = std::make_shared<SdCardResponseMessage>(std::move(message));
+            break;
         case MessageCmdType::Broadcast: response = std::make_shared<BroadcastNotifyResponse>(std::move(message)); break;
         default: break;
     }

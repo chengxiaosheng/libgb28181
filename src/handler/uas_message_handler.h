@@ -3,7 +3,6 @@
 
 #include <functional>
 #include <gb28181/message/message_base.h>
-#include <gb28181/message/uas_message.h>
 #include <memory>
 #include <string>
 

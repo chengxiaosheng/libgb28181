@@ -1,4 +1,9 @@
 #include "gb28181/local_server.h"
+#include "gb28181/message/catalog_message.h"
+#include "gb28181/request/invite_request.h"
+#include "gb28181/request/sdp2.h"
+#include "gb28181/request/subscribe_request.h"
+
 #include <iostream>
 
 #include <Network/Buffer.h>
@@ -41,8 +46,8 @@ int main() {
         allow_cb(true);
     });
     local_server->run();
-
-    toolkit::NoticeCenter::Instance().addListener(&tag, gb28181::Broadcast::kEventSubordinatePlatformStatus, [](std::shared_ptr<gb28181::SubordinatePlatform> platform , gb28181::PlatformStatusType status, const std::string& message) {
+    std::shared_ptr<SubscribeRequest> catalog_sub;
+    toolkit::NoticeCenter::Instance().addListener(&tag, gb28181::Broadcast::kEventSubordinatePlatformStatus, [&](std::shared_ptr<gb28181::SubordinatePlatform> platform , gb28181::PlatformStatusType status, const std::string& message) {
         platform->query_device_info("", [](const std::shared_ptr<gb28181::RequestProxy> &proxy) {
             if (*proxy) {
                 auto resp = std::dynamic_pointer_cast<gb28181::DeviceInfoMessageResponse>(proxy->response());
@@ -56,6 +61,39 @@ int main() {
         platform->query_preset("", [](const std::shared_ptr<gb28181::RequestProxy> &proxy) {
             InfoL << "get query prset result, ret = " << (int)proxy->status() << ", response_count = " << proxy->all_response().size() << ", error = " << proxy->error();
         });
+
+        auto catalog_sub_message = std::make_shared<CatalogRequestMessage>(platform->account().platform_id);
+        SubscribeRequest::subscribe_info info;
+        info.event = "Catalog";
+        catalog_sub = SubscribeRequest::new_subscribe(platform, catalog_sub_message, std::move(info));
+        catalog_sub->start();
+
+        auto sdp_ptr =std::make_shared<sdp_description>();
+        sdp_ptr->origin.username = account.platform_id;
+        sdp_ptr->origin.addr_type  = sdp_network_address_type::IP4;
+        sdp_ptr->origin.addr = "10.1.20.2";
+        sdp_ptr->s_name = sdp_session_type::Play;
+        sdp_ptr->timing = sdp_time_description();
+        sdp_ptr->timing->start_time = 0;
+        sdp_ptr->timing->end_time = 0;
+        sdp_ptr->connection = sdp_connection();
+        sdp_ptr->connection.value().addr = "10.1.20.2";
+        sdp_ptr->media.type = sdp_media_type::video;
+        sdp_ptr->media.port = 20002;
+        sdp_ptr->media.payloads[96] = {96, "PS", 90000};
+        sdp_ptr->media.payloads[97] = {97, "MPEG4", 90000};
+        sdp_ptr->media.payloads[98] = {98, "H264", 90000};
+        sdp_ptr->media.payloads[99] = {99, "H265", 90000};
+        sdp_ptr->y_ssrc = 1;
+
+       auto invite_request = InviteRequest::new_invite_request(platform, sdp_ptr);
+        invite_request->to_invite_request([invite_request](bool ret, std::string err, const std::shared_ptr<sdp_description> &remote_sdp) {
+            InfoL << "invite request ret = " << ret << ", err = " << err ;
+            if (remote_sdp) {
+                InfoL << "remote_sdp = " << get_sdp_description(*remote_sdp);
+            }
+        });
+
     });
 
     // 捕获 SIGINT 和 SIGTERM 信号

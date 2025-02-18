@@ -54,11 +54,15 @@ public:
 
     void
     query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
-    void query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
-    void query_config(const std::string &device_id, DeviceConfigType config_type, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void
+    query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void query_config(
+        const std::string &device_id, DeviceConfigType config_type,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
     void query_preset(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
-    void device_config(const std::string &device_id, std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> &&config, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
-
+    void device_config(
+        const std::string &device_id, std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> &&config,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
 
     bool update_local_via(std::string host, uint16_t port) override;
 
@@ -72,6 +76,10 @@ public:
     int on_notify(
         MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,
         std::shared_ptr<sip_message_t> request) override;
+
+    void on_invite(
+        const std::shared_ptr<InviteRequest> &invite_request,
+        std::function<void(int, std::shared_ptr<sdp_description>)> &&resp) override;
 
 private:
     subordinate_account account_; // 账户信息

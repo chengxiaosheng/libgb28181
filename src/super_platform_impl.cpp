@@ -40,16 +40,24 @@ bool SuperPlatformImpl::update_local_via(std::string host, uint16_t port) {
         changed = true;
     }
     if (changed) {
-        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":" + std::to_string(account_.local_port);
+        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":"
+            + std::to_string(account_.local_port);
         // 通知上层应用？
-        toolkit::EventPollerPool::Instance().getExecutor()->async([this_ptr = shared_from_this()]() {
-            toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSuperPlatformContactChanged, this_ptr, this_ptr->account_.local_host, this_ptr->account_.local_port);
-        }, false);
+        toolkit::EventPollerPool::Instance().getExecutor()->async(
+            [this_ptr = shared_from_this()]() {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSuperPlatformContactChanged, this_ptr, this_ptr->account_.local_host,
+                    this_ptr->account_.local_port);
+            },
+            false);
     }
     return changed;
 }
-
-
+void SuperPlatformImpl::on_invite(
+    const std::shared_ptr<InviteRequest> &invite_request,
+    std::function<void(int, std::shared_ptr<sdp_description>)> &&resp) {
+    resp(400, nullptr);
+}
 
 /**********************************************************************************************************
 文件名称:   super_platform_impl.cpp

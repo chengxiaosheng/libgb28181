@@ -79,7 +79,7 @@ public:
 
     void on_invite(
         const std::shared_ptr<InviteRequest> &invite_request,
-        std::function<void(int, std::shared_ptr<sdp_description>)> &&resp) override;
+        std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) override;
 
 private:
     subordinate_account account_; // 账户信息

@@ -68,32 +68,37 @@ int main() {
         catalog_sub = SubscribeRequest::new_subscribe(platform, catalog_sub_message, std::move(info));
         catalog_sub->start();
 
-        auto sdp_ptr =std::make_shared<sdp_description>();
-        sdp_ptr->origin.username = account.platform_id;
-        sdp_ptr->origin.addr_type  = sdp_network_address_type::IP4;
-        sdp_ptr->origin.addr = "10.1.20.2";
-        sdp_ptr->s_name = sdp_session_type::Play;
-        sdp_ptr->timing = sdp_time_description();
-        sdp_ptr->timing->start_time = 0;
-        sdp_ptr->timing->end_time = 0;
-        sdp_ptr->connection = sdp_connection();
-        sdp_ptr->connection.value().addr = "10.1.20.2";
-        sdp_ptr->media.type = sdp_media_type::video;
-        sdp_ptr->media.port = 20002;
-        sdp_ptr->media.payloads[96] = {96, "PS", 90000};
-        sdp_ptr->media.payloads[97] = {97, "MPEG4", 90000};
-        sdp_ptr->media.payloads[98] = {98, "H264", 90000};
-        sdp_ptr->media.payloads[99] = {99, "H265", 90000};
-        sdp_ptr->y_ssrc = 1;
+        auto sdp_ptr =std::make_shared<SdpDescription>();
+        sdp_ptr->session().origin.username = account.platform_id;
+        sdp_ptr->session().origin.addr_type  = SDPAddressType::IP4;
+        sdp_ptr->session().origin.address = "10.1.20.2";
+        sdp_ptr->session().sessionType = SessionType::PLAY;
+        sdp_ptr->session().connection.address = "10.1.20.2";
+        MediaDescription media;
+        media.port = 20002;
+        media.direction = Direction::RECVONLY;
+        media.payloads.emplace_back(PayloadInfo{96, 90000, "PS"});
+        media.payloads.emplace_back(PayloadInfo{97, 90000, "MPEG4"});
+        media.payloads.emplace_back(PayloadInfo{98, 90000, "H264"});
+        media.payloads.emplace_back(PayloadInfo{99, 90000, "H265"});
+        media.ssrc = 1;
+        media.ice.pwd = "123456";
+        media.ice.ufrag = "1234567adfa";
+        media.ice.candidates.emplace_back(ICECandidate{"1",ICEComponentType::RTP,TransportProtocol::UDP,ICECandidateType::HOST,20002,0,"10.1.20.2",""});
+        media.ice.candidates.emplace_back(ICECandidate{"2",ICEComponentType::RTCP,TransportProtocol::UDP,ICECandidateType::HOST,20003,0,"10.1.20.2",""});
+        media.ice.candidates.emplace_back(ICECandidate{"3",ICEComponentType::RTP,TransportProtocol::UDP,ICECandidateType::SRFLX,20002,0,"10.1.20.2",""});
+        media.ice.candidates.emplace_back(ICECandidate{"4",ICEComponentType::RTCP,TransportProtocol::UDP,ICECandidateType::SRFLX,20003,0,"10.1.20.2",""});
+
+        sdp_ptr->media().emplace_back(std::move(media));
 
        auto invite_request = InviteRequest::new_invite_request(platform, sdp_ptr);
-        invite_request->to_invite_request([invite_request](bool ret, std::string err, const std::shared_ptr<sdp_description> &remote_sdp) {
+        invite_request->to_invite_request([invite_request](bool ret, std::string err, const std::shared_ptr<SdpDescription> &remote_sdp) {
             InfoL << "invite request ret = " << ret << ", err = " << err ;
             if (remote_sdp) {
-                InfoL << "remote_sdp = " << get_sdp_description(*remote_sdp);
+                InfoL << "remote_sdp = " <<  remote_sdp->generate();
             }
+            invite_request->to_bye("");
         });
-
     });
 
     // 捕获 SIGINT 和 SIGTERM 信号

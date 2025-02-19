@@ -8,6 +8,7 @@
 #ifdef __cplusplus
 
 namespace gb28181 {
+class SdpDescription;
 struct sdp_description;
 }
 namespace gb28181 {
@@ -64,7 +65,7 @@ public:
     virtual int on_notify(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual int on_query(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
-    virtual void on_invite(const std::shared_ptr<InviteRequest> &invite_request, std::function<void(int, std::shared_ptr<sdp_description>)> && resp) = 0;
+    virtual void on_invite(const std::shared_ptr<InviteRequest> &invite_request, std::function<void(int, std::shared_ptr<SdpDescription>)> && resp) = 0;
 
     void uac_send(std::shared_ptr<sip_uac_transaction_t> transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool udp = true);
 protected:

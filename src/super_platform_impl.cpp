@@ -55,7 +55,7 @@ bool SuperPlatformImpl::update_local_via(std::string host, uint16_t port) {
 }
 void SuperPlatformImpl::on_invite(
     const std::shared_ptr<InviteRequest> &invite_request,
-    std::function<void(int, std::shared_ptr<sdp_description>)> &&resp) {
+    std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) {
     resp(400, nullptr);
 }
 

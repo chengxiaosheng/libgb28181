@@ -15,11 +15,16 @@
 #include <Util/logger.h>
 using namespace gb28181;
 
+// 针对invite 会话的管理, 得到 sip_dialog_t 后加入到集合中, bye 时从集合中移除， 应该不会有问题
 static std::unordered_map<void *, std::shared_ptr<InviteRequestImpl>> invite_request_map_;
 static std::shared_mutex invite_request_map_mutex_;
 
+// 针对会话内uac请求的管理, 生命周期应该等同 sip_uac_transaction
+static std::unordered_map<void *, std::shared_ptr<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>>> info_request_map_;
+static std::mutex info_request_map_mutex_;
+
 std::shared_ptr<InviteRequest> InviteRequest::new_invite_request(
-    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<sdp_description> &sdp) {
+    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp) {
     return std::make_shared<InviteRequestImpl>(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), sdp);
 }
 
@@ -41,10 +46,179 @@ void InviteRequestImpl::remove_invite() {
     invite_request_map_.erase(this);
 }
 
-void InviteRequestImpl::to_play(const std::function<void(bool, std::string)> &rcb) {}
-void InviteRequestImpl::to_teardown(const std::function<void(bool, std::string)> &rcb) {}
-void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &rcb) {}
-void InviteRequestImpl::to_scale(float scale, const std::function<void(bool, std::string)> &rcb) {}
+
+// 不关注结果的请求使用
+static int on_bye_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
+    if (reply) {
+        sip_message_destroy(const_cast<sip_message_t *>(reply));
+    }
+    return 0;
+}
+
+
+void InviteRequestImpl::to_teardown(const std::string& reason) {
+    auto platform  = platform_helper_.lock();
+    if (!platform ) {
+        return;
+    }
+    if (invite_dialog_) {
+        return to_bye("teardown");
+    }
+    std::stringstream ss;
+    ss << "TEARDOWN RTSP/1.0" << "\r\n";
+    ss << "CSeq:" << platform->get_new_sn() << "\r\n";
+
+    // teardown 消息应该不需要关注返回值
+    std::shared_ptr<sip_uac_transaction_t> transaction(sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(),nullptr, on_bye_reply, this), [](sip_uac_transaction_t *t) {
+        if (t) sip_uac_transaction_release(t);
+    });
+    set_message_header(transaction.get());
+    set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
+    platform->uac_send(transaction, ss.str(), [](bool,std::string){});
+    // 发送 teardown 后立即发送 bye 防止对方不支持teardown
+    return to_bye(reason);
+}
+
+
+
+// 专门接收会话内请求消息回复
+static int info_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
+    if (SIP_IS_SIP_INFO(code) && reply) return 0;
+
+    std::shared_ptr<sip_message_t> reply_msg(const_cast<sip_message_t *>(reply),[](sip_message_t * p) {
+       if (p) sip_message_destroy(p);
+    });
+
+    std::shared_ptr<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>> rcb_ptr;
+    {
+        std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
+        if (auto it = info_request_map_.find(param); it != info_request_map_.end()) {
+            rcb_ptr = it->second;
+            info_request_map_.erase(it);
+        }
+    }
+    if (rcb_ptr) {
+        if (SIP_IS_SIP_SUCCESS(code)) (*rcb_ptr)(true, "", reply_msg);
+        else (*rcb_ptr)(false, "reply " + std::to_string(code), reply_msg);
+    }
+    return 0;
+}
+void InviteRequestImpl::to_play(const std::function<void(bool, std::string)> &rcb) {
+    to_seek_scale({},{},std::forward<decltype(rcb)>(rcb));
+}
+
+void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &rcb) {
+    auto platform  = platform_helper_.lock();
+    if (!platform ) {
+       return rcb(false, "illegal operation! the session closed .");
+    }
+    if (!invite_dialog_ || !local_sdp_ || !remote_sdp_) {
+        return rcb(false, "illegal operation! the session was closed or not established.");
+    }
+    if (local_sdp_->session().sessionType != SessionType::PLAYBACK && local_sdp_->session().sessionType != SessionType::DOWNLOAD) {
+        return rcb(false, "illegal operation! this operation is not supported by the session.");
+    }
+    std::stringstream ss;
+    ss << "PAUSE RTSP/1.0" << "\r\n";
+    ss << "CSeq: " << platform->get_new_sn() << "\r\n";
+    ss << "PauseTime: now" << "\r\n";
+
+    auto rcb_ptr = std::make_shared<std::function<void(bool, std::string,std::shared_ptr<sip_message_t>)>>([rcb,weak_this = weak_from_this()](bool ret, std::string err,std::shared_ptr<sip_message_t>) {
+        if (!ret) {
+            return rcb(false, err);
+        }
+        if (auto this_ptr = weak_this.lock()) {
+            this_ptr->playback_state_->is_paused = true;
+            this_ptr->playback_state_->is_now = true;
+        }
+        rcb(ret, err);
+    });
+    std::shared_ptr<sip_uac_transaction_t> transaction(sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(),nullptr, info_reply, rcb_ptr.get()), [](sip_uac_transaction_t *t) {
+       if (t) sip_uac_transaction_release(t);
+    });
+    {
+        std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
+        info_request_map_.emplace(rcb_ptr.get(), rcb_ptr);
+    }
+    set_message_header(transaction.get());
+    set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
+
+    // 发送消息
+    platform->uac_send(transaction, ss.str(), [rcb_ptr](bool ret,std::string err) {
+        if (!ret) {
+            std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
+            info_request_map_.erase(rcb_ptr.get());
+            (*rcb_ptr)(ret, err, {});
+        }
+    });
+
+}
+
+void InviteRequestImpl::to_seek_scale(std::optional<float> scale, std::optional<uint32_t> ntp, const std::function<void(bool, std::string)> &rcb) {
+auto platform = platform_helper_.lock();
+    if (!platform) {
+        return rcb(false, "illegal operation! the session closed .");
+    }
+    if (!invite_dialog_ || !local_sdp_ || !remote_sdp_) {
+        return rcb(false, "illegal operation! the session was closed or not established.");
+    }
+    if (local_sdp_->session().sessionType != SessionType::PLAYBACK
+        && local_sdp_->session().sessionType != SessionType::DOWNLOAD) {
+        return rcb(false, "illegal operation! this operation is not supported by the session.");
+    }
+    std::stringstream ss;
+    ss << "PLAY RTSP/1.0" << "\r\n";
+    ss << "CSeq: " << platform->get_new_sn() << "\r\n";
+    if (ntp) {
+        ss << "Range: ntp=" << ntp.value() << "-" << "\r\n";
+    } else {
+        ss << "Range: ntp=now-" << "\r\n";
+    }
+    if (scale) {
+        ss << "Scale: " << scale.value() << "\r\n";
+    }
+    auto rcb_ptr = std::make_shared<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>>(
+        [rcb, weak_this = weak_from_this(), scale,
+         ntp](bool ret, std::string err, std::shared_ptr<sip_message_t> reply) {
+            if (!ret) {
+                return rcb(false, err);
+            }
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->playback_state_->is_paused = false;
+                if (ntp) {
+                    this_ptr->playback_state_->current_npt = ntp.value();
+                    this_ptr->playback_state_->is_now = false;
+                } else {
+                    this_ptr->playback_state_->is_now = true;
+                }
+                if (scale) {
+                    this_ptr->playback_state_->scale = scale.value();
+                }
+            }
+            rcb(ret, err);
+        });
+    std::shared_ptr<sip_uac_transaction_t> transaction(
+        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, info_reply, rcb_ptr.get()),
+        [](sip_uac_transaction_t *t) {
+            if (t)
+                sip_uac_transaction_release(t);
+        });
+    {
+        std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
+        info_request_map_.emplace(rcb_ptr.get(), rcb_ptr);
+    }
+    set_message_header(transaction.get());
+    set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
+
+    // 发送消息
+    platform->uac_send(transaction, ss.str(), [rcb_ptr](bool ret, std::string err) {
+        if (!ret) {
+            std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
+            info_request_map_.erase(rcb_ptr.get());
+            (*rcb_ptr)(ret, err, {});
+        }
+    });
+}
 
 void InviteRequestImpl::set_status(INVITE_STATUS_TYPE status, std::string error) {
     error_ = error;
@@ -97,9 +271,9 @@ int InviteRequestImpl::on_invite_reply(
     std::string error;
     if (SIP_IS_SIP_SUCCESS(code)) {
         // 1. 解析sdp
-        sdp_description sdp;
-        if (parse(sdp, std::string((const char *)reply->payload, reply->size))) {
-            this_ptr->remote_sdp_ = std::make_shared<sdp_description>(std::move(sdp));
+        SdpDescription sdp;
+        if (sdp.parse(std::string((const char *)reply->payload, reply->size))) {
+            this_ptr->remote_sdp_ = std::make_shared<SdpDescription>(std::move(sdp));
             // 发送ack
             if (0 == sip_uac_ack(t, nullptr, 0, nullptr)) {
                 this_ptr->set_status(INVITE_STATUS_TYPE::ack, "");
@@ -126,11 +300,6 @@ int InviteRequestImpl::on_invite_reply(
         this_ptr->rcb_(result, this_ptr->error_, this_ptr->remote_sdp_);
         this_ptr->rcb_ = {};
     }
-    return 0;
-}
-
-// 这个函数没啥用
-static int on_bye_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
     return 0;
 }
 
@@ -168,7 +337,7 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
 }
 
 InviteRequestImpl::InviteRequestImpl(
-    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<sdp_description> &sdp)
+    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp)
     : InviteRequest()
     , platform_helper_(platform)
     , local_sdp_(sdp) {
@@ -176,9 +345,12 @@ InviteRequestImpl::InviteRequestImpl(
 }
 InviteRequestImpl::~InviteRequestImpl() {
     TraceL << "InviteRequestImpl::~InviteRequestImpl()";
+    if (static_cast<int>(status_)  < 3 ) {
+        InviteRequestImpl::to_bye("destruction");
+    }
 }
 void InviteRequestImpl::to_invite_request(
-    std::function<void(bool, std::string, const std::shared_ptr<sdp_description> &)> rcb) {
+    std::function<void(bool, std::string, const std::shared_ptr<SdpDescription> &)> rcb) {
     auto platform = platform_helper_.lock();
     auto from = platform->get_from_uri();
     auto to = platform->get_to_uri();
@@ -192,7 +364,7 @@ void InviteRequestImpl::to_invite_request(
     set_message_header(uac_invite_transaction_.get());
     set_x_preferred_path(uac_invite_transaction_.get(), preferred_path_);
     set_message_content_type(uac_invite_transaction_.get(), SipContentType::SipContentType_SDP);
-    std::string sdp_str = get_sdp_description(*local_sdp_);
+    std::string sdp_str = local_sdp_->generate();
     if (sdp_str.empty()) {
         rcb(false, "No local sdp description", nullptr);
         return;
@@ -236,20 +408,20 @@ int InviteRequestImpl::on_recv_invite(
     const std::shared_ptr<sip_uas_transaction_t> &transaction, const std::shared_ptr<sip_dialog_t> &dialog_ptr,
     void **session) {
 
-    sdp_description sdp {};
-    if (!parse(sdp, std::string((const char *)req->payload, req->size))) {
+    SdpDescription sdp {};
+    if (!sdp.parse(std::string((const char *)req->payload, req->size))) {
         WarnL << "parse sdp failed, " << std::string_view((const char *)req->payload, req->size);
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, sip_session.get());
     }
     auto sip_server = sip_session->getSipServer();
     auto platform_id = get_platform_id(req.get());
-    if (sdp.s_name == sdp_session_type::invalid) {
+    if (sdp.session().sessionType == SessionType::UNKNOWN) {
         WarnL << "unknown invite sdk session , sdp = " << std::string_view((const char *)req->payload, req->size);
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, sip_session.get());
     }
-    auto sdp_ptr = std::make_shared<sdp_description>(std::move(sdp));
+    auto sdp_ptr = std::make_shared<SdpDescription>(std::move(sdp));
     std::shared_ptr<PlatformHelper> platform_ptr;
-    if (sdp.s_name == sdp_session_type::Talk) {
+    if (sdp.session().sessionType == SessionType::TALK) {
         platform_ptr
             = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
     } else {
@@ -270,7 +442,7 @@ int InviteRequestImpl::on_recv_invite(
     sip_uas_reply(transaction.get(), 100, nullptr, 0, sip_session.get());
     platform_ptr->on_invite(
         invite_ptr,
-        [invite_ptr, sip_session, transaction, platform_ptr](int sip_code, std::shared_ptr<sdp_description> sdp_ptr) {
+        [invite_ptr, sip_session, transaction, platform_ptr](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
             // GB/T 28181-2022 x-route-path
             if (invite_ptr->route_path_.empty()) {
                 invite_ptr->route_path_.emplace_back(platform_ptr->get_sip_server()->get_account().platform_id);
@@ -283,7 +455,7 @@ int InviteRequestImpl::on_recv_invite(
                     invite_ptr->set_status(INVITE_STATUS_TYPE::failed, "local sdp error");
                     return;
                 }
-                std::string payload = get_sdp_description(*sdp_ptr);
+                std::string payload = sdp_ptr->generate();
                 invite_ptr->local_sdp_ = sdp_ptr;
                 if (payload.empty()) {
                     WarnL << "sdp_ptr is empty";
@@ -343,6 +515,12 @@ int InviteRequestImpl::on_recv_info(
     if (!this_ptr) {
         return sip_uas_reply(transaction.get(), 481, nullptr, 0, sip_session.get());
     }
+    // 对消息进行解析
+    if (!req->payload || req->size == 0) {
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, sip_session.get());
+    }
+
+
     // todo： gb/t 28181 中通过 info 控制点播
 
     return sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());

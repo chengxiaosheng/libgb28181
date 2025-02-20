@@ -1,5 +1,15 @@
 #include "subordinate_platform_impl.h"
 
+#include "gb28181/message/catalog_message.h"
+#include "gb28181/message/cruise_track_message.h"
+#include "gb28181/message/device_control_message.h"
+#include "gb28181/message/home_position_message.h"
+#include "gb28181/message/ptz_position_message.h"
+#include "gb28181/message/record_info_message.h"
+#include "gb28181/message/sd_card_status_message.h"
+#include "gb28181/request/subscribe_request.h"
+#include "request/invite_request_impl.h"
+
 #include <Util/NoticeCenter.h>
 #include <gb28181/message/config_download_messsage.h>
 #include <gb28181/message/device_config_message.h>
@@ -177,17 +187,130 @@ bool SubordinatePlatformImpl::update_local_via(std::string host, uint16_t port) 
     return changed;
 }
 
-void SubordinatePlatformImpl::query_device_info(
-    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
-    auto request = std::make_shared<DeviceInfoMessageRequest>(device_id.empty() ? account_.platform_id : device_id);
-    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(ret));
-}
-
 void SubordinatePlatformImpl::query_device_status(
     const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
     auto request = std::make_shared<DeviceStatusMessageRequest>(device_id.empty() ? account_.platform_id : device_id);
     RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(ret));
 }
+void SubordinatePlatformImpl::query_catalog(
+    const std::string &device_id, RequestProxy::ResponseCallback data_callback,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<CatalogRequestMessage>(device_id);
+    auto proxy = RequestProxy::newRequestProxy(shared_from_this(), request);
+    if (rcb) {
+        proxy->set_response_callback(std::forward<decltype(data_callback)>(data_callback));
+    }
+    proxy->send(std::move(rcb));
+}
+
+void SubordinatePlatformImpl::query_device_info(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
+    auto request = std::make_shared<DeviceInfoMessageRequest>(device_id.empty() ? account_.platform_id : device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(ret));
+}
+void SubordinatePlatformImpl::query_record_info(
+    const std::shared_ptr<RecordInfoRequestMessage> &req, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    RequestProxy::newRequestProxy(shared_from_this(), req)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::query_home_position(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<HomePositionRequestMessage>(device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::query_cruise_list(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<CruiseTrackListRequestMessage>(device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::query_cruise(
+    const std::string &device_id, int32_t number, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<CruiseTrackRequestMessage>(device_id, number);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::query_ptz_position(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<PTZPositionRequestMessage>(device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::query_sd_card_status(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<SdCardRequestMessage>(device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_ptz(
+    const std::string &device_id, PtzCmdType ptz_cmd, std::string name,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_PTZCmd>(device_id, std::move(ptz_cmd), std::nullopt);
+    if (!name.empty()) {
+        request->ptz_cmd_params() = PtzCmdParams();
+        request->ptz_cmd_params().value().CruiseTrackName = name;
+        request->ptz_cmd_params().value().PresetName = name;
+    }
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_tele_boot(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_TeleBoot>(device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_record_cmd(
+    const std::string &device_id, RecordType type, int stream_number,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_RecordCmd>(device_id, type, stream_number);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_guard_cmd(
+    const std::string &device_id, GuardType type, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_GuardCmd>(device_id, type);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_alarm_cmd(
+    const std::string &device_id, std::optional<AlarmCmdInfoType> info,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_AlarmCmd>(device_id, std::move(info));
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_i_frame_cmd(
+    const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_IFrameCmd>(device_id);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_drag_zoom_in(
+    const std::string &device_id, DragZoomType drag, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_DragZoomIn>(device_id, std::move(drag));
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_drag_zoom_out(
+    const std::string &device_id, DragZoomType drag, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_DragZoomOut>(device_id, std::move(drag));
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_home_position(
+    const std::shared_ptr<DeviceControlRequestMessage_HomePosition> &req,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    RequestProxy::newRequestProxy(shared_from_this(), req)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_ptz_precise_ctrl(
+    std::shared_ptr<DeviceControlRequestMessage_PtzPreciseCtrl> &req,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    RequestProxy::newRequestProxy(shared_from_this(), req)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_device_upgrade(
+    const std::shared_ptr<DeviceControlRequestMessage_DeviceUpgrade> &req,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    RequestProxy::newRequestProxy(shared_from_this(), req)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_format_sd_card(
+    const std::string &device_id, int index, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    auto request = std::make_shared<DeviceControlRequestMessage_FormatSDCard>(device_id, index);
+    RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+void SubordinatePlatformImpl::device_control_target_track(
+    const std::shared_ptr<DeviceControlRequestMessage_TargetTrack> &req,
+    std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
+    RequestProxy::newRequestProxy(shared_from_this(), req)->send(std::move(rcb));
+}
+
 void SubordinatePlatformImpl::query_config(
     const std::string &device_id, DeviceConfigType config_type,
     std::function<void(std::shared_ptr<RequestProxy>)> ret) {
@@ -206,6 +329,15 @@ void SubordinatePlatformImpl::device_config(
     auto request
         = std::make_shared<DeviceConfigRequestMessage>(device_id.empty() ? account_.platform_id : device_id, config);
     RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
+}
+
+std::shared_ptr<InviteRequest> SubordinatePlatformImpl::invite(const std::shared_ptr<SdpDescription> &sdp) {
+    return InviteRequest::new_invite_request(shared_from_this(), sdp);
+}
+
+std::shared_ptr<SubscribeRequest>
+SubordinatePlatformImpl::subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) {
+    return SubscribeRequest::new_subscribe(shared_from_this(), request, std::move(info));
 }
 
 /**********************************************************************************************************

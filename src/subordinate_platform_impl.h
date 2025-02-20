@@ -1,5 +1,6 @@
 #ifndef gb28181_src_SUBORDINATE_PLATFORM_IMPL_H
 #define gb28181_src_SUBORDINATE_PLATFORM_IMPL_H
+#include "gb28181/request/subscribe_request.h"
 #include "gb28181/subordinate_platform.h"
 #include "gb28181/type_define.h"
 #include "platform_helper.h"
@@ -12,6 +13,7 @@ namespace toolkit {
 class SockException;
 }
 namespace gb28181 {
+class SubscribeRequest;
 class SipServer;
 class RequestProxyImpl;
 class MessageBase;
@@ -47,15 +49,12 @@ public:
     }
     std::weak_ptr<SubordinatePlatformImpl> weak_from_this() { return shared_from_this(); }
 
-    inline const subordinate_account &account() const override { return account_; }
+    const subordinate_account &account() const override { return account_; }
+
     gb28181::sip_account &sip_account() const override { return *(gb28181::sip_account *)&account_; }
 
     void set_status(PlatformStatusType status, std::string error);
 
-    void
-    query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
-    void
-    query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
     void query_config(
         const std::string &device_id, DeviceConfigType config_type,
         std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
@@ -66,7 +65,6 @@ public:
 
     bool update_local_via(std::string host, uint16_t port) override;
 
-public:
     int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
     void on_device_info(
         std::shared_ptr<DeviceInfoMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
@@ -80,6 +78,70 @@ public:
     void on_invite(
         const std::shared_ptr<InviteRequest> &invite_request,
         std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) override;
+
+    void
+    query_device_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+
+    void query_catalog(
+        const std::string &device_id, RequestProxy::ResponseCallback data_callback,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+
+    void
+    query_device_info(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+
+    void query_record_info(
+        const std::shared_ptr<RecordInfoRequestMessage> &req,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void
+    query_home_position(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void
+    query_cruise_list(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void query_cruise(
+        const std::string &device_id, int32_t number, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void
+    query_ptz_position(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void
+    query_sd_card_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_ptz(
+        const std::string &device_id, PtzCmdType ptz_cmd, std::string name,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_tele_boot(
+        const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_record_cmd(
+        const std::string &device_id, RecordType type, int stream_number,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_guard_cmd(
+        const std::string &device_id, GuardType type, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_alarm_cmd(
+        const std::string &device_id, std::optional<AlarmCmdInfoType> info,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_i_frame_cmd(
+        const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_drag_zoom_in(
+        const std::string &device_id, DragZoomType drag,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_drag_zoom_out(
+        const std::string &device_id, DragZoomType drag,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_home_position(
+        const std::shared_ptr<DeviceControlRequestMessage_HomePosition> &req,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_ptz_precise_ctrl(
+        std::shared_ptr<DeviceControlRequestMessage_PtzPreciseCtrl> &req,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_device_upgrade(
+        const std::shared_ptr<DeviceControlRequestMessage_DeviceUpgrade> &req,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_format_sd_card(
+        const std::string &device_id, int index, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+    void device_control_target_track(
+        const std::shared_ptr<DeviceControlRequestMessage_TargetTrack> &req,
+        std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
+
+    std::shared_ptr<InviteRequest> invite(const std::shared_ptr<SdpDescription> &sdp) override;
+
+    std::shared_ptr<SubscribeRequest>
+    subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) override;
 
 private:
     subordinate_account account_; // 账户信息

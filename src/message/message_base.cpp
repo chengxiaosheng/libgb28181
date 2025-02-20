@@ -137,7 +137,10 @@ void MessageBase::load_extend_data() {
         append_extend_to_xml(root, it);
     }
 }
-
+std::ostream &gb28181::operator<<(std::ostream &os, const MessageBase &msg) {
+    os << "[" <<  msg.root_ << "->" << msg.cmd_ << ":" << msg.sn_ << "] " ;
+    return os;
+}
 
 /**********************************************************************************************************
 文件名称:   message_base.cpp

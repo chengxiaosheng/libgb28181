@@ -65,6 +65,8 @@ public:
 
     explicit operator bool() const { return is_valid_; }
 
+    friend std::ostream &operator<<(std::ostream &os, const MessageBase &msg);
+
     /**
      * 解析xml 文档
      * @return

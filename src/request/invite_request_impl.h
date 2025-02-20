@@ -54,12 +54,9 @@ public:
         status_cb_ = std::move(status_cb);
     }
     void to_pause(const std::function<void(bool, std::string)> &rcb) override;
-    void to_play(const std::function<void(bool, std::string)> &rcb) override;
+    void to_play(const BackPlayControlResponseCallback &rcb) override;
     void to_teardown(const std::string& reason) override;
-    void to_seek_scale(std::optional<float> scale, std::optional<uint32_t> ntp, const std::function<void(bool, std::string)> &rcb) override;
-    std::shared_ptr<PlaybackState> playback_state() override {
-        return playback_state_;
-    }
+    void to_seek_scale(std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb) override;
 
 private:
     void set_status(INVITE_STATUS_TYPE status, std::string error);
@@ -103,9 +100,9 @@ private:
     std::vector<std::string> route_path_;
     std::string error_;
     INVITE_STATUS_TYPE status_ { INVITE_STATUS_TYPE::invite };
-    std::shared_ptr<PlaybackState> playback_state_;
     std::function<void(bool, std::string, const std::shared_ptr<SdpDescription> &)> rcb_;
     std::function<void(INVITE_STATUS_TYPE status, const std::string &err)> status_cb_;
+    BackPlayControlCallback play_control_callback_;
     friend class SipServer;
 };
 } // namespace gb28181

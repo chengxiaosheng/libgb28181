@@ -28,8 +28,18 @@ public:
 protected:
     void on_invite(const std::shared_ptr<InviteRequest> &invite_request, std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) override;
 
+    int on_query(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) override;
+
+    int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) override;
+
+    int on_notify(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) override;
+
+private:
+    int on_device_status_query(MessageBase &&message, const std::shared_ptr<sip_uas_transaction_t> &transaction, std::shared_ptr<sip_message_t> request);
+
 private:
     super_account account_;
+    std::shared_ptr<event_defined> event_define_;
 };
 } // namespace gb28181
 

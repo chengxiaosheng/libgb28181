@@ -20,6 +20,10 @@ enum SipError : int {
     sip_ok = 0, // 无错误
 };
 
+#ifndef GB28181_QUERY_TIMEOUT_MS
+#define GB28181_QUERY_TIMEOUT_MS 5*1000
+#endif
+
 /** is the status code informational */
 #define SIP_IS_SIP_INFO(x) (((x) >= 100) && ((x) < 200))
 /** is the status code OK ?*/
@@ -54,8 +58,9 @@ constexpr const char kEventSuperPlatformContactChanged[] = "kEventSuperPlatformC
 constexpr const char kEventOnDeviceInfoRequest[] = "kEventOnDeviceInfoRequest";
 #define kEventOnDeviceInfoRequestArgs std::shared_ptr<SubordinatePlatform> platform,std::shared_ptr<DeviceInfoMessageRequest> message, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)> callback
 
+// 收到来自上级平台的 设备状态查询请求
 constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusRequest";
-#define kEventOnDeviceStatusRequestArgs std::shared_ptr<SubordinatePlatform> platform,std::shared_ptr<DeviceStatusMessageRequest> message, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> callback
+#define kEventOnDeviceStatusRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceStatusMessageRequest> message, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> callback
 
 // 收到订阅通知
 constexpr const char kEventOnSubscribeNotify[] = "kEventOnSubscribeNotify";

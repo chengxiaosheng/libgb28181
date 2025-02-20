@@ -15,15 +15,17 @@ struct PlaybackState {
 };
 
 struct PlaybackControl {
-    enum { Play = 0, Pause, Teardown } : int8_t action;
+    enum { invalid = 0, Play, Pause, Teardown } action;
     bool is_now = false;
     float scale { 0 }; // 为0时表示无效
     double ntp { 0.00 };
+    double end_ntp { 0.00 }; // 这个参数应该不会有值吧
 };
 struct PlaybackControlResponse {
-    int sip_code { 200 }; // 返回的状态码
+    int rtsp_code { 0 }; // 返回的状态码
     uint32_t seq { 0 }; // 最后发送的RTP序列号
     uint32_t rtptime { 0 }; // 最后RTP时间戳
+    double ntp { 0.00 };
     std::string reason; // 错误信息
 };
 
@@ -33,7 +35,7 @@ public:
      * 回放控制的结果回调
      * @param PlaybackControlResponse 回放控制的结果
      */
-    using BackPlayControlResponseCallback = std::function<void(PlaybackControlResponse)>;
+    using BackPlayControlResponseCallback = std::function<void(bool,std::string, PlaybackControlResponse)>;
     /**
      * 回放控制请求回调
      * @param PlaybackControl 请求信息
@@ -70,12 +72,11 @@ public:
 
     virtual void to_teardown(const std::string &reason) = 0;
     virtual void to_pause(const std::function<void(bool, std::string)> &rcb) = 0;
-    virtual void to_play(const std::function<void(bool, std::string)> &rcb) = 0;
+    virtual void to_play(const BackPlayControlResponseCallback &rcb) = 0;
     virtual void to_seek_scale(
-        std::optional<float> scale, std::optional<uint32_t> ntp, const std::function<void(bool, std::string)> &rcb)
+        std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb)
         = 0;
 
-    virtual std::shared_ptr<PlaybackState> playback_state() = 0;
 };
 } // namespace gb28181
 

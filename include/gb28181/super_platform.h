@@ -1,9 +1,21 @@
 #ifndef gb28181_include_gb28181_SUPER_PLATFORM_H
 #define gb28181_include_gb28181_SUPER_PLATFORM_H
 #include "gb28181/type_define.h"
+
+#include <functional>
 namespace gb28181 {
+class DeviceStatusMessageResponse;
+class DeviceStatusMessageRequest;
+class SuperPlatform;
+
+
+
 class SuperPlatform {
 public:
+    using DeviceStatusQueryCallback = std::function<void(std::shared_ptr<SuperPlatform>, std::shared_ptr<DeviceStatusMessageRequest>, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)>)>;
+    struct event_defined {
+        DeviceStatusQueryCallback on_device_status_query;
+    };
     virtual ~SuperPlatform() = default;
     virtual void shutdown() = 0;
     virtual const super_account &account() const = 0;

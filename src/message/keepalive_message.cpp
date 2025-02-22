@@ -14,13 +14,25 @@ bool KeepaliveMessageRequest::load_detail() {
      if (!from_xml_element(status_, root, "Status")) {
          return false;
      }
-     from_xml_element(info_, root, "Info");
+     if (auto info = root->FirstChildElement("Info")) {
+         auto item = info->FirstChildElement("DeviceID");
+         while (item) {
+             info_.emplace_back(item->GetText());
+             item = item->NextSiblingElement("Info");
+         }
+     }
      return true;
 }
 bool KeepaliveMessageRequest::parse_detail() {
      auto root = xml_ptr_->RootElement();
      new_xml_element(status_, root, "Status");
-     new_xml_element(info_, root, "Info");
+     if (!info_.empty()) {
+         auto info = root->InsertNewChildElement("Info");
+         for (const auto &it : info_) {
+             auto item = info->InsertNewChildElement("DeviceID");
+             item->SetText(it.c_str());
+         }
+     }
      return true;
 }
 

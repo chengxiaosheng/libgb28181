@@ -41,6 +41,7 @@ void set_message_content_type(struct sip_uac_transaction_t *transaction, enum Si
 void set_message_reason(struct sip_uac_transaction_t *transaction, const char *reason);
 void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const char *path);
 void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const std::vector<std::string> &path);
+void set_message_authorization(struct sip_uac_transaction_t *transaction, const std::string &authorization);
 
 void set_message_agent(struct sip_uas_transaction_t *transaction);
 void set_message_gbt_version(
@@ -53,17 +54,21 @@ void set_message_reason(struct sip_uas_transaction_t *transaction, const char *r
 void set_x_route_path(struct sip_uas_transaction_t *transaction, const char *local, const char *sub);
 void set_x_route_path(struct sip_uas_transaction_t *transaction, const std::vector<std::string> &path);
 
-PlatformVersionType get_message_gbt_version(struct sip_message_t *msg);
-std::string get_platform_id(struct sip_message_t *msg);
-std::string get_from_uri(struct sip_message_t *msg);
-std::string get_to_uri(struct sip_message_t *msg);
+PlatformVersionType get_message_gbt_version(const struct sip_message_t *msg);
+std::string get_platform_id(const struct sip_message_t *msg);
+std::string get_from_uri(const struct sip_message_t *msg);
+std::string get_to_uri(const struct sip_message_t *msg);
 std::string get_message_reason(const struct sip_message_t *transaction);
-std::vector<std::string> get_x_preferred_path(struct sip_message_t *msg);
-std::vector<std::string> get_x_route_path(struct sip_message_t *msg);
+std::vector<std::string> get_x_preferred_path(const struct sip_message_t *msg);
+std::vector<std::string> get_x_route_path(const struct sip_message_t *msg);
+int get_expires(const struct sip_message_t *msg);
+std::string get_message_contact(const struct sip_message_t *msg);
 
 bool verify_authorization(struct sip_message_t *msg, const std::string &user, const std::string &password);
 std::string generate_www_authentication_(const std::string &realm);
 void set_message_www_authenticate(struct sip_uas_transaction_t *transaction, const std::string &realm);
+std::string get_www_authenticate(const struct sip_message_t *msg);
+std::string generate_authorization(const struct sip_message_t *msg, const std::string &username, const std::string &password, const std::string &uri, std::pair<std::string,int> &nc_pair);
 
 } // namespace gb28181
 

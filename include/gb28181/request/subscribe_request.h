@@ -2,7 +2,12 @@
 #define gb28181_include_gb28181_request_SUBSCRIBE_REQUEST_H
 #include "tinyxml2.h"
 
+#include <functional>
+#include <string>
+
 namespace gb28181 {
+class SubordinatePlatform;
+class MessageBase;
 class SubscribeRequest {
 public:
     enum TERMINATED_TYPE_E : uint8_t {

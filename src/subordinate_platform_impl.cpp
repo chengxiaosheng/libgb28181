@@ -51,7 +51,20 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
     account_.plat_status.error = std::move(error);
     if (status == PlatformStatusType::online) {
         account_.plat_status.register_time = toolkit::getCurrentMicrosecond(true);
+    } else {
+        keepalive_timer_.reset();
     }
+    keepalive_timer_ = std::make_shared<toolkit::Timer>(5, [weak_this = weak_from_this()]() {
+        if (auto this_ptr = weak_this.lock()) {
+            auto last_time = ((std::max)(this_ptr->account_.plat_status.register_time, this_ptr->account_.plat_status.keepalive_time));
+            auto now_time = toolkit::getCurrentMicrosecond(true);
+            if (last_time + 3 * 30 * 1000000L <= now_time) {
+                this_ptr->set_status(PlatformStatusType::offline, "keepalive timeout");
+            }
+            return true;
+        }
+        return false;
+    }, nullptr);
     // 异步广播平台在线状态
     toolkit::EventPollerPool::Instance().getPoller()->async(
         [this_ptr = shared_from_this(), status, error]() {
@@ -272,7 +285,7 @@ void SubordinatePlatformImpl::device_control_alarm_cmd(
 }
 void SubordinatePlatformImpl::device_control_i_frame_cmd(
     const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
-    auto request = std::make_shared<DeviceControlRequestMessage_IFrameCmd>(device_id);
+    auto request = std::make_shared<DeviceControlRequestMessage_IFrameCmd>(device_id, std::vector<std::string>());
     RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
 }
 void SubordinatePlatformImpl::device_control_drag_zoom_in(

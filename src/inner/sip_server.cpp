@@ -16,6 +16,7 @@
 #include "sip-subscribe.h"
 #include "sip_common.h"
 
+#include <Util/uv_errno.h>
 #include <gb28181/super_platform.h>
 #include <handler/uas_message_handler.h>
 #include <sip-message.h>
@@ -94,6 +95,7 @@ void SipServer::add_super_platform(super_account &&account) {
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
     auto platform = std::make_shared<SuperPlatformImpl>(std::move(account), shared_from_this());
     super_platforms_[platform_id] = platform;
+    platform->start();
 }
 void SipServer::reload_account(sip_account account) {}
 
@@ -187,16 +189,34 @@ void SipServer::get_client(
     const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb) {
     auto poller = EventPollerPool::Instance().getPoller();
     if (protocol == TransportType::udp && udp_server_) {
-        auto sock_ptr = udp_sockets_[poller.get()].lock();
-        if (!sock_ptr) {
-            cb(SockException(Err_other, "not found"), nullptr);
-            return;
-        }
-        auto session = std::make_shared<SipSession>(sock_ptr);
-        session->_sip_server = weak_from_this();
-        session->_sip_agent = sip_.get();
-        // udp下，只是作为发送，不需要绑定数据接收逻辑~
-        cb({}, session);
+        WorkThreadPool::Instance().getPoller()->async([poller, host, port, cb, local_port = udp_server_->getPort(), weak_this = weak_from_this()]() {
+            struct sockaddr_storage addr;
+            if (!SockUtil::getDomainIP(host.c_str(), port, addr, AF_INET, SOCK_DGRAM, IPPROTO_UDP)) {
+                poller->async([cb, host]() {
+                    cb(toolkit::SockException(Err_dns, "dns resolution failed" + host ), nullptr);
+                });
+                return;
+            }
+            poller->async([host,port, cb, addr, local_port, poller, weak_this]() {
+                auto this_ptr = weak_this.lock();
+                if (!this_ptr) {
+                    cb(toolkit::SockException(Err_other, "server destruction"), nullptr);
+                    return;
+                }
+                std::string ifr_ip = addr.ss_family == AF_INET ? "0.0.0.0" : "::";
+                auto sock_ptr = Socket::createSocket(poller, false);
+                if (!sock_ptr->bindUdpSock(local_port,ifr_ip.c_str(), true)) {
+                    cb(toolkit::SockException(Err_other, StrPrinter << "open udp active client failed on port: " << local_port << ", err: " << get_uv_errmsg(true)), nullptr);
+                    return;
+                }
+                sock_ptr->bindPeerAddr((struct sockaddr *)&addr, 0, true);
+                auto session = std::make_shared<SipSession>(sock_ptr);
+                session->_sip_server = this_ptr;
+                session->_sip_agent = this_ptr->sip_.get();
+                session->onSockConnect({});
+                cb({}, session);
+            });
+        });
     } else if (protocol == TransportType::tcp && tcp_server_) {
         auto sock_ptr = Socket::createSocket(poller, false);
         auto session = std::make_shared<SipSession>(sock_ptr);

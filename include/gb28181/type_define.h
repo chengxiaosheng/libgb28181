@@ -90,9 +90,10 @@ struct subordinate_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
+    PlatformVersionType version { PlatformVersionType::unknown }; // 平台版本
     uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
     std::string local_host; // 本地host, 会根据via头域的值而改变
-    sip_account_status plat_status;
+    sip_account_status plat_status; // 平台状态
 };
 /**
  * 上级平台账户信息
@@ -101,6 +102,7 @@ struct super_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
+    PlatformVersionType version { PlatformVersionType::unknown }; // 平台版本
     uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
     std::string local_host; // 本地host, 会根据via头域的值而改变
     int register_expired { 60 * 60 * 24 }; // 注册过期时间

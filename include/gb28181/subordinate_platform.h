@@ -5,6 +5,8 @@
 
 #include <functional>
 namespace gb28181 {
+class SdpDescription;
+class InviteRequest;
 class DeviceControlRequestMessage_TargetTrack;
 }
 namespace gb28181 {

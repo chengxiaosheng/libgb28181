@@ -13,7 +13,7 @@ public:
   ResultType & status() {
     return status_;
   }
-  DeviceIdArr & info() {
+  std::vector<std::string> & info() {
     return info_;
   }
 
@@ -23,7 +23,7 @@ protected:
 
 private:
   ResultType status_{ResultType::invalid};
-  DeviceIdArr info_;
+  std::vector<std::string> info_;
 };
 class KeepaliveMessageResponse : public MessageBase {};
 } // namespace gb28181

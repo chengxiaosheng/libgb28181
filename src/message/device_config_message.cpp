@@ -78,6 +78,10 @@ bool DeviceConfigRequestMessage::load_detail() {
         if (config_.first != DeviceConfigType::invalid)
             break;
     }
+    if (config_.first == DeviceConfigType::invalid) {
+        error_message_ = "Invalid device config";
+        return false;
+    }
     return true;
 }
 bool DeviceConfigRequestMessage::parse_detail() {

@@ -5,8 +5,6 @@
 #include <mutex>
 #include <shared_mutex>
 
-#ifdef __cplusplus
-
 namespace gb28181 {
 class SdpDescription;
 struct sdp_description;
@@ -14,6 +12,9 @@ struct sdp_description;
 namespace gb28181 {
 class InviteRequest;
 }
+
+#ifdef __cplusplus
+
 extern "C" {
     struct timeval;
     struct sip_message_t;
@@ -40,6 +41,8 @@ public:
     virtual void get_session(
         const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,
         bool udp = true);
+
+    virtual CharEncodingType get_encoding() const = 0;
 
     virtual void add_session(const std::shared_ptr<SipSession> &session);
 

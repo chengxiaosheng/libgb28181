@@ -4,9 +4,9 @@
 #include "Network/Session.h"
 #ifdef __cplusplus
 extern "C" {
-  struct http_parser_t;
-  struct sip_agent_t;
-  struct sip_transport_t;
+struct http_parser_t;
+struct sip_agent_t;
+struct sip_transport_t;
 }
 #endif
 
@@ -15,61 +15,52 @@ class SipServer;
 
 class SipSession : public toolkit::Session {
 public:
-  SipSession(const toolkit::Socket::Ptr &sock);
-  ~SipSession() override;
+    SipSession(const toolkit::Socket::Ptr &sock);
+    ~SipSession() override;
 
-  void onRecv(const toolkit::Buffer::Ptr &) override;
-  void onError(const toolkit::SockException &err) override;
-  void onManager() override;
-  inline bool is_udp() const {
-    return _is_udp;
-  }
-  void startConnect(const std::string &host, uint16_t port, uint16_t local_port, const std::string &local_ip, const std::function<void(const toolkit::SockException &ex)> &cb, float timeout_sec);
+    void onRecv(const toolkit::Buffer::Ptr &) override;
+    void onError(const toolkit::SockException &err) override;
+    void onManager() override;
+    inline bool is_udp() const { return _is_udp; }
+    void startConnect(
+        const std::string &host, uint16_t port, uint16_t local_port, const std::string &local_ip,
+        const std::function<void(const toolkit::SockException &ex)> &cb, float timeout_sec);
 
-  inline std::shared_ptr<SipServer> getSipServer() const {
-     return _sip_server.lock();
-  }
+    inline std::shared_ptr<SipServer> getSipServer() const { return _sip_server.lock(); }
 
-  inline void set_on_manager(std::function<void()> cb) {
-    _on_manager = std::move(cb);
-  }
-  inline void set_on_error(std::function<void(const toolkit::SockException &ex)> cb) {
-    _on_error = std::move(cb);
-  }
+    inline void set_on_manager(std::function<void()> cb) { _on_manager = std::move(cb); }
+    inline void set_on_error(std::function<void(const toolkit::SockException &ex)> cb) { _on_error = std::move(cb); }
 
-  static int sip_send(void* transport, const void* data, size_t bytes);
-  static int sip_via(void* transport, const char* destination, char protocol[16], char local[128], char dns[128]);
+    static int sip_send(void *transport, const void *data, size_t bytes);
+    static int sip_via(void *transport, const char *destination, char protocol[16], char local[128], char dns[128]);
 
-  static sip_transport_t * get_transport();
+    static sip_transport_t *get_transport();
 
-protected:
-  void onSockConnect(const toolkit::SockException &ex);
+    void onSockConnect(const toolkit::SockException &ex);
 
+    void set_local_ip(const std::string &ip) { local_ip_ = ip; }
+    void set_local_port(uint16_t port) { local_port_ = port; }
 
 private:
-  bool _is_udp = false;
-  int8_t _wait_type{0};
-  toolkit::Ticker _ticker;
-  struct sockaddr_storage _addr{};
-  std::shared_ptr<http_parser_t> _sip_parse;
-  sip_agent_t * _sip_agent{};
-  std::weak_ptr<SipServer> _sip_server;
-  std::shared_ptr<toolkit::Timer> _timer;
-  std::string local_ip_;
-  uint16_t local_port_{0};
-  friend class SipServer;
+    bool _is_udp = false;
+    int8_t _wait_type { 0 };
+    toolkit::Ticker _ticker;
+    struct sockaddr_storage _addr {};
+    std::shared_ptr<http_parser_t> _sip_parse;
+    sip_agent_t *_sip_agent {};
+    std::weak_ptr<SipServer> _sip_server;
+    std::shared_ptr<toolkit::Timer> _timer;
+    std::string local_ip_;
+    uint16_t local_port_ { 0 };
+    friend class SipServer;
 
-  std::function<void()> _on_manager;
-  std::function<void(const toolkit::SockException &)> _on_error;
+    std::function<void()> _on_manager;
+    std::function<void(const toolkit::SockException &)> _on_error;
 };
 
-}
+} // namespace gb28181
 
-
-
-#endif //gb28181_src_inner_SIP_SESSION_H
-
-
+#endif // gb28181_src_inner_SIP_SESSION_H
 
 /**********************************************************************************************************
 文件名称:   sip_session.h

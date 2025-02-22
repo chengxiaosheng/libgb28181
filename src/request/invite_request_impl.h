@@ -2,7 +2,6 @@
 #define gb28181_src_request_INVITE_REQUEST_IMPL_H
 #include "RequestConfigDownloadImpl.h"
 #include "gb28181/request/invite_request.h"
-#include "gb28181/request/sdp2.h"
 
 #include <Poller/EventPoller.h>
 #include <functional>

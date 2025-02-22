@@ -6,6 +6,9 @@
 #include <atomic>
 #include <variant>
 
+namespace gb28181 {
+class PlatformHelper;
+}
 namespace toolkit {
 class Timer;
 }
@@ -33,10 +36,10 @@ class RequestProxyImpl
 public:
     RequestProxyImpl(
         const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request,
-        RequestType type);
+        RequestType type, int32_t sn = 0);
     RequestProxyImpl(
     const std::shared_ptr<SuperPlatformImpl> &platform, const std::shared_ptr<MessageBase> &request,
-    RequestType type);
+    RequestType type, int32_t sn = 0);
     ~RequestProxyImpl() override;
     void set_sn(int sn) { request_sn_ = sn; }
     Status status() const override { return status_; }
@@ -70,7 +73,7 @@ protected:
     uint64_t response_begin_time_ { 0 };
     uint64_t response_end_time_ { 0 };
     std::vector<std::shared_ptr<MessageBase>> responses_;
-    std::variant<std::shared_ptr<SubordinatePlatformImpl>, std::shared_ptr<SuperPlatformImpl>> platform_;
+    std::shared_ptr<PlatformHelper> platform_;
     std::shared_ptr<MessageBase> request_;
     std::shared_ptr<SipSession> send_session_;
     std::shared_ptr<sip_uac_transaction_t> uac_transaction_;

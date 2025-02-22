@@ -43,6 +43,7 @@ public:
     void shutdown() override;
 
     void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
+    CharEncodingType get_encoding() const override { return account_.encoding; }
 
     std::shared_ptr<SubordinatePlatformImpl> shared_from_this() {
         return std::dynamic_pointer_cast<SubordinatePlatformImpl>(PlatformHelper::shared_from_this());

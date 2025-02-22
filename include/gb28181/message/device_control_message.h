@@ -120,6 +120,7 @@ private:
 };
 
 class DeviceControlRequestMessage_IFrameCmd final : public DeviceControlRequestMessage {
+public:
     explicit DeviceControlRequestMessage_IFrameCmd(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
     explicit DeviceControlRequestMessage_IFrameCmd(MessageBase &&messageBase)

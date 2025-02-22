@@ -7,6 +7,8 @@
 #include "sip-message.h"
 #include "sip_common.h"
 
+#include "tinyxml2.h"
+
 #include <algorithm>
 #include <sip-uac.h>
 #include <sip-uas.h>
@@ -59,6 +61,12 @@ void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const std::
     auto data = ss.str();
     if (!data.empty()) {
         sip_uac_add_header(transaction, SIP_HEADER_X_PREFERRED_PATH, data.c_str());
+    }
+}
+
+void set_message_authorization(struct sip_uac_transaction_t *transaction, const std::string &authorization) {
+    if (!authorization.empty()) {
+        sip_uac_add_header(transaction, SIP_HEADER_AUTHORIZATION, authorization.c_str());
     }
 }
 
@@ -120,7 +128,7 @@ void set_message_content_type(struct sip_uas_transaction_t *transaction, enum Si
     }
 }
 
-PlatformVersionType get_message_gbt_version(struct sip_message_t *msg) {
+PlatformVersionType get_message_gbt_version(const struct sip_message_t *msg) {
     if (!msg)
         return PlatformVersionType::unknown;
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_X_GB_VERSION);
@@ -136,7 +144,7 @@ PlatformVersionType get_message_gbt_version(struct sip_message_t *msg) {
     }
     return PlatformVersionType::unknown;
 }
-std::string get_platform_id(struct sip_message_t *msg) {
+std::string get_platform_id(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     cstring_t str {};
@@ -146,7 +154,7 @@ std::string get_platform_id(struct sip_message_t *msg) {
     }
     return "";
 }
-std::string get_from_uri(struct sip_message_t *msg) {
+std::string get_from_uri(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     std::string str(128, '\0');
@@ -157,7 +165,7 @@ std::string get_from_uri(struct sip_message_t *msg) {
     return "";
 }
 
-std::string get_to_uri(struct sip_message_t *msg) {
+std::string get_to_uri(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     std::string str(128, '\0');
@@ -172,24 +180,43 @@ std::string get_message_reason(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_REASON);
-    if (cstrvalid(hv)) {
+    if (hv && cstrvalid(hv)) {
         return std::string(hv->p, hv->n);
     }
     return "";
 }
-std::vector<std::string> get_x_preferred_path(struct sip_message_t *msg) {
+std::vector<std::string> get_x_preferred_path(const struct sip_message_t *msg) {
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_X_PREFERRED_PATH);
-    if (cstrvalid(hv)) {
+    if (hv && cstrvalid(hv)) {
         return toolkit::split(std::string(hv->p, hv->n), "-");
     }
     return {};
 }
-std::vector<std::string> get_x_route_path(struct sip_message_t *msg) {
+std::vector<std::string> get_x_route_path(const struct sip_message_t *msg) {
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_X_ROUTE_PATH);
-    if (cstrvalid(hv)) {
+    if (hv && cstrvalid(hv)) {
         return toolkit::split(std::string(hv->p, hv->n), "-");
     }
     return {};
+}
+int get_expires(const struct sip_message_t *msg) {
+    if (!msg)
+        return 0;
+    auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_EXPIRES);
+    if (hv && cstrvalid(hv)) {
+        int expires = 0;
+        tinyxml2::XMLUtil::ToInt(hv->p, &expires);
+        return expires;
+    }
+    return 0;
+}
+std::string get_message_contact(const struct sip_message_t *msg) {
+    if (!msg) return "";
+    auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_CONTACT);
+    if (cstrvalid(hv)) {
+        return std::string(hv->p, hv->n);
+    }
+    return "";
 }
 
 std::unordered_map<std::string, std::string> parseAuthorizationHeader(const std::string &authHeader) {
@@ -292,6 +319,80 @@ std::string generate_www_authentication_(const std::string &realm) {
 }
 void set_message_www_authenticate(struct sip_uas_transaction_t *transaction, const std::string &realm) {
     sip_uas_add_header(transaction, SIP_HEADER_WWW_AUTHENTICATE, generate_www_authentication_(realm).c_str());
+}
+std::string get_www_authenticate(const struct sip_message_t *msg) {
+    if (!msg) return "";
+    auto auth_str = sip_message_get_header_by_name(msg, SIP_HEADER_WWW_AUTHENTICATE);
+    if (cstrvalid(auth_str)) {
+        return std::string(auth_str->p, auth_str->n);
+    }
+    return "";
+
+}
+std::string generate_authorization(const struct sip_message_t *msg, const std::string &username, const std::string &password,const std::string &uri, std::pair<std::string,int> &nc_pair) {
+    std::string www_authorization = get_www_authenticate(msg);
+    if (www_authorization.empty()) return "";
+    auto &&fields = parseAuthorizationHeader(www_authorization);
+    if (fields.empty()) return "";
+    // 校验必要参数
+    if (!fields.count("realm") || !fields.count("nonce")) {
+        return "";
+    }
+    // 提取认证参数
+    const std::string& realm = fields["realm"];
+    const std::string& nonce = fields["nonce"];
+    const std::string& qop = fields.count("qop") ? fields["qop"] : "";
+    const std::string& algorithm = fields.count("algorithm") ? fields["algorithm"] : "MD5";
+
+    if (nc_pair.first == nonce) {
+        nc_pair.second ++;
+        if (nc_pair.second >= 0xFFFFFFFF) {
+            nc_pair.second = 1;
+        }
+    } else {
+        nc_pair.first = nonce;
+        nc_pair.second = 1;
+    }
+    std::stringstream nc_ss;
+    nc_ss << std::setw(8) << std::setfill('0') << std::hex << nc_pair.second;
+    std::string nc_str = nc_ss.str();
+
+    // 选择哈希算法
+    auto H = (algorithm == "MD5") ? md5 : sha256;
+    // 生成客户端随机数
+    std::string cnonce = toolkit::makeRandStr(16);
+    // 计算H(A1)
+    std::string A1 = username + ":" + realm + ":" + password;
+    std::string HA1 = H(A1);
+    // 计算H(A2)
+    std::string A2 = "REGISTER:" + uri;
+    if (qop == "auth-int") {
+        // 若需要消息体校验，需额外传入entity_body参数
+        A2 += ":" + H(""); // 示例中假设无消息体
+    }
+    std::string HA2 = H(A2);
+    // 生成响应值
+    std::string response;
+    if (qop.empty()) {
+        response = H(HA1 + ":" + nonce + ":" + HA2);
+    } else {
+        response = H(HA1 + ":" + nonce + ":" + nc_str + ":" + cnonce + ":" + qop + ":" + HA2);
+    }
+    // 构建Authorization头
+    std::ostringstream oss;
+    oss << "Digest "
+        << "username=\"" << username << "\", "
+        << "realm=\"" << realm << "\", "
+        << "nonce=\"" << nonce << "\", "
+        << "uri=\"" << uri << "\", "
+        << "response=\"" << response << "\", "
+        << "algorithm=\"" << algorithm << "\"";
+    if (!qop.empty()) {
+        oss << ", qop=\"" << qop << "\", "
+            << "nc=\"" << nc_str << "\", "
+            << "cnonce=\"" << cnonce << "\"";
+    }
+    return oss.str();
 }
 
 } // namespace gb28181

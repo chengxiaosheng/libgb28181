@@ -173,7 +173,9 @@ bool DeviceControlRequestMessage_AlarmCmd::parse_detail() {
 
 DeviceControlRequestMessage_IFrameCmd::DeviceControlRequestMessage_IFrameCmd(
     const std::string &device_id, std::vector<std::string> &&extra)
-    : DeviceControlRequestMessage(device_id, std::move(extra)) {}
+    : DeviceControlRequestMessage(device_id, std::move(extra)) {
+
+}
 bool DeviceControlRequestMessage_IFrameCmd::load_detail() {
     DeviceControlRequestMessage::load_detail();
     auto root = xml_ptr_->RootElement();

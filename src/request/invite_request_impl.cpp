@@ -87,7 +87,7 @@ void InviteRequestImpl::to_teardown(const std::string &reason) {
 
 // 专门接收会话内请求消息回复
 static int info_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
-    if (SIP_IS_SIP_INFO(code) && reply)
+    if (SIP_IS_SIP_INFO(code))
         return 0;
 
     std::shared_ptr<sip_message_t> reply_msg(const_cast<sip_message_t *>(reply), [](sip_message_t *p) {
@@ -191,6 +191,10 @@ void InviteRequestImpl::to_seek_scale(
          ntp](bool ret, std::string err, std::shared_ptr<sip_message_t> reply) {
             if (!ret) {
                 return rcb(false, err, {});
+            }
+            if (!reply) {
+                // 其实一定不会走到这里， reply = nullptr 时ret一定是false, 这里图个安心
+                return rcb(false, "request timeout", {});
             }
             PlaybackControlResponse response;
             try {

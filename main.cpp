@@ -1,7 +1,6 @@
 #include "gb28181/local_server.h"
 #include "gb28181/message/catalog_message.h"
 #include "gb28181/request/invite_request.h"
-#include "gb28181/request/sdp2.h"
 #include "gb28181/request/subscribe_request.h"
 
 #include <iostream>
@@ -101,6 +100,18 @@ int main() {
         });
     });
 
+
+    super_account sup_account;
+    {
+        sup_account.platform_id = "65010400002000100005";
+        sup_account.domain = "6501040000";
+        sup_account.name = "级联测试平台";
+        sup_account.host = "10.1.11.170";
+        sup_account.port = 55060;
+        sup_account.password = "123456";
+    };
+    local_server->add_super_platform(std::move(sup_account));
+
     // 捕获 SIGINT 和 SIGTERM 信号
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
@@ -110,6 +121,8 @@ int main() {
     while (is_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 防止忙等
     }
+
+
 
     std::cout << "Server stopped." << std::endl;
     return 0;

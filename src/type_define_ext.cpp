@@ -962,10 +962,15 @@ bool from_xml_element(PictureMaskClgType &val, const tinyxml2::XMLElement *root,
                 RegionListItem item_val;
                 from_xml_element(item_val.Seq, item, "Seq");
                 if (auto point = item->FirstChildElement("Point")) {
-                    if (sscanf_s(
-                            point->GetText(), "%d,%d,%d,%d", &item_val.Point.lx, &item_val.Point.ly, &item_val.Point.rx,
-                            &item_val.Point.ry)
-                        != 4) {
+                    try {
+                        auto pair = toolkit::split(point->Value(), ",");
+                        if (pair.size() == 4) {
+                            item_val.Point.lx = std::stoi(pair[0]);
+                            item_val.Point.ly = std::stoi(pair[1]);
+                            item_val.Point.rx = std::stoi(pair[2]);
+                            item_val.Point.ry = std::stoi(pair[3]);
+                        }
+                    } catch (const std::exception &e) {
                         WarnL << "parse PictureMask->RegionList->Item[]->Point failed, point = " << point->GetText();
                     }
                 }

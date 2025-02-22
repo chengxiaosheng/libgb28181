@@ -52,7 +52,7 @@ public:
 
     const subordinate_account &account() const override { return account_; }
 
-    gb28181::sip_account &sip_account() const override { return *(gb28181::sip_account *)&account_; }
+    platform_account &sip_account() const override { return *(platform_account *)&account_; }
 
     void set_status(PlatformStatusType status, std::string error);
 
@@ -145,6 +145,11 @@ public:
     subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) override;
 
 private:
+
+    TransportType get_transport() const override {
+        return account_.transport_type;
+    }
+
     subordinate_account account_; // 账户信息
     // 心跳检测
     std::shared_ptr<toolkit::Timer> keepalive_timer_;

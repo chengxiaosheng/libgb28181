@@ -7,6 +7,7 @@ extern "C" {
 struct http_parser_t;
 struct sip_agent_t;
 struct sip_transport_t;
+struct cstring_t;
 }
 #endif
 
@@ -26,12 +27,13 @@ public:
         const std::string &host, uint16_t port, uint16_t local_port, const std::string &local_ip,
         const std::function<void(const toolkit::SockException &ex)> &cb, float timeout_sec);
 
-    inline std::shared_ptr<SipServer> getSipServer() const { return _sip_server.lock(); }
+    std::shared_ptr<SipServer> getSipServer() const { return _sip_server.lock(); }
 
-    inline void set_on_manager(std::function<void()> cb) { _on_manager = std::move(cb); }
-    inline void set_on_error(std::function<void(const toolkit::SockException &ex)> cb) { _on_error = std::move(cb); }
+    void set_on_manager(std::function<void()> cb) { _on_manager = std::move(cb); }
+    void set_on_error(std::function<void(const toolkit::SockException &ex)> cb) { _on_error = std::move(cb); }
 
     static int sip_send(void *transport, const void *data, size_t bytes);
+    static int sip_send2(void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received, int rport, const void *data, int bytes);
     static int sip_via(void *transport, const char *destination, char protocol[16], char local[128], char dns[128]);
 
     static sip_transport_t *get_transport();
@@ -56,6 +58,7 @@ private:
 
     std::function<void()> _on_manager;
     std::function<void(const toolkit::SockException &)> _on_error;
+    std::shared_ptr<toolkit::Ticker> ticker_; // 计时器
 };
 
 } // namespace gb28181

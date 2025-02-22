@@ -82,11 +82,10 @@ struct local_account : public sip_account {
     bool allow_auto_register { false }; // 是否允许自动注册
     TransportType transport_type { TransportType::both }; // 监听的网络
 };
-
 /**
- * 下级平台账户信息
+ * 上下级连平台基本账户信息
  */
-struct subordinate_account : public sip_account {
+struct platform_account : public sip_account {
     CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
@@ -95,20 +94,20 @@ struct subordinate_account : public sip_account {
     std::string local_host; // 本地host, 会根据via头域的值而改变
     sip_account_status plat_status; // 平台状态
 };
+
+/**
+ * 下级平台账户信息
+ */
+struct subordinate_account : public platform_account {
+
+};
 /**
  * 上级平台账户信息
  */
-struct super_account : public sip_account {
-    CharEncodingType encoding { CharEncodingType::gb2312 }; // 字符集编码
-    TransportType transport_type { TransportType::udp }; // 网络传输方式
-    PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
-    PlatformVersionType version { PlatformVersionType::unknown }; // 平台版本
-    uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
-    std::string local_host; // 本地host, 会根据via头域的值而改变
+struct super_account : public platform_account {
     int register_expired { 60 * 60 * 24 }; // 注册过期时间
     int keepalive_interval { 30 }; // 心跳间隔
     int keepalive_times { 3 }; // 心跳超时次数
-    sip_account_status plat_status; // 平台状态
 };
 
 /**

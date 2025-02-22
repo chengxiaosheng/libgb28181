@@ -30,7 +30,7 @@ public:
 
     const super_account &account() const override { return account_; }
     void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
-    gb28181::sip_account &sip_account() const override { return *(gb28181::sip_account *)&account_; }
+    platform_account &sip_account() const override { return *(platform_account *)&account_; }
     bool update_local_via(std::string host, uint16_t port) override;
 
     std::string get_to_uri() override;
@@ -60,6 +60,9 @@ private:
     on_register_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code);
     void set_status(PlatformStatusType status, std::string error);
 
+    TransportType get_transport() const override {
+        return account_.transport_type;
+    }
 private:
     super_account account_;
     std::string moved_uri_;

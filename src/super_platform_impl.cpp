@@ -98,11 +98,9 @@ bool SuperPlatformImpl::update_local_via(std::string host, uint16_t port) {
     if (changed) {
         from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":"
             + std::to_string(account_.local_port);
-        for (auto &it : sip_session_) {
-            if (it) {
-                it->set_local_ip(host);
-                it->set_local_port(port);
-            }
+        if (tcp_session_) {
+            tcp_session_->set_local_ip(host);
+            tcp_session_->set_local_port(port);
         }
         // 通知上层应用？
         toolkit::EventPollerPool::Instance().getExecutor()->async(

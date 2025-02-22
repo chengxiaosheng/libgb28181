@@ -1,8 +1,6 @@
 #include "gb28181/sip_common.h"
 #include "sip-agent.h"
-#include "sip-transport.h"
 #include "subordinate_platform_impl.h"
-#include "uri-parse.h"
 #include <Thread/WorkThreadPool.h>
 #include <Util/NoticeCenter.h>
 #include <sip-uac.h>
@@ -16,7 +14,6 @@
 #include "sip-subscribe.h"
 #include "sip_common.h"
 
-#include <Util/uv_errno.h>
 #include <gb28181/super_platform.h>
 #include <handler/uas_message_handler.h>
 #include <sip-message.h>
@@ -48,7 +45,7 @@ SipServer::SipServer(local_account account)
     init_agent();
 }
 void SipServer::init_agent() {
-    handler_->send = send;
+    handler_->send = SipSession::sip_send2;
     handler_->onregister = onregister;
     handler_->oninvite = oninvite;
     handler_->onack = onack;
@@ -127,22 +124,6 @@ void SipServer::new_subordinate_account(
     }
 }
 
-int SipServer::send_data(
-    const std::shared_ptr<SipSession> &session_ptr, toolkit::Buffer::Ptr data, TransportType protocol,
-    sockaddr_storage &addr) {
-    if (!session_ptr)
-        return sip_unknown_host;
-    if (session_ptr->is_udp() && protocol == TransportType::udp) {
-        // udp 需要指定目标地址
-        session_ptr->getSock()->send(std::move(data), (sockaddr *)&addr);
-        return sip_ok;
-    } else if (!session_ptr->is_udp() && protocol == TransportType::tcp) {
-        session_ptr->send(std::move(data));
-        return sip_ok;
-    }
-    return sip_no_network;
-}
-
 SipServer::~SipServer() = default;
 
 void SipServer::run() {
@@ -154,14 +135,6 @@ void SipServer::run() {
     auto weak_this = weak_from_this();
     if (account_.transport_type == TransportType::both || account_.transport_type == TransportType::udp) {
         udp_server_ = std::make_shared<UdpServer>();
-        udp_server_->setOnCreateSocket(
-            [weak_this](const EventPoller::Ptr &poller, const Buffer::Ptr &buf, struct sockaddr *addr, int addr_len) {
-                auto socket = Socket::createSocket(poller, false);
-                if (auto this_ptr = weak_this.lock()) {
-                    this_ptr->udp_sockets_[poller.get()] = socket;
-                }
-                return socket;
-            });
         udp_server_->start<SipSession>(
             account_.port, local_ip_, [weak_this](const std::shared_ptr<SipSession> &session) {
                 session->_sip_server = weak_this;
@@ -179,55 +152,61 @@ void SipServer::run() {
     }
 }
 void SipServer::shutdown() {
-    udp_sockets_.clear();
     udp_server_.reset();
     tcp_server_.reset();
+}
+
+void SipServer::get_client_l(
+    bool is_udp, const struct sockaddr_storage &addr,
+    const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb) {
+    if (is_udp && udp_server_) {
+        if (auto session_ptr = udp_server_->getOrCreateSession(addr)) {
+            cb({}, std::dynamic_pointer_cast<SipSession>(session_ptr));
+        } else {
+            cb(toolkit::SockException(Err_other, "get session failed"), nullptr);
+        }
+        return;
+    }
+    auto poller = EventPollerPool::Instance().getPoller();
+    auto sock_ptr = Socket::createSocket(poller, false);
+    auto session = std::make_shared<SipSession>(sock_ptr);
+    session->_sip_server = weak_from_this();
+    session->_sip_agent = sip_.get();
+    // tcp 下sipSession 模拟tcpclient 操作, 尝试往对端建立连接
+    session->startConnect(
+        SockUtil::inet_ntoa((const sockaddr *)&addr), SockUtil::inet_port((const sockaddr *)&addr),
+        tcp_server_->getPort(), local_ip_,
+        [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
 }
 
 void SipServer::get_client(
     TransportType protocol, const std::string &host, uint16_t port,
     const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb) {
     auto poller = EventPollerPool::Instance().getPoller();
-    if (protocol == TransportType::udp && udp_server_) {
-        WorkThreadPool::Instance().getPoller()->async([poller, host, port, cb, local_port = udp_server_->getPort(), weak_this = weak_from_this()]() {
+    bool is_udp = protocol == TransportType::udp;
+    if (is_udp && !udp_server_) {
+        is_udp = false;
+    }
+    bool is_ip = toolkit::isIP(host.c_str());
+    auto weak_this = weak_from_this();
+    if (!toolkit::isIP(host.c_str())) {
+        WorkThreadPool::Instance().getPoller()->async([poller, host, port, cb, weak_this, is_udp]() {
             struct sockaddr_storage addr;
-            if (!SockUtil::getDomainIP(host.c_str(), port, addr, AF_INET, SOCK_DGRAM, IPPROTO_UDP)) {
-                poller->async([cb, host]() {
-                    cb(toolkit::SockException(Err_dns, "dns resolution failed" + host ), nullptr);
-                });
+            if (!SockUtil::getDomainIP(
+                    host.c_str(), port, addr, AF_INET, SOCK_DGRAM, is_udp ? IPPROTO_UDP : IPPROTO_TCP)) {
+                poller->async(
+                    [cb, host]() { cb(toolkit::SockException(Err_dns, "dns resolution failed" + host), nullptr); });
                 return;
             }
-            poller->async([host,port, cb, addr, local_port, poller, weak_this]() {
-                auto this_ptr = weak_this.lock();
-                if (!this_ptr) {
-                    cb(toolkit::SockException(Err_other, "server destruction"), nullptr);
-                    return;
-                }
-                std::string ifr_ip = addr.ss_family == AF_INET ? "0.0.0.0" : "::";
-                auto sock_ptr = Socket::createSocket(poller, false);
-                if (!sock_ptr->bindUdpSock(local_port,ifr_ip.c_str(), true)) {
-                    cb(toolkit::SockException(Err_other, StrPrinter << "open udp active client failed on port: " << local_port << ", err: " << get_uv_errmsg(true)), nullptr);
-                    return;
-                }
-                sock_ptr->bindPeerAddr((struct sockaddr *)&addr, 0, true);
-                auto session = std::make_shared<SipSession>(sock_ptr);
-                session->_sip_server = this_ptr;
-                session->_sip_agent = this_ptr->sip_.get();
-                session->onSockConnect({});
-                cb({}, session);
-            });
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->get_client_l(is_udp, addr, cb);
+            } else {
+                cb(toolkit::SockException(Err_other, "server destruction"), nullptr);
+            }
         });
-    } else if (protocol == TransportType::tcp && tcp_server_) {
-        auto sock_ptr = Socket::createSocket(poller, false);
-        auto session = std::make_shared<SipSession>(sock_ptr);
-        session->_sip_server = weak_from_this();
-        session->_sip_agent = sip_.get();
-        // tcp 下sipsession 模拟tcpclient 操作, 尝试往对端建立连接
-        session->startConnect(
-            host, port, tcp_server_->getPort(), local_ip_,
-            [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
     } else {
-        cb(toolkit::SockException(Err_other, "当前线程不存在udp socket", sip_no_network), nullptr);
+        auto addr = toolkit::SockUtil::make_sockaddr(host.c_str(), port);
+        get_client_l(is_udp, addr, cb);
     }
 }
 
@@ -254,46 +233,6 @@ bool isPeerAddressBound(int sock) {
         return false;
     }
     return true;
-}
-
-int SipServer::send(
-    void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received,
-    int rport, const void *data, int bytes) {
-
-    GetSipSession(param);
-    auto buffer = BufferRaw::create();
-    buffer->assign((const char *)data, bytes);
-
-    TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
-    // 判断是否绑定了对端地址，如果绑定，则直接发送
-    if (isPeerAddressBound(session_ptr->getSock()->rawFD())) {
-        session_ptr->send(std::move(buffer));
-        return sip_ok;
-    }
-    std::shared_ptr<uri_t> uri(uri_parse(peer->p, peer->n), uri_free);
-    if (uri == nullptr)
-        return sip_unknown_host;
-    std::string host = (received && cstrvalid(received)) ? std::string(received->p, received->n) : uri->host;
-    uint16_t port = rport > 0 ? rport : (uri->port ? uri->port : SIP_PORT);
-
-    auto proto = get_sip_protocol(protocol);
-    if (isIP(host.c_str())) {
-        auto addr = SockUtil::make_sockaddr(host.c_str(), port);
-        session_ptr->getSock()->send(
-            std::move(buffer), (sockaddr *)(&addr), SockUtil::get_sock_len((sockaddr *)(&addr)));
-        return sip_ok;
-    } else {
-        auto poller = toolkit::EventPollerPool::Instance().getPoller();
-        WorkThreadPool::Instance().getExecutor()->async(
-            [host, port, buffer = std::move(buffer), proto, poller, session_ptr]() mutable {
-                struct sockaddr_storage addr {};
-                if (SockUtil::getDomainIP(host.c_str(), port, addr)) {
-                    session_ptr->getSock()->send(
-                        std::move(buffer), (sockaddr *)(&addr), SockUtil::get_sock_len((sockaddr *)(&addr)));
-                }
-            });
-        return sip_ok;
-    }
 }
 
 int SipServer::onregister(

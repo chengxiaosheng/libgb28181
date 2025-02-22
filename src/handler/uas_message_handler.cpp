@@ -43,7 +43,9 @@ int on_uas_register(
     if (auto platform
         = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(user))) {
         // 将session 添加到平台
-        platform->add_session(session);
+        if (!session->is_udp()) {
+            platform->set_tcp_session(session);
+        }
         if (expires == 0) {
             platform->set_status(PlatformStatusType::offline, "logout");
             return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
@@ -79,7 +81,9 @@ int on_uas_register(
             sip_server->new_subordinate_account(
                 account_ptr, [session, transaction, expires](std::shared_ptr<SubordinatePlatformImpl> platform) {
                     if (platform) {
-                        platform->add_session(session);
+                        if (session->is_udp()) {
+                            platform->set_tcp_session(session);
+                        }
                         platform->set_status(PlatformStatusType::online, {});
                         set_message_date(transaction.get());
                         set_message_expires(transaction.get(), expires);

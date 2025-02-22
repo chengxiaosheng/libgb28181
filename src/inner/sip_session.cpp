@@ -14,12 +14,14 @@ SipSession::SipSession(const toolkit::Socket::Ptr &sock)
     , _sip_parse(
           std::shared_ptr<http_parser_t>(
               http_parser_create(HTTP_PARSER_MODE::HTTP_PARSER_REQUEST, nullptr, nullptr),
-              [](http_parser_t *parser) { http_parser_destroy(parser); })) {
+              [](http_parser_t *parser) { http_parser_destroy(parser); })), ticker_(std::make_shared<toolkit::Ticker>()) {
     socklen_t addr_len = sizeof(_addr);
     getpeername(sock->rawFD(), (struct sockaddr *)&_addr, &addr_len);
     _is_udp = sock->sockType() == SockNum::Sock_UDP;
 }
-SipSession::~SipSession() {}
+SipSession::~SipSession() {
+    TraceP(this) << "SipSession::~SipSession()";
+}
 
 void SipSession::startConnect(
     const std::string &host, uint16_t port, uint16_t local_port, const std::string &local_ip,
@@ -123,13 +125,31 @@ int SipSession::sip_via(void *transport, const char *destination, char protocol[
     return 0;
 }
 
+// 本地作为客户端的时候会执行此函数
 int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
-    if (transport == nullptr) return -1;
+    if (transport == nullptr)
+        return -1;
     auto session = static_cast<SipSession *>(transport);
+    session->ticker_->resetTime(); // 重置保活
     auto buffer = toolkit::BufferRaw::create();
     buffer->assign((const char *)data, bytes);
     TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
     session->send(std::move(buffer));
+    return 0;
+}
+int SipSession::sip_send2(
+    void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received,
+    int rport, const void *data, int bytes) {
+    if (param == nullptr)
+        return sip_unknown_host;
+    auto session_ptr = std::dynamic_pointer_cast<SipSession>((static_cast<SipSession *>(param))->shared_from_this());
+    if (session_ptr == nullptr)
+        return sip_unknown_host;
+    auto buffer = BufferRaw::create();
+    buffer->assign((const char *)data, bytes);
+    TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
+    session_ptr->ticker_->resetTime();
+    session_ptr->send(std::move(buffer));
     return 0;
 }
 sip_transport_t *SipSession::get_transport() {
@@ -178,13 +198,8 @@ std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_M
 
 void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
     TraceL << "recv " << buffer->size() << " bytes" << ", local: " << get_local_ip() << ", remote: " << get_peer_ip();
-    if (local_ip_.empty()) {
-        struct sockaddr_in localAddr{};
-        socklen_t addrLen = sizeof(localAddr);
-        if (getsockname(getSock()->rawFD(), (struct sockaddr*)&localAddr, &addrLen) >= 0) {
-            local_ip_ = SockUtil::inet_ntoa((struct sockaddr*)&localAddr);
-        }
-    }
+    ticker_->resetTime();
+    if (buffer->size() == 0) return;
     if (_wait_type == 0) {
         if (strncasecmp("SIP", buffer->data(), 3) == 0) {
             http_parser_reset(_sip_parse.get(), HTTP_PARSER_RESPONSE);
@@ -216,7 +231,9 @@ void SipSession::onError(const toolkit::SockException &err) {
     if (_on_error) _on_error(err);
 }
 void SipSession::onManager() {
-    if (_on_manager) _on_manager();
+    if (ticker_->elapsedTime() > 60 * 1000) {
+        shutdown(SockException(Err_timeout, "session timeout"));
+    }
 }
 
 } // namespace gb28181

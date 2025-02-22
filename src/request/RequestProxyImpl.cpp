@@ -98,9 +98,11 @@ int RequestProxyImpl::on_recv_reply(
     if (param == nullptr)
         return 0;
     auto request = static_cast<RequestProxyImpl *>(param);
-    if (auto via = sip_vias_get(&reply->vias, 0)) {
-        std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
-        request->platform_->update_local_via(host, static_cast<uint16_t>(via->rport));
+    if (reply) {
+        if (auto via = sip_vias_get(&reply->vias, 0)) {
+            std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
+            request->platform_->update_local_via(host, static_cast<uint16_t>(via->rport));
+        }
     }
     std::shared_ptr<sip_message_t> sip_message(const_cast<sip_message_t *>(reply), [](sip_message_t *reply) {
         if (reply) {

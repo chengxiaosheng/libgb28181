@@ -14,45 +14,36 @@ using namespace gb28181;
 
 void add_session(const std::shared_ptr<SipSession> &session);
 
-
-void PlatformHelper::add_session(const std::shared_ptr<SipSession> &session) {
-    std::lock_guard<decltype(sip_session_mutex_)> lck(sip_session_mutex_);
-    auto index = session->is_udp() ? 0 : 1;
-    if (sip_session_[index] == session)
-        return;
-    sip_session_[index] = session;
-
-    // 发送错误时主动关闭释放
-    session->set_on_error([weak_this = weak_from_this(), index, ptr = session.get()](const toolkit::SockException &e) {
-        if (auto this_ptr = weak_this.lock()) {
-            std::lock_guard<decltype(sip_session_mutex_)> lck(this_ptr->sip_session_mutex_);
-            if (this_ptr->sip_session_[index] && this_ptr->sip_session_[index].get() == ptr) {
-                this_ptr->sip_session_[index].reset();
-            }
-        }
-    });
-}
-
-void PlatformHelper::get_session(
-    const std::function<void(const toolkit::SockException &, std::shared_ptr<SipSession>)> &cb, bool udp) {
-    std::lock_guard<decltype(sip_session_mutex_)> lck(sip_session_mutex_);
-    if (udp && sip_session_[0]) {
-        return cb({}, sip_session_[0]);
+PlatformHelper::~PlatformHelper() {
+    if (tcp_session_) {
+        tcp_session_->safeShutdown();
     }
-    if (!udp && sip_session_[1]) {
-        return cb({}, sip_session_[1]);
+}
+void PlatformHelper::get_session(
+    const std::function<void(const toolkit::SockException &, std::shared_ptr<SipSession>)> &cb, bool force_tcp) {
+    bool is_udp = !force_tcp && (get_transport() == TransportType::udp || get_transport() == TransportType::both);
+    if (!is_udp && tcp_session_) {
+        return cb({}, tcp_session_);
     }
     if (auto server = local_server_weak_.lock()) {
         server->get_client(
-            udp ? TransportType::udp : TransportType::tcp, sip_account().host, sip_account().port,
-            [weak_this = weak_from_this(), cb](const toolkit::SockException &e, std::shared_ptr<SipSession> session) {
-                if (!e && session) {
-                    if (auto this_ptr = weak_this.lock()) {
-                        this_ptr->add_session(session);
+            is_udp ? TransportType::udp : TransportType::tcp, sip_account().host, sip_account().port,
+            [cb, weak_this = weak_from_this()](const toolkit::SockException &e, std::shared_ptr<SipSession> session) {
+                if (e) {
+                    cb(e, session);
+                    return;
+                }
+                if (auto this_ptr = weak_this.lock()) {
+                    session->set_local_ip(this_ptr->sip_account().local_host);
+                    session->set_local_port(this_ptr->sip_account().local_port);
+                    if (!session->is_udp()) {
+                        this_ptr->set_tcp_session(session);
                     }
                 }
                 cb(e, session);
             });
+    } else {
+        cb(toolkit::SockException(toolkit::Err_other, "server de"), nullptr);
     }
 }
 
@@ -74,7 +65,8 @@ int32_t PlatformHelper::get_new_sn() {
 
 struct sip_agent_t *PlatformHelper::get_sip_agent() {
     auto server = local_server_weak_.lock();
-    if (!server) return nullptr;
+    if (!server)
+        return nullptr;
     return server->get_sip_agent().get();
 }
 std::string PlatformHelper::get_from_uri() {
@@ -82,7 +74,8 @@ std::string PlatformHelper::get_from_uri() {
 }
 std::string PlatformHelper::get_to_uri() {
     if (to_uri_.empty()) {
-        to_uri_ = "sip:" + sip_account().platform_id + "@" + sip_account().host + ":" + std::to_string(sip_account().port);
+        to_uri_
+            = "sip:" + sip_account().platform_id + "@" + sip_account().host + ":" + std::to_string(sip_account().port);
     }
     return to_uri_;
 }
@@ -90,7 +83,6 @@ std::string PlatformHelper::get_to_uri() {
 void PlatformHelper::add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy) {
     std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
     request_map_[sn] = proxy;
-
 }
 void PlatformHelper::remove_request_proxy(int32_t sn) {
     std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
@@ -99,18 +91,36 @@ void PlatformHelper::remove_request_proxy(int32_t sn) {
 
 void PlatformHelper::uac_send(
     std::shared_ptr<sip_uac_transaction_t> transaction, std::string &&payload,
-    const std::function<void(bool, std::string)> &rcb, bool udp) {
-    get_session([transaction, payload = std::move(payload),rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession>& session) {
-        if (e) {
-            return rcb(false, e.what());
-        }
-        if (0!= sip_uac_send(transaction.get(), payload.data(), static_cast<int>(payload.size()),SipSession::get_transport(), session.get())) {
-            return rcb(false, "failed to send request, call sip_uac_send failed");
-        }
-        rcb(true, {});
-    },udp);
+    const std::function<void(bool, std::string)> &rcb, bool force_tcp) {
+    get_session(
+        [transaction, payload = std::move(payload),
+         rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+            if (e) {
+                return rcb(false, e.what());
+            }
+            if (0
+                != sip_uac_send(
+                    transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
+                    session.get())) {
+                return rcb(false, "failed to send request, call sip_uac_send failed");
+            }
+            rcb(true, {});
+        },
+        force_tcp);
 }
-
+void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session) {
+    if (session->is_udp()) {
+        return;
+    }
+    session->set_on_error([session_p = session.get(), weak_this = weak_from_this()](const toolkit::SockException &e) {
+        if (auto this_ptr = weak_this.lock()) {
+            if (this_ptr->tcp_session_.get() == session_p) {
+                this_ptr->tcp_session_.reset();
+            }
+        }
+    });
+    tcp_session_ = session;
+}
 
 int PlatformHelper::on_response(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
@@ -135,19 +145,11 @@ int PlatformHelper::on_query(
 int PlatformHelper::on_notify(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
     return 400;
-
 }
 int PlatformHelper::on_control(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
     return 400;
 }
-
-
-
-
-
-
-
 
 /**********************************************************************************************************
 文件名称:   platform_helper.cpp

@@ -36,15 +36,11 @@ class SipServer;
 class SipSession;
 class PlatformHelper : public std::enable_shared_from_this<PlatformHelper> {
 public:
-    virtual ~PlatformHelper() = default;
-    virtual sip_account &sip_account() const = 0;
-    virtual void get_session(
-        const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,
-        bool udp = true);
+    virtual ~PlatformHelper();
+    virtual platform_account &sip_account() const = 0;
+    virtual TransportType get_transport() const = 0;
 
     virtual CharEncodingType get_encoding() const = 0;
-
-    virtual void add_session(const std::shared_ptr<SipSession> &session);
 
     struct sip_agent_t * get_sip_agent();
 
@@ -70,11 +66,17 @@ public:
     virtual int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual void on_invite(const std::shared_ptr<InviteRequest> &invite_request, std::function<void(int, std::shared_ptr<SdpDescription>)> && resp) = 0;
 
-    void uac_send(std::shared_ptr<sip_uac_transaction_t> transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool udp = true);
+    void uac_send(std::shared_ptr<sip_uac_transaction_t> transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool force_tcp = false);
+
+    void set_tcp_session(const std::shared_ptr<SipSession> &session);
+
+private:
+    virtual void get_session(
+    const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,bool force_tcp = false);
+
+
 protected:
-    // 连接信息 0 udp 1 tcp
-    std::recursive_mutex sip_session_mutex_;
-    std::shared_ptr<SipSession> sip_session_[2];
+    std::shared_ptr<SipSession> tcp_session_;
     // local_server
     std::weak_ptr<SipServer> local_server_weak_;
     std::atomic_int32_t platform_sn_ { 1 };

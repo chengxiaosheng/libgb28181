@@ -61,6 +61,8 @@ public:
         TransportType protocol, const std::string &host, uint16_t port,
         const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
 
+    void get_client_l(bool is_udp, const struct sockaddr_storage &addr, const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
+
     inline std::shared_ptr<sip_agent_t> get_sip_agent() const { return sip_; }
 
     std::shared_ptr<SubordinatePlatform> get_subordinate_platform(const std::string &platform_id) override;
@@ -74,13 +76,9 @@ public:
 
 
 private:
-    static int send_data(
-        const std::shared_ptr<SipSession> &session_ptr, toolkit::Buffer::Ptr data, TransportType protocol,
-        sockaddr_storage &addr);
     void init_agent();
 
-    static int send(void *param, const struct cstring_t *protocol, const struct cstring_t *peer,
-                        const struct cstring_t *received, int rport, const void *data, int bytes);
+
     static int onregister(
         void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const char *user,
         const char *location, int expires);
@@ -122,7 +120,6 @@ private:
     toolkit::TcpServer::Ptr tcp_server_ { nullptr };
     std::shared_ptr<sip_uas_handler_t> handler_ { nullptr };
     std::shared_ptr<sip_agent_t> sip_ { nullptr };
-    std::unordered_map<toolkit::EventPoller *, std::weak_ptr<toolkit::Socket>> udp_sockets_;
 
     std::unordered_map<std::string, std::shared_ptr<SuperPlatformImpl>> super_platforms_; // 上级平台
     std::unordered_map<std::string, std::shared_ptr<SubordinatePlatformImpl>> sub_platforms_; // 下级平台

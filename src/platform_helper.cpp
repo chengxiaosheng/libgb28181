@@ -1,7 +1,11 @@
 #include "platform_helper.h"
 
+#include "gb28181/sip_common.h"
 #include "sip-uac.h"
+#include "subordinate_platform_impl.h"
+#include "super_platform_impl.h"
 
+#include <Util/NoticeCenter.h>
 #include <gb28181/message/message_base.h>
 #include <inner/sip_server.h>
 #include <inner/sip_session.h>
@@ -68,6 +72,42 @@ struct sip_agent_t *PlatformHelper::get_sip_agent() {
     if (!server)
         return nullptr;
     return server->get_sip_agent().get();
+}
+bool PlatformHelper::update_remote_via(std::pair<std::string, uint32_t> val) {
+    if (val.first.empty() && val.second == 0) return false;
+    std::string &host = val.first;
+    uint32_t &port = val.second;
+
+    bool changed = false;
+    if (!host.empty() && sip_account().local_host != host) {
+        sip_account().local_host = host;
+        changed = true;
+    }
+    if (port && sip_account().local_port != port) {
+        sip_account().local_port = port;
+        changed = true;
+    }
+    if (changed) {
+        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + sip_account().local_host + ":"
+            + std::to_string(sip_account().local_port);
+        if (tcp_session_) {
+            tcp_session_->set_local_ip(host);
+            tcp_session_->set_local_port(port);
+        }
+        // 通知上层应用？
+        toolkit::EventPollerPool::Instance().getExecutor()->async(
+            [this_ptr = shared_from_this()]() {
+                if (auto platform = std::dynamic_pointer_cast<SuperPlatformImpl>(this_ptr)) {
+                    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSuperPlatformContactChanged, platform, this_ptr->sip_account().local_host,this_ptr->sip_account().local_port);
+                }
+                if (auto platform = std::dynamic_pointer_cast<SubordinatePlatformImpl>(this_ptr)) {
+                    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSubordinatePlatformContactChanged, platform, this_ptr->sip_account().local_host,this_ptr->sip_account().local_port);
+                }
+            },
+            false);
+    }
+    return changed;
+
 }
 std::string PlatformHelper::get_from_uri() {
     return from_uri_;

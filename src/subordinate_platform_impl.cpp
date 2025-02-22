@@ -175,30 +175,6 @@ void SubordinatePlatformImpl::on_invite(
     resp(400, nullptr);
 }
 
-bool SubordinatePlatformImpl::update_local_via(std::string host, uint16_t port) {
-    bool changed = false;
-    if (!host.empty() && account_.local_host != host) {
-        account_.local_host = host;
-        changed = true;
-    }
-    if (port && account_.local_port != port) {
-        account_.local_port = port;
-        changed = true;
-    }
-    if (changed) {
-        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":"
-            + std::to_string(account_.local_port);
-        // 通知上层应用？
-        toolkit::EventPollerPool::Instance().getExecutor()->async(
-            [this_ptr = shared_from_this()]() {
-                toolkit::NoticeCenter::Instance().emitEvent(
-                    Broadcast::kEventSubordinatePlatformContactChanged, this_ptr, this_ptr->account_.local_host,
-                    this_ptr->account_.local_port);
-            },
-            false);
-    }
-    return changed;
-}
 
 void SubordinatePlatformImpl::query_device_status(
     const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {

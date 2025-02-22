@@ -30,8 +30,7 @@ public:
 
     const super_account &account() const override { return account_; }
     void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
-    platform_account &sip_account() const override { return *(platform_account *)&account_; }
-    bool update_local_via(std::string host, uint16_t port) override;
+    platform_account &sip_account()  override { return *(platform_account *)&account_; }
 
     std::string get_to_uri() override;
     CharEncodingType get_encoding() const override { return account_.encoding; }

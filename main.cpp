@@ -109,6 +109,7 @@ int main() {
         sup_account.host = "10.1.11.170";
         sup_account.port = 55060;
         sup_account.password = "123456";
+        sup_account.transport_type = TransportType::tcp;
     };
     local_server->add_super_platform(std::move(sup_account));
 

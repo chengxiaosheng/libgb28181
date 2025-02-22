@@ -85,34 +85,6 @@ void SuperPlatformImpl::start() {
     to_register(account_.register_expired);
 }
 
-bool SuperPlatformImpl::update_local_via(std::string host, uint16_t port) {
-    bool changed = false;
-    if (!host.empty() && account_.local_host != host) {
-        account_.local_host = host;
-        changed = true;
-    }
-    if (port && account_.local_port != port) {
-        account_.local_port = port;
-        changed = true;
-    }
-    if (changed) {
-        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":"
-            + std::to_string(account_.local_port);
-        if (tcp_session_) {
-            tcp_session_->set_local_ip(host);
-            tcp_session_->set_local_port(port);
-        }
-        // 通知上层应用？
-        toolkit::EventPollerPool::Instance().getExecutor()->async(
-            [this_ptr = shared_from_this()]() {
-                toolkit::NoticeCenter::Instance().emitEvent(
-                    Broadcast::kEventSuperPlatformContactChanged, this_ptr, this_ptr->account_.local_host,
-                    this_ptr->account_.local_port);
-            },
-            false);
-    }
-    return changed;
-}
 std::string SuperPlatformImpl::get_to_uri() {
     if (moved_uri_.empty())
         return PlatformHelper::get_to_uri();
@@ -148,10 +120,14 @@ int SuperPlatformImpl::on_register_reply(
     }
 
     // 更新rport received
-    if (auto via = sip_vias_get(&reply->vias, 0)) {
-        std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
-        this_ptr->update_local_via(host, static_cast<uint16_t>(via->rport));
+
+    if (reply) {
+        this_ptr->update_remote_via(get_via_rport(reply));
     }
+    // if (auto via = sip_vias_get(&reply->vias, 0)) {
+    //     std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
+    //     this_ptr->update_local_via(host, static_cast<uint16_t>(via->rport));
+    // }
 
     // 如果是 200 ok, 表示注册成功
     if (SIP_IS_SIP_SUCCESS(code)) {

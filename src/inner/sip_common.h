@@ -63,6 +63,8 @@ std::vector<std::string> get_x_preferred_path(const struct sip_message_t *msg);
 std::vector<std::string> get_x_route_path(const struct sip_message_t *msg);
 int get_expires(const struct sip_message_t *msg);
 std::string get_message_contact(const struct sip_message_t *msg);
+std::pair<std::string,uint32_t> get_via_rport(const struct sip_message_t *msg);
+
 
 bool verify_authorization(struct sip_message_t *msg, const std::string &user, const std::string &password);
 std::string generate_www_authentication_(const std::string &realm);

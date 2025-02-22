@@ -52,7 +52,7 @@ public:
 
     const subordinate_account &account() const override { return account_; }
 
-    platform_account &sip_account() const override { return *(platform_account *)&account_; }
+    platform_account &sip_account()  override { return *(platform_account *)&account_; }
 
     void set_status(PlatformStatusType status, std::string error);
 
@@ -64,7 +64,6 @@ public:
         const std::string &device_id, std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> &&config,
         std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
 
-    bool update_local_via(std::string host, uint16_t port) override;
 
     int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
     void on_device_info(

@@ -218,6 +218,18 @@ std::string get_message_contact(const struct sip_message_t *msg) {
     }
     return "";
 }
+std::pair<std::string,uint32_t> get_via_rport(const struct sip_message_t *msg) {
+    if (!msg) return std::make_pair("", 0);
+    if (auto via = sip_vias_get(&msg->vias, 0)) {
+        std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
+        if (via->rport <= 0) {
+            return std::make_pair(host, 0);
+        } else {
+            return std::make_pair(host, via->rport);
+        }
+    }
+    return std::make_pair("", 0);
+}
 
 std::unordered_map<std::string, std::string> parseAuthorizationHeader(const std::string &authHeader) {
     std::unordered_map<std::string, std::string> fields;

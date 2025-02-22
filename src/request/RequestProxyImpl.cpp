@@ -99,10 +99,11 @@ int RequestProxyImpl::on_recv_reply(
         return 0;
     auto request = static_cast<RequestProxyImpl *>(param);
     if (reply) {
-        if (auto via = sip_vias_get(&reply->vias, 0)) {
-            std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
-            request->platform_->update_local_via(host, static_cast<uint16_t>(via->rport));
-        }
+        request->platform_->update_remote_via(get_via_rport(reply));
+        // if (auto via = sip_vias_get(&reply->vias, 0)) {
+        //     std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
+        //     request->platform_->update_local_via(host, static_cast<uint16_t>(via->rport));
+        // }
     }
     std::shared_ptr<sip_message_t> sip_message(const_cast<sip_message_t *>(reply), [](sip_message_t *reply) {
         if (reply) {
@@ -190,6 +191,7 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
         return on_completed();
     }
     platform_->add_request_proxy(request_sn_, shared_from_this());
+    send_time_ = toolkit::getCurrentMicrosecond(true);
     platform_->uac_send(uac_transaction_, request_->str(), [weak_this = weak_from_this()](bool ret, std::string err) {
         if (auto this_ptr = weak_this.lock()) {
             if (!ret) {

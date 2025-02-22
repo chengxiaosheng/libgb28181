@@ -37,7 +37,7 @@ class SipSession;
 class PlatformHelper : public std::enable_shared_from_this<PlatformHelper> {
 public:
     virtual ~PlatformHelper();
-    virtual platform_account &sip_account() const = 0;
+    virtual platform_account &sip_account()  = 0;
     virtual TransportType get_transport() const = 0;
 
     virtual CharEncodingType get_encoding() const = 0;
@@ -54,7 +54,7 @@ public:
      */
     virtual int32_t get_new_sn();
 
-    virtual bool update_local_via(std::string host, uint16_t port) = 0;
+    virtual bool update_remote_via(std::pair<std::string, uint32_t> val);
     virtual std::string get_from_uri();
     virtual std::string get_to_uri();
 

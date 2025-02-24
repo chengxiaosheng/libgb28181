@@ -6,19 +6,15 @@
 #include <atomic>
 #include <variant>
 
-namespace gb28181 {
-class PlatformHelper;
-}
 namespace toolkit {
 class Timer;
 }
 namespace gb28181 {
+class PlatformHelper;
 class SuperPlatformImpl;
 class SubordinatePlatformImpl;
-} // namespace gb28181
-namespace gb28181 {
 class SipSession;
-}
+} // namespace gb28181
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +39,7 @@ public:
     ~RequestProxyImpl() override;
     void set_sn(int sn) { request_sn_ = sn; }
     Status status() const override { return status_; }
+    int reply_code() const override { return reply_code_; }
     RequestType type() const override { return request_type_; }
     std::string error() const override { return error_; }
     uint64_t send_time() const override { return send_time_; }

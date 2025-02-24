@@ -41,8 +41,16 @@ CruiseTrackListResponseMessage::CruiseTrackListResponseMessage(
     , sum_num_(sum_num)
     , cruise_track_list_(std::move(list)) {
     device_id_ = device_id;
-    result_ = result;
-
+    root_ = MessageRootType::Response;
+    cmd_ = MessageCmdType::CruiseTrackListQuery;
+}
+CruiseTrackListResponseMessage::CruiseTrackListResponseMessage(
+    const std::string &device_id, int32_t sum_num, std::vector<CruiseTrackListItemType> &&list)
+    : MessageBase()
+    , result_(ResultType::OK)
+    , sum_num_(sum_num)
+    , cruise_track_list_(std::move(list)) {
+    device_id_ = device_id;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::CruiseTrackListQuery;
 }
@@ -88,6 +96,16 @@ CruiseTrackResponseMessage::CruiseTrackResponseMessage(
     , cruise_points_(std::move(list)) {
     device_id_ = device_id;
     reason_ = reason;
+    root_ = MessageRootType::Response;
+    cmd_ = MessageCmdType::CruiseTrackQuery;
+}
+CruiseTrackResponseMessage::CruiseTrackResponseMessage(
+    const std::string &device_id, int sum_num, std::vector<CruisePointType> &&list)
+    : MessageBase()
+    , result_(ResultType::OK)
+    , sum_num_(sum_num)
+    , cruise_points_(std::move(list)) {
+    device_id_ = device_id;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::CruiseTrackQuery;
 }

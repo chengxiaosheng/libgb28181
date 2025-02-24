@@ -38,6 +38,9 @@ public:
     explicit CruiseTrackListResponseMessage(
         const std::string &device_id, int32_t sum_num, std::vector<CruiseTrackListItemType> &&list,
         ResultType result = ResultType::OK, const std::string &reason = "");
+    explicit CruiseTrackListResponseMessage(
+        const std::string &device_id, int32_t sum_num, std::vector<CruiseTrackListItemType> &&list);
+
     std::vector<CruiseTrackListItemType> &cruise_track_list() { return cruise_track_list_; }
 
 protected:
@@ -59,7 +62,13 @@ public:
     explicit CruiseTrackResponseMessage(
         const std::string &device_id, std::string name, int32_t sum_num, std::vector<CruisePointType> &&list,
         ResultType result = ResultType::OK, const std::string &reason = "");
-    std::vector<CruisePointType> &cruise_points() { return cruise_points_; }
+
+    explicit CruiseTrackResponseMessage(const std::string &device_id, int sum_num, std::vector<CruisePointType> &&list);
+
+    ResultType &result() { return result_; }
+    int32_t &sum_num() { return sum_num_; }
+    std::string &name() { return name_; }
+    std::vector<CruisePointType> &points() { return cruise_points_; }
 
 protected:
     bool load_detail() override;

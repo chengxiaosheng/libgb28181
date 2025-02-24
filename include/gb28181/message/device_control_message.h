@@ -3,6 +3,23 @@
 #include <gb28181/message/message_base.h>
 namespace gb28181 {
 
+enum class DeviceControlType : uint8_t {
+    PTZCmd = 1,
+    TeleBoot,
+    RecordCmd,
+    GuardCmd,
+    AlarmCmd,
+    IFrameCmd,
+    DragZoomIn,
+    DragZoomOut,
+    HomePosition,
+    PtzPreciseCtrl,
+    DeviceUpgrade,
+    FormatSDCard,
+    TargetTrack
+
+};
+
 class DeviceControlRequestMessage : public virtual MessageBase {
 public:
     explicit DeviceControlRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
@@ -12,6 +29,8 @@ public:
     explicit DeviceControlRequestMessage(const std::string &device_id, std::vector<std::string> &&extra = {});
 
     std::vector<std::string> &extra_info() { return extra_info_; }
+
+    virtual DeviceControlType control_type() const = 0;
 
 protected:
     bool load_detail() override;
@@ -34,6 +53,7 @@ public:
     PtzCmdType &ptz_cmd() { return ptz_cmd_type_; }
 
     std::optional<PtzCmdParams> &ptz_cmd_params() { return ptz_cmd_params_; }
+    DeviceControlType control_type() const override { return DeviceControlType::PTZCmd; }
 
 protected:
     bool load_detail() override;
@@ -51,6 +71,7 @@ public:
     explicit DeviceControlRequestMessage_TeleBoot(MessageBase &&messageBase)
         : DeviceControlRequestMessage(std::move(messageBase)) {}
     explicit DeviceControlRequestMessage_TeleBoot(const std::string &device_id, std::vector<std::string> &&extra = {});
+    DeviceControlType control_type() const override { return DeviceControlType::TeleBoot; }
 
 protected:
     bool load_detail() override;
@@ -71,6 +92,7 @@ public:
 
     gb28181::RecordType &record_type() { return record_type_; }
     int8_t &stream_numbre() { return stream_number_; }
+    DeviceControlType control_type() const override { return DeviceControlType::RecordCmd; }
 
 protected:
     bool load_detail() override;
@@ -90,6 +112,7 @@ public:
     explicit DeviceControlRequestMessage_GuardCmd(
         const std::string &device_id, GuardType type, std::vector<std::string> &&extra = {});
     GuardType &guard_type() { return guard_type_; }
+    DeviceControlType control_type() const override { return DeviceControlType::GuardCmd; }
 
 protected:
     bool load_detail() override;
@@ -109,6 +132,7 @@ public:
         const std::string &device_id, std::optional<AlarmCmdInfoType> &&info = {},
         std::vector<std::string> &&extra = {});
     std::optional<AlarmCmdInfoType> &info() { return info_; }
+    DeviceControlType control_type() const override { return DeviceControlType::AlarmCmd; }
 
 protected:
     bool load_detail() override;
@@ -126,6 +150,7 @@ public:
     explicit DeviceControlRequestMessage_IFrameCmd(MessageBase &&messageBase)
         : DeviceControlRequestMessage(std::move(messageBase)) {}
     explicit DeviceControlRequestMessage_IFrameCmd(const std::string &device_id, std::vector<std::string> &&extra = {});
+    DeviceControlType control_type() const override { return DeviceControlType::IFrameCmd; }
 
 protected:
     bool load_detail() override;
@@ -145,6 +170,7 @@ public:
         const std::string &device_id, DragZoomType &&drag_zoom, std::vector<std::string> &&extra = {});
 
     DragZoomType &drag_zoom() { return drag_zoom_; }
+    DeviceControlType control_type() const override { return DeviceControlType::DragZoomIn; }
 
 protected:
     bool load_detail() override;
@@ -161,6 +187,7 @@ public:
         : DeviceControlRequestMessage_DragZoomIn(std::move(messageBase)) {}
     explicit DeviceControlRequestMessage_DragZoomOut(
         const std::string &device_id, DragZoomType &&drag_zoom, std::vector<std::string> &&extra = {});
+    DeviceControlType control_type() const override { return DeviceControlType::DragZoomOut; }
 
 protected:
     bool load_detail() override;
@@ -180,6 +207,7 @@ public:
     int8_t &enabled() { return enabled_; }
     std::optional<uint8_t> &preset_index() { return preset_index_; }
     std::optional<int32_t> &reset_time() { return reset_time_; }
+    DeviceControlType control_type() const override { return DeviceControlType::HomePosition; }
 
 protected:
     bool load_detail() override;
@@ -201,6 +229,7 @@ public:
         const std::string &device_id, PTZPreciseCtrlType &&ptz_precise_ctrl, std::vector<std::string> &&extra = {});
 
     PTZPreciseCtrlType &ptz_precise_ctrl() { return ptz_precise_ctrl_; }
+    DeviceControlType control_type() const override { return DeviceControlType::PtzPreciseCtrl; }
 
 protected:
     bool load_detail() override;
@@ -220,6 +249,7 @@ public:
         const std::string &device_id, DeviceUpgradeType &&device_upgrade, std::vector<std::string> &&extra = {});
 
     DeviceUpgradeType &device_upgrade() { return device_upgrade_; }
+    DeviceControlType control_type() const override { return DeviceControlType::DeviceUpgrade; }
 
 protected:
     bool load_detail() override;
@@ -238,6 +268,7 @@ public:
     explicit DeviceControlRequestMessage_FormatSDCard(
         const std::string &device_id, uint8_t &&index, std::vector<std::string> &&extra = {});
     uint8_t &index() { return index_; }
+    DeviceControlType control_type() const override { return DeviceControlType::FormatSDCard; }
 
 protected:
     bool load_detail() override;
@@ -259,6 +290,7 @@ public:
     TargetTraceType &target_trace() { return target_trace_; }
     std::string &device_id2() { return device_id2_; }
     std::optional<DragZoomType> &target_area() { return target_area_; }
+    DeviceControlType control_type() const override { return DeviceControlType::TargetTrack; }
 
 protected:
     bool load_detail() override;

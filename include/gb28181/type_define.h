@@ -925,10 +925,7 @@ struct ItemMobilePositionType {
     // -地面高度，单位:米(可选)
     std::optional<double> Height;
 };
-struct DeviceMobilePositionListType {
-    int32_t Num { 0 };
-    std::vector<ItemMobilePositionType> Item;
-};
+
 struct PTZPreciseCtrlType {
     /**
      * @brief 设定云台水平角度(可选) 0~360.00 度。
@@ -1077,27 +1074,24 @@ struct PresetListItem {
     std::string PresetID {};
     std::string PresetName {};
 };
-struct PresetList {
-    std::vector<PresetListItem> Item {};
-    int32_t Num { 0 };
-};
+
 struct AlarmCmdInfoType {
     std::string AlarmMethod { "0" };
     std::string AlarmType;
 };
 struct DragZoomType {
     // 全景播放窗口长度像素值
-    int32_t Length;
+    int32_t Length{0};
     // 全景播放窗口宽度像素值
-    int32_t Width;
+    int32_t Width{0};
     // 跟踪框中心点横轴坐标
-        int32_t MidPointX;
+    int32_t MidPointX{0};
     // 跟踪框中心点纵轴坐标
-    int32_t MidPointY;
+    int32_t MidPointY{0};
     // 跟踪框长度
-    int32_t LengthX;
+    int32_t LengthX{0};
     // 跟踪框宽度
-    int32_t LengthY;
+    int32_t LengthY{0};
 };
 struct DeviceUpgradeType {
     std::string Firmware;

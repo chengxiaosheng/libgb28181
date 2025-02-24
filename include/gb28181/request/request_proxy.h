@@ -36,7 +36,8 @@ public:
      * @param end 是否结束（是否为最后一个）
      * @return sip 状态码， 此状态码用以回复到对端，
      */
-    using ResponseCallback = std::function<int(std::shared_ptr<RequestProxy> proxy, std::shared_ptr<MessageBase> response, bool end)>;
+    using ResponseCallback
+        = std::function<int(std::shared_ptr<RequestProxy> proxy, std::shared_ptr<MessageBase> response, bool end)>;
     /**
      * 针对请求的应答
      * @param proxy 请求代理的指针
@@ -56,7 +57,8 @@ public:
      */
     virtual std::shared_ptr<MessageBase> response() {
         auto list = all_response();
-        if (list.empty()) return nullptr;
+        if (list.empty())
+            return nullptr;
         return list.front();
     }
 
@@ -64,6 +66,11 @@ public:
      * 获取请求状态
      */
     virtual Status status() const = 0;
+    /**
+     * 回复状态码
+     * @return
+     */
+    virtual int reply_code() const = 0;
     /**
      * 获取请求类型
      */
@@ -115,11 +122,13 @@ public:
     /**
      * 构建一个请求
      */
-    static std::shared_ptr<RequestProxy> newRequestProxy(
-        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request);
+    static std::shared_ptr<RequestProxy>
+    newRequestProxy(const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request);
 
     explicit operator bool() const { return status() == Succeeded; }
 };
+std::ostream &operator<<(std::ostream &os, const RequestProxy &proxy);
+std::ostream &operator<<(std::ostream &os, const std::shared_ptr<RequestProxy> &proxy);
 
 } // namespace gb28181
 

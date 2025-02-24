@@ -79,6 +79,15 @@ RecordInfoResponseMessage::RecordInfoResponseMessage(
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::RecordInfo;
 }
+RecordInfoResponseMessage::RecordInfoResponseMessage(
+    const std::string &device_id, int32_t sum_num, std::vector<ItemFileType> &&record_list)
+    : MessageBase()
+    , sum_num_(sum_num)
+    , record_list_(std::move(record_list)) {
+    device_id_ = device_id;
+    root_ = MessageRootType::Response;
+    cmd_ = MessageCmdType::RecordInfo;
+}
 bool RecordInfoResponseMessage::load_detail() {
     auto root = xml_ptr_->RootElement();
     from_xml_element(name_, root, "Name");

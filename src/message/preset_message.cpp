@@ -11,8 +11,9 @@ PresetRequestMessage::PresetRequestMessage(const std::string &device_id)
     cmd_ = MessageCmdType::PresetQuery;
 }
 
+
 PresetResponseMessage::PresetResponseMessage(
-    const std::string &device_id, std::vector<PresetListItem> &&vec, int32_t sum_num)
+    const std::string &device_id, int32_t sum_num, std::vector<PresetListItem> &&vec)
     : MessageBase()
     , sum_num_(sum_num)
     , preset_list_(std::move(vec)) {

@@ -64,14 +64,125 @@ constexpr const char kEventSuperPlatformContactChanged[] = "kEventSuperPlatformC
 constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusRequest";
 #define kEventOnDeviceStatusRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceStatusMessageRequest> message, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> callback
 
+// 收到来自上级平台的 目录查询请求
+constexpr const char kEventOnCatalogRequest[] = "kEventOnCatalogRequest";
+/**
+ * @brief 目录查询请求事件的参数
+ * @param platform 平台指针
+ * @param message 请求消息指针
+ * @param callback 回复的数据回调
+ *  @arg resposne 响应消息队列
+ *      - 队列中的每个元素代表一个待发送的回复数据包
+ *      - 单个请求最大长度为 8*1024 组装消息时请考虑最大包长度
+ *  @arg concurrency 并发控制参数
+ *      - 默认为1
+ *      - 并发逻辑是在同一个线程中顺序发送 concurrency个回复， 后续得到一个reply== 200 ok 立即发送下一个。
+ *  @arg ignore_4xx 忽略4xx 的返回
+ *      - true: 当对端返回4xx 时继续发送下一个
+ *      - false: 当对端返回4xx 时立即结束任务
+ */
+#define kEventOnCatalogRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CatalogRequestMessage> message, std::function<void(std::deque<std::shared_ptr<CatalogResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+
 constexpr const char kEventOnDeviceInfoRequest[] = "kEventOnDeviceInfoRequest";
 #define kEventOnDeviceInfoRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceInfoMessageRequest> message, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)> callback
+
+// 收到来自上级平台的 目录查询请求
+constexpr const char kEventOnRecordInfoRequest[] = "kEventOnRecordInfoRequest";
+/**
+ * @brief 目录查询请求事件的参数
+ * @param platform 平台指针
+ * @param message 请求消息指针
+ * @param callback 回复的数据回调
+ *  @arg resposne 响应消息队列
+ *      - 队列中的每个元素代表一个待发送的回复数据包
+ *      - 单个请求最大长度为 8*1024 组装消息时请考虑最大包长度
+ *  @arg concurrency 并发控制参数
+ *      - 默认为1
+ *      - 并发逻辑是在同一个线程中顺序发送 concurrency个回复， 后续得到一个reply== 200 ok 立即发送下一个。
+ *  @arg ignore_4xx 忽略4xx 的返回
+ *      - true: 当对端返回4xx 时继续发送下一个
+ *      - false: 当对端返回4xx 时立即结束任务
+ */
+#define kEventOnRecordInfoRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<RecordInfoRequestMessage> message, std::function<void(std::deque<std::shared_ptr<RecordInfoResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+
+// 收到来自上级平台的 目录查询请求
+constexpr const char kEventOnConfigDownloadRequest[] = "kEventOnConfigDownloadRequest";
+/**
+ * @brief 目录查询请求事件的参数
+ * @param platform 平台指针
+ * @param message 请求消息指针
+ * @param callback 回复的数据回调
+ *  @arg resposne 响应消息队列
+ *      - 队列中的每个元素代表一个待发送的回复数据包
+ *      - 单个请求最大长度为 8*1024 组装消息时请考虑最大包长度
+ *  @arg concurrency 并发控制参数
+ *      - 默认为1
+ *      - 并发逻辑是在同一个线程中顺序发送 concurrency个回复， 后续得到一个reply== 200 ok 立即发送下一个。
+ *  @arg ignore_4xx 忽略4xx 的返回
+ *      - true: 当对端返回4xx 时继续发送下一个
+ *      - false: 当对端返回4xx 时立即结束任务
+ */
+#define kEventOnConfigDownloadRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<ConfigDownloadRequestMessage> message, std::function<void(std::deque<std::shared_ptr<ConfigDownloadResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+
+// 收到来自上级平台的 目录查询请求
+constexpr const char kEventOnPresetListRequest[] = "kEventOnPresetListRequest";
+/**
+ * @brief 目录查询请求事件的参数
+ * @param platform 平台指针
+ * @param message 请求消息指针
+ * @param callback 回复的数据回调
+ *  @arg resposne 响应消息队列
+ *      - 队列中的每个元素代表一个待发送的回复数据包
+ *      - 单个请求最大长度为 8*1024 组装消息时请考虑最大包长度
+ *  @arg concurrency 并发控制参数
+ *      - 默认为1
+ *      - 并发逻辑是在同一个线程中顺序发送 concurrency个回复， 后续得到一个reply== 200 ok 立即发送下一个。
+ *  @arg ignore_4xx 忽略4xx 的返回
+ *      - true: 当对端返回4xx 时继续发送下一个
+ *      - false: 当对端返回4xx 时立即结束任务
+ */
+#define kEventOnPresetListRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<PresetRequestMessage> message, std::function<void(std::deque<std::shared_ptr<PresetRequestMessage>> response, int concurrency, bool ignore_4xx)> callback
+
 
 constexpr const char kEventOnHomePositionRequest[] = "kEventOnHomePositionRequest";
 #define kEventOnHomePositionRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<HomePositionRequestMessage> message, std::function<void(std::shared_ptr<HomePositionResponseMessage>)> callback
 
 constexpr const char kEventOnCruiseTrackListRequest[] = "kEventOnCruiseTrackListRequest";
-#define kEventOnCruiseTrackListRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CruiseTrackListRequestMessage> message, std::function<void(std::shared_ptr<CruiseTrackListResponseMessage>)> callback
+/**
+ * @brief 目录查询请求事件的参数
+ * @param platform 平台指针
+ * @param message 请求消息指针
+ * @param callback 回复的数据回调
+ *  @arg resposne 响应消息队列
+ *      - 队列中的每个元素代表一个待发送的回复数据包
+ *      - 单个请求最大长度为 8*1024 组装消息时请考虑最大包长度
+ *  @arg concurrency 并发控制参数
+ *      - 默认为1
+ *      - 并发逻辑是在同一个线程中顺序发送 concurrency个回复， 后续得到一个reply== 200 ok 立即发送下一个。
+ *  @arg ignore_4xx 忽略4xx 的返回
+ *      - true: 当对端返回4xx 时继续发送下一个
+ *      - false: 当对端返回4xx 时立即结束任务
+ */
+#define kEventOnCruiseTrackListRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CruiseTrackListRequestMessage> message, std::function<void(std::deque<std::shared_ptr<CruiseTrackListResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+
+constexpr const char kEventOnCruiseTrackRequest[] = "kEventOnCruiseTrackRequest";
+/**
+ * @brief 目录查询请求事件的参数
+ * @param platform 平台指针
+ * @param message 请求消息指针
+ * @param callback 回复的数据回调
+ *  @arg resposne 响应消息队列
+ *      - 队列中的每个元素代表一个待发送的回复数据包
+ *      - 单个请求最大长度为 8*1024 组装消息时请考虑最大包长度
+ *  @arg concurrency 并发控制参数
+ *      - 默认为1
+ *      - 并发逻辑是在同一个线程中顺序发送 concurrency个回复， 后续得到一个reply== 200 ok 立即发送下一个。
+ *  @arg ignore_4xx 忽略4xx 的返回
+ *      - true: 当对端返回4xx 时继续发送下一个
+ *      - false: 当对端返回4xx 时立即结束任务
+ */
+#define kEventOnCruiseTrackRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CruiseTrackRequestMessage> message, std::function<void(std::deque<std::shared_ptr<CruiseTrackResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+
 
 constexpr const char kEventOnPTZPositionRequest[] = "kEventOnPTZPositionRequest";
 #define kEventOnPTZPositionRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<PTZPositionRequestMessage> message, std::function<void(std::shared_ptr<PTZPositionResponseMessage>)> callback

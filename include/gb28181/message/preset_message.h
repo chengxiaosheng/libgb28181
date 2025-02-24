@@ -20,7 +20,9 @@ public:
     explicit PresetResponseMessage(MessageBase &&messageBase)
         : MessageBase(std::move(messageBase)) {}
     explicit PresetResponseMessage(
-        const std::string &device_id, std::vector<PresetListItem> &&vec, int32_t sum_num = 0);
+        const std::string &device_id, int32_t sum_num, std::vector<PresetListItem> &&vec);
+
+
 
     std::vector<PresetListItem> &preset_list() { return preset_list_; }
 

@@ -57,7 +57,7 @@ private:
 
     static int
     on_register_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code);
-    void set_status(PlatformStatusType status, std::string error);
+    void set_status(PlatformStatusType status, const std::string& error);
 
     TransportType get_transport() const override {
         return account_.transport_type;

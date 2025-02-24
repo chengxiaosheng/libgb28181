@@ -40,6 +40,16 @@ std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxyImpl &prox
     os << ") ";
     return os;
 }
+std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxy &proxy) {
+    os << dynamic_cast<const RequestProxyImpl &>(proxy);
+    return os;
+}
+std::ostream &gb28181::operator<<(std::ostream &os, const std::shared_ptr<RequestProxy> &proxy) {
+    if (auto ptr = std::dynamic_pointer_cast<RequestProxyImpl>(proxy)) {
+        os << *ptr;
+    }
+    return os;
+}
 
 RequestProxyImpl::RequestProxyImpl(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, RequestType type,
@@ -67,19 +77,39 @@ RequestProxyImpl::~RequestProxyImpl() {
 
 std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request) {
-    RequestType type { RequestType::invalid };
+    RequestType type { RequestType::OneResponse };
     auto command = request->command();
     auto root = request->root();
     if (root == MessageRootType::Query) {
-        if (command == MessageCmdType::Catalog || command == MessageCmdType::ConfigDownload
-            || command == MessageCmdType::PresetQuery || command == MessageCmdType::CruiseTrackListQuery)
+        // 可能存在多个回复的消息类型掩码
+        constexpr uint64_t multi_response_cmds = (1ULL << static_cast<int>(MessageCmdType::Catalog))
+            | (1ULL << static_cast<int>(MessageCmdType::ConfigDownload))
+            | (1ULL << static_cast<int>(MessageCmdType::RecordInfo))
+            | (1ULL << static_cast<int>(MessageCmdType::PresetQuery))
+            | (1ULL << static_cast<int>(MessageCmdType::CruiseTrackQuery))
+            | (1ULL << static_cast<int>(MessageCmdType::CruiseTrackListQuery));
+        if (multi_response_cmds & (1ULL << static_cast<int>(command))) {
             type = MultipleResponses;
-        else
-            type = OneResponse;
+        }
     } else if (root == MessageRootType::Control) {
-        // 源设备向目标设备发送摄像机云台控制、远程启动、强制关键帧、拉框放大、拉框缩小、PTZ精准控制、 存储卡格式化、
-        // 目标跟踪命令后，目标设备不发送应答命令，命令流程见9.3.2.1;
-
+        if (command == MessageCmdType::DeviceControl) {
+            // 源设备向目标设备发送摄像机云台控制、远程启动、强制关键帧、拉框放大、拉框缩小、PTZ精准控制、
+            // 存储卡格式化、 目标跟踪命令后，目标设备不发送应答命令，命令流程见9.3.2.1;
+            // 不需要回复的控制消息掩码
+            constexpr uint64_t no_response_cmds = (1ULL << static_cast<int>(DeviceControlType::PTZCmd))
+                | (1ULL << static_cast<int>(DeviceControlType::TeleBoot))
+                | (1ULL << static_cast<int>(DeviceControlType::IFrameCmd))
+                | (1ULL << static_cast<int>(DeviceControlType::DragZoomIn))
+                | (1ULL << static_cast<int>(DeviceControlType::DragZoomOut))
+                | (1ULL << static_cast<int>(DeviceControlType::PtzPreciseCtrl))
+                | (1ULL << static_cast<int>(DeviceControlType::FormatSDCard))
+                | (1ULL << static_cast<int>(DeviceControlType::TargetTrack));
+            if (auto control_request = std::dynamic_pointer_cast<DeviceControlRequestMessage>(request)) {
+                if (no_response_cmds & (1ULL << static_cast<int>(control_request->control_type()))) {
+                    type = NoResponse;
+                }
+            }
+        }
     } else if (root == MessageRootType::Notify || root == MessageRootType::Response) {
         type = NoResponse;
     } else {

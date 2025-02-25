@@ -103,7 +103,7 @@ public:
     void
     query_sd_card_status(const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
     void device_control_ptz(
-        const std::string &device_id, PtzCmdType ptz_cmd, std::string name,
+        const std::string &device_id, PTZCommand ptz_cmd, std::string name,
         std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
     void device_control_tele_boot(
         const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;

@@ -227,7 +227,7 @@ void SubordinatePlatformImpl::query_sd_card_status(
     RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
 }
 void SubordinatePlatformImpl::device_control_ptz(
-    const std::string &device_id, PtzCmdType ptz_cmd, std::string name,
+    const std::string &device_id, PTZCommand ptz_cmd, std::string name,
     std::function<void(std::shared_ptr<RequestProxy>)> rcb) {
     auto request = std::make_shared<DeviceControlRequestMessage_PTZCmd>(device_id, std::move(ptz_cmd), std::nullopt);
     if (!name.empty()) {

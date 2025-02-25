@@ -35,7 +35,7 @@ bool DeviceControlRequestMessage::parse_detail() {
 }
 
 DeviceControlRequestMessage_PTZCmd::DeviceControlRequestMessage_PTZCmd(
-    const std::string &device_id, PtzCmdType &&ptz_cmd, std::optional<gb28181::PtzCmdParams> &&params,
+    const std::string &device_id, PTZCommand &&ptz_cmd, std::optional<gb28181::PtzCmdParams> &&params,
     std::vector<std::string> &&extra)
     : DeviceControlRequestMessage(device_id, std::move(extra))
     , ptz_cmd_type_(std::move(ptz_cmd))
@@ -45,7 +45,12 @@ bool DeviceControlRequestMessage_PTZCmd::load_detail() {
     DeviceControlRequestMessage::load_detail();
     auto root = xml_ptr_->RootElement();
     if (auto ele = root->FirstChildElement("PTZCmd")) {
-        ptz_cmd_type_ = PtzCmdType(ele->GetText());
+        if (auto cmd = PTZCommand::FromHex(ele->GetText())) {
+            ptz_cmd_type_ = cmd.value();
+        } else {
+            error_message_ = "Invalid PTZ command";
+            return false;
+        }
     } else {
         error_message_ = "PTZCmdType not found";
         return false;
@@ -62,7 +67,7 @@ bool DeviceControlRequestMessage_PTZCmd::parse_detail() {
 
     auto root = xml_ptr_->RootElement();
     auto cmd_ele = root->FirstChildElement("PTZCmd");
-    cmd_ele->SetText(ptz_cmd_type_.str().c_str());
+    cmd_ele->SetText(ptz_cmd_type_.ToHex().c_str());
     if (ptz_cmd_params_) {
         auto p_ele = root->FirstChildElement("PTZCmdParams");
         if (!ptz_cmd_params_->PresetName.empty()) {

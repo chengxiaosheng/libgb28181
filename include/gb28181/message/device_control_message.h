@@ -47,10 +47,10 @@ public:
     explicit DeviceControlRequestMessage_PTZCmd(MessageBase &&messageBase)
         : DeviceControlRequestMessage(std::move(messageBase)) {}
     explicit DeviceControlRequestMessage_PTZCmd(
-        const std::string &device_id, PtzCmdType &&ptz_cmd, std::optional<gb28181::PtzCmdParams> &&params,
+        const std::string &device_id, PTZCommand &&ptz_cmd, std::optional<gb28181::PtzCmdParams> &&params,
         std::vector<std::string> &&extra = {});
 
-    PtzCmdType &ptz_cmd() { return ptz_cmd_type_; }
+    PTZCommand &ptz_cmd() { return ptz_cmd_type_; }
 
     std::optional<PtzCmdParams> &ptz_cmd_params() { return ptz_cmd_params_; }
     DeviceControlType control_type() const override { return DeviceControlType::PTZCmd; }
@@ -60,7 +60,7 @@ protected:
     bool parse_detail() override;
 
 private:
-    gb28181::PtzCmdType ptz_cmd_type_;
+    PTZCommand ptz_cmd_type_;
     std::optional<gb28181::PtzCmdParams> ptz_cmd_params_;
 };
 

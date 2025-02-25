@@ -383,267 +383,385 @@ struct DeviceStatusAlarmStatus {
     int32_t Num { 0 };
 };
 
-/**
- * PTZ 指令
- */
-class PtzCmdType {
+class PTZCommand {
 public:
-    enum CommandType : uint8_t {
-        // 停止
-        Stop = 0,
-        // 上
-        Up,
-        // 下
-        Down,
-        // 左
-        Left,
-        // 右
-        Right,
-        // 缩小
-        Zoom_Out,
-        // 放大
-        Zoom_In,
-        // 聚焦 远
-        Focus_Out,
-        // 聚焦 近
-        Focus_In,
-        // 光圈 缩小
-        Iris_Out,
-        // 光圈 放大
-        Iris_in,
-
-        Set_Preset,
-        Operator_Preset,
-        Del_Preset,
-
-        // 巡航路径添加预置点
-        Add_Point,
-        // 巡航路径删除预置点
-        Del_Point,
-        // 巡航速度
-        Set_Speed,
-        // 巡航点停留速度
-        Set_Remain,
-        // 开始巡航
-        Begin_Cruise,
-
-        // 开始自动扫描
-        Begin_Auto_Scan,
-        // 设置自动扫描左侧边界
-        Auto_Scan_Left,
-        // 设置自动扫描右侧边界
-        Auto_Scan_right,
-        // 设置自动扫描速度
-        Auto_Scan_Speed,
-        // 开关开
-        switch_open,
-        // 开关关
-        switch_close
+    enum class CommandType : uint8_t { invalid, PTZ, FI, PRESET, CRUISE, SCAN, AUX };
+    enum PTZ_MOVE_TYPE : uint8_t {
+        PTZ_Stop = 0x00,
+        PTZ_Up = 0x01 << 3,
+        PTZ_Down = 0x01 << 2,
+        PTZ_Left = 0x01 << 1,
+        PTZ_Right = 0x01 << 0,
+        PTZ_ZoomIn = 0x01 << 4,
+        PTZ_ZoomOut = 0x01 << 5,
     };
-    enum CommandDefineType : uint8_t {
-        // ptz 指令
-        PTZ,
-        // 光圈焦距指令
-        FI,
-        // 预置点指令
-        PRESET,
-        // 巡航指令
-        CRUISE,
-        // 自动扫描指令
-        SCAN,
-        // 辅助开关指令
-        AUXILIARY
+    enum PTZ_FI_TYPE : uint8_t {
+        FI_IrisOut = (0x01 << 6) | (0x01 << 3), // 光圈缩小
+        FI_IrisIn = (0x01 << 6) | (0x01 << 2), // 光圈放大
+        FI_FocusOut = (0x01 << 6) | (0x01 << 1), // 聚焦近
+        FI_FocusIn = (0x01 << 6) | (0x01 << 0), // 聚焦远
+        Fi_Close = (0x01 << 6), // 停止镜头FI的所有动作
     };
-    PtzCmdType() = default;
-    PtzCmdType(PtzCmdType &&) = default;
-    PtzCmdType &operator=(PtzCmdType &&) = default;
-    explicit PtzCmdType(
-        const std::vector<CommandType> &commands, const uint8_t &value1 = 0, const uint16_t &value2 = 0,
-        const uint8_t &value3 = 0)
-        : _value1(value1)
-        , _value3(value3)
-        , _value2(value2)
-        , _valid(true) {
-        for (const auto &it : commands) {
-            if (const auto &t = get_command_type().find(it); t != get_command_type().end()) {
-                _command[3] |= t->second;
-            }
-        }
-        _command[4] = _value1;
-        _command[5] = _value2 & 0xff;
-        if (value3) {
-            _command[6] = ((value3 << 4) & 0xf0);
-        }
-        // 垂直方向速度
-        if (value2 > 0xff) {
-            _command[5] = (_value2 & 0xff);
-            _command[6] = ((_value2 >> 8) << 4) & 0xF0;
-        }
+    enum PTZ_PRESET_TYPE : uint8_t {
+        PRESET_SetPreset = (0x01 << 7) | 0x01, // 设置预置位
+        PRESET_CallPreset = (0x01 << 7) | 0x02, // 调用预置位
+        PRESET_DelPreset = (0x01 << 7) | 0x03, // 删除预置位
+    };
+    enum PTZ_CRUISE_TYPE : uint8_t {
+        CRUISE_AddPoint = (0x01 << 7) | 0x04, // 新增巡航点
+        CRUISE_DelPoint = (0x01 << 7) | 0x05, // 删除巡航点
+        CRUISE_SetSpeed = (0x01 << 7) | 0x06, // 设置巡航速度
+        CRUISE_SetStayTime = (0x01 << 7) | 0x07, // 设置停留时间
+        CRUISE_StartCrusie = (0x01 << 7) | 0x08, // 开始巡航
+    };
+    enum PTZ_SCAN_TYPE : uint8_t {
+        SCAN_Start = (0x01 << 7) | 0x09,
+        SCAN_SetSpeed = (0x01 << 7) | 0x0A,
+    };
+    enum PTZ_AUX_TYPE : uint8_t {
+        AUX_On = (0x01 << 7) | 0x0C,
+        AUX_Off = (0x01 << 7) | 0x0D,
+    };
+    enum ScanSubType : uint8_t { BeginScan = 0, ScanLeft = 1, ScanRight = 2 };
 
-        // base ptz
-        if (_command[3] < (1 << 6)) {
-            this->_define_type = CommandDefineType::PTZ;
-        }
-        // fi
-        else if (_command[3] < (1 << 7)) {
-            this->_define_type = CommandDefineType::FI;
-        }
-        // 预置位
-        else if (_command[3] <= 0x83) {
-            this->_define_type = CommandDefineType::PRESET;
-        } // 巡航
-        else if (_command[3] <= 0x88) {
-            this->_define_type = CommandDefineType::CRUISE;
-        }
-        // 自动扫描
-        else if (_command[3] <= 0x8A) {
-            this->_define_type = CommandDefineType::SCAN;
-        }
-        // 辅助开关
-        else if (_command[3] <= 0x8D) {
-            this->_define_type = CommandDefineType::AUXILIARY;
-        }
+    explicit PTZCommand(uint16_t device_address = 0) {
+        bytes[2] = static_cast<uint8_t>(device_address);
+        bytes[6] = (device_address >> 8) & 0x0F;
     }
-    explicit PtzCmdType(const std::string &data) {
-        if (data.size() != 2 * sizeof(_command)) {
-            _valid = false;
-            return;
-        }
-        // 填充数组
-        for (int i = 0; i < 8; ++i) {
-            _command[i] = (hexCharToUint8(data[i * 2]) << 4) | hexCharToUint8(data[i * 2 + 1]);
-        }
-        // base ptz
-        if (_command[3] < (1 << 6)) {
-            // 字节5水平方向速度
-            _value1 = _command[4];
-            // 垂直方向速度
-            _value2 = _command[5];
-            // 字节7 高4位， 变倍速度
-            _value3 = (_command[6] >> 4);
-            this->_define_type = CommandDefineType::PTZ;
-        }
-        // fi
-        else if (_command[3] < (1 << 7)) {
-            // 聚焦速度
-            _value1 = _command[4];
-            // 光圈速度
-            _value2 = _command[5];
-            this->_define_type = CommandDefineType::FI;
-        }
-        // 预置位
-        else if (_command[3] <= 0x83) {
-            // 聚焦速度
-            _value1 = _command[4];
-            // 光圈速度
-            _value2 = _command[5];
-            this->_define_type = CommandDefineType::PRESET;
-        }
-        // 巡航
-        else if (_command[3] <= 0x88) {
-            // 巡航组号
-            _value1 = _command[4];
-            // 预置位编号
-            _value2 = _command[5];
-            // 巡航速度或停留时间
-            if (_command[3] == 0x86 || _command[3] == 0x87) {
-                _value2 |= ((_command[6] >> 4) << 8);
-            }
-            this->_define_type = CommandDefineType::CRUISE;
-        }
-        // 自动扫描
-        else if (_command[3] <= 0x8A) {
-            this->_define_type = CommandDefineType::SCAN;
-            // 扫描组号
-            _value1 = _command[4];
-            // 子指令
-            _value2 = _command[5];
 
-            // 扫描速度, 此处位 12bit的速度
-            if (_command[3] == 0x8A) {
-                _value2 |= ((_command[6] >> 4) << 8);
-            }
+    /**
+     * PTZ 指令
+     * @param type 指令类型
+     * @param speed 移动速度
+     * - type = ZoomIn ZoomOut 时，speed 有效值范围为 0-15
+     * @return
+     */
+    PTZCommand &Move(PTZ_MOVE_TYPE type, uint8_t speed) {
+        uint8_t cmd = bytes[3] | type;
+        if (cmd > 0b00101010)
+            return *this;
+        constexpr uint8_t MASK_LR = 0x03; // 00000011 (b0-b1)
+        constexpr uint8_t MASK_UD = 0x0C; // 00001100 (b2-b3)
+        constexpr uint8_t MASK_ZM = 0x30; // 00110000 (b4-b5)
+        if (((cmd & MASK_LR) == MASK_LR) || // 检测b0和b1同时为1
+            ((cmd & MASK_UD) == MASK_UD) || // 检测b2和b3同时为1
+            ((cmd & MASK_ZM) == MASK_ZM)) // 检测b4和b5同时为1
+        {
+            return *this;
         }
-        // 辅助开关
-        else if (_command[3] <= 0x8D) {
-            this->_define_type = CommandDefineType::AUXILIARY;
-            // 辅助开关编号
-            _value1 = _command[4];
+        bytes[3] = cmd;
+        if (type == PTZ_Left || type == PTZ_Right) {
+            bytes[4] = speed;
+        } else if (type == PTZ_Up || type == PTZ_Down) {
+            bytes[5] = speed;
         } else {
-            _valid = false;
-            return;
+            bytes[6] = (((speed & 0x0F) << 4) | (bytes[6] & 0x0F));
         }
-        _valid = true;
+        return *this;
     }
-    std::string str() const {
-        const uint8_t version = 0x00;
-        // 字节2 ： 组合码1， 高4位是版本信息，低4位是校验位， 校验位 = （字节1的高4位 + 字节1的低4位+字节2的高4位）
-        // % 16. 本文件的版本号 1.0， 版本信息 0H
-        _command[1] = ((_command[0] & 0xF) + (_command[0] >> 4) + ((version >> 4))) % 16;
-        _command[1] |= (version & 0xF0);
-
-        // 字节3 与 字节7 ， 文档中表示 字节3 = 地址低8位， 字节低4位 = 地址高4位
-        // 这里的地址是个啥？
-
-        _command[7]
-            = (_command[6] + _command[5] + _command[4] + _command[3] + _command[2] + _command[1] + _command[0]) % 256;
-        std::stringstream hexStream;
-        for (auto i : _command) {
-            hexStream << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << i;
+    /**
+     * FI 指令
+     * @param type 指令类型
+     * @param speed 指令对应的速度 0-255
+     * @return
+     */
+    PTZCommand &FI(PTZ_FI_TYPE type, uint8_t speed) {
+        if ((bytes[3] > 0b01001010) || (bytes[3] && bytes[3] < 0b01000000))
+            return *this;
+        uint8_t cmd = bytes[3] | type;
+        constexpr uint8_t MASK_FOCUS = 0x03;
+        constexpr uint8_t MASK_IRIS = 0x0C;
+        if (((cmd & MASK_FOCUS) == MASK_FOCUS) || // 检测b0和b1同时为1
+            ((cmd & MASK_IRIS) == MASK_IRIS))
+            return *this;
+        bytes[3] = cmd;
+        if (type == FI_FocusIn || type == FI_FocusOut) {
+            bytes[4] = speed;
+        } else if (type == FI_IrisIn || type == FI_IrisOut) {
+            bytes[5] = speed;
         }
-        return hexStream.str();
+        return *this;
     }
-    uint8_t value1() const { return _value1; }
-    void value1(const uint8_t value) { _value1 = value; }
-    uint16_t value2() const { return _value2; }
-    void value2(const uint16_t value) { _value2 = value; }
-    uint8_t value3() const { return _value3; }
-    void value3(const uint8_t value) { _value3 = value; }
+    /**
+     * 预置位操作
+     * @param type 动作枚举
+     * @param preset_id 预置位编码 1-255
+     * @return
+     */
+    PTZCommand &Preset(PTZ_PRESET_TYPE type, uint8_t preset_id) {
+        bytes[3] = static_cast<uint8_t>(type);
+        bytes[5] = preset_id;
+        return *this;
+    }
+    /**
+     *
+     * @param type
+     * @param cruise_id 巡航路径编码
+     * @param preset_id
+     *  - type = DelPoint
+     *      - preset_id = 0: 删除cruise_id对应的整个巡航路径
+     *  - type = SetSpeed
+     *      - preset_id 表示 巡航速度
+     *  - type = SetStayTime
+     *      - preset_id 表示 停止时间 单位为s
+     * @return
+     */
+    PTZCommand &Cruise(PTZ_CRUISE_TYPE type, uint8_t cruise_id, uint16_t preset_id) {
+        bytes[3] = static_cast<uint8_t>(type);
+        bytes[4] = cruise_id;
+        bytes[5] = static_cast<uint8_t>(preset_id);
+        if (type == CRUISE_SetSpeed || type == CRUISE_SetStayTime) {
+            bytes[6] = ((preset_id >> 8) << 4) | (bytes[6] & 0x0F);
+        }
+        return *this;
+    }
+    PTZCommand &Scan(uint8_t group_id, ScanSubType sub_type) {
+        bytes[3] = static_cast<uint8_t>(SCAN_Start);
+        bytes[4] = group_id;
+        bytes[5] = static_cast<uint8_t>(sub_type);
+        return *this;
+    }
+    PTZCommand &ScanSpeed(PTZ_SCAN_TYPE type, uint8_t group_id, uint16_t speed) {
+        bytes[3] = static_cast<uint8_t>(SCAN_SetSpeed);
+        bytes[4] = group_id;
+        bytes[5] = static_cast<uint8_t>(speed);
+        bytes[6] = ((speed >> 8) << 4) | (bytes[6] & 0x0F);
+        return *this;
+    }
+
+    PTZCommand &Aux(PTZ_AUX_TYPE type, uint8_t aux_id) {
+        bytes[3] = static_cast<uint8_t>(type);
+        bytes[4] = aux_id;
+        return *this;
+    }
+
+    // 协议操作接口
+    static std::optional<PTZCommand> FromHex(std::string_view hex) {
+        if (hex.length() != 16)
+            return std::nullopt;
+        PTZCommand frame;
+        for (size_t i = 0; i < sizeof(frame); ++i) {
+            auto byte = HexToByte(hex.substr(i * 2, 2));
+            if (!byte)
+                return std::nullopt;
+            reinterpret_cast<uint8_t *>(&frame)[i] = *byte;
+        }
+        if (!frame.ValidateFrame())
+            return std::nullopt;
+        return PTZCommand(frame);
+    }
+    std::string ToHex() {
+        CalculateBytes2();
+        CalculateChecksum();
+        return FrameToHex(*this);
+    }
+    // 数据访问接口
+    uint16_t DeviceAddress() const noexcept { return ((bytes[6] & 0x0F) << 8) | bytes[2]; }
+    uint8_t CommandByte() const noexcept { return bytes[3]; }
+    /**
+     * 字节5
+     *  - PTZ 表示水平速度
+     *  - FI 表示聚焦速度
+     *  - PRESET 无效
+     *  - CRUISE 巡航路径编号
+     *  - SCAN 扫描组编码
+     *  - AUX 开关编号
+     * @return
+     */
+    uint8_t Param1() const noexcept { return bytes[4]; }
+    /**
+     * 字节6
+     * - PTZ 表示垂直速度
+     * - FI 表示光圈速度
+     * - PRESET 表示预置位编号
+     * - CRUISE
+     *  - 设置巡航速度时 表示巡航速度
+     *  - 设置巡航停留时间时 表示停留时间
+     *  - 其他情况 表示预置位编号
+     * - SCAN
+     *  - 当为设置扫描速度时 表示扫描速度
+     *  - 其他情况无效
+     *  - 当AUX 时 无效
+     * @return
+     */
+    uint16_t Param2() const noexcept {
+        if (bytes[3] == 0x86 || bytes[3] == 0x87 || bytes[3] == 0x8A) {
+            return ((bytes[6] & 0xF0) << 4) | bytes[5];
+        }
+        return bytes[5];
+    }
+    /**
+     * 字节7
+     * - PTZ 变倍速度
+     * - 其他 无效
+     * @return
+     */
+    uint8_t Param3() const noexcept {
+        if (get_command_type() == CommandType::PTZ) {
+            return (bytes[6] & 0xF0) >> 4;
+        }
+        return 0;
+    }
+
+    CommandType get_command_type() const noexcept {
+        if (bytes[3] == 0)
+            return CommandType::PTZ;
+        if (bytes[3] <= 0b00101010)
+            return CommandType::PTZ;
+        if (bytes[3] <= 0b01001010)
+            return CommandType::FI;
+        if (bytes[3] >= 0x81 && bytes[3] >= 0x83)
+            return CommandType::PRESET;
+        if (bytes[3] >= 0x84 && bytes[3] <= 0x88)
+            return CommandType::CRUISE;
+        if (bytes[3] >= 0x89 && bytes[3] <= 0x8A)
+            return CommandType::SCAN;
+        if (bytes[3] >= 0x8C && bytes[3] <= 0x8D)
+            return CommandType::AUX;
+        return CommandType::invalid;
+    }
+
+    PTZ_MOVE_TYPE get_move_type() const noexcept {
+        if (get_command_type() == CommandType::PTZ) {
+            return static_cast<PTZ_MOVE_TYPE>(bytes[4]);
+        }
+        return PTZ_Stop;
+    }
+
+    /**
+     * 获取水平速度
+     * @return
+     * @remark get_command_type() == PTZ 时有效
+     */
+    uint8_t pan_speed() const noexcept {
+        if (get_command_type() == CommandType::PTZ) {
+            return bytes[4];
+        }
+        return 0;
+    }
+
+    /**
+     * 获取垂直速度
+     * @return
+     * @remark get_command_type() == PTZ 时有效
+     */
+    uint8_t tilt_speed() const noexcept {
+        if (get_command_type() == CommandType::PTZ) {
+            return bytes[5];
+        }
+        return 0;
+    }
+    /**
+     * 获取变倍速度
+     * @return
+     * @remark get_command_type() == PTZ 时有效
+     */
+    uint8_t zoom_speed() const noexcept {
+        if (get_command_type() == CommandType::PTZ) {
+            return (bytes[6] & 0xF0) >> 4;
+        }
+        return 0;
+    }
+    /**
+     * 获取光圈速度
+     * @return
+     * @remark get_command_type() == FI 时有效
+     */
+    uint8_t iris_speed() const noexcept {
+        if (get_command_type() == CommandType::FI) {
+            return bytes[5];
+        }
+        return 0;
+    }
+    /**
+     * 获取聚焦速度
+     * @return
+     * @remark get_command_type() == FI 时有效
+     */
+    uint8_t focus_speed() const noexcept {
+        if (get_command_type() == CommandType::FI) {
+            return bytes[4];
+        }
+    }
+    /**
+     * 获取预置位编号
+     * @return
+     * @remark get_command_type() == PRESET 或 CRUISE时有效
+     */
+    uint8_t get_preset_id() const noexcept {
+        if (get_command_type() == CommandType::PRESET) {
+            return bytes[5];
+        } else if (get_command_type() == CommandType::CRUISE) {
+            if (bytes[3] == 0x84 || bytes[3] == 0x85) {
+                return bytes[5];
+            }
+        }
+        return 0;
+    }
+    /**
+     * 获取续航路径编号
+     * @return
+     * @remark get_command_type() == PRESET 时有效
+     */
+    uint8_t get_crusie_id() const noexcept {
+        if (get_command_type() == CommandType::CRUISE) {
+            return bytes[4];
+        }
+        return 0;
+    }
+    uint16_t get_cruise_speed() const noexcept {
+        if (bytes[3] == 0x86) {
+            return (bytes[5] | ((bytes[6] & 0xF0) << 4));
+        }
+        return 0;
+    }
+    uint16_t get_cruise_stay_time() const noexcept {
+        if (bytes[3] == 0x87) {
+            return (bytes[5] | ((bytes[6] & 0xF0) << 4));
+        }
+        return 0;
+    }
+    uint8_t get_aux_id() const noexcept {
+        if (get_command_type() == CommandType::AUX) {
+            return bytes[4];
+        }
+        return 0;
+    }
+
+    static std::string FrameToHex(const PTZCommand &frame) {
+        std::stringstream ss;
+        ss << std::hex << std::uppercase << std::setfill('0');
+        const uint8_t *bytes = reinterpret_cast<const uint8_t *>(&frame);
+        for (size_t i = 0; i < sizeof(frame); ++i) {
+            ss << std::setw(2) << static_cast<int>(bytes[i]);
+        }
+        return ss.str();
+    }
 
 private:
-    static const std::unordered_map<CommandType, uint8_t> &get_command_type() {
-        static std::unordered_map<CommandType, uint8_t> _command_type_map = { { Stop, 0 },
-                                                                              { Up, (1 << 3) },
-                                                                              { Down, (1 << 2) },
-                                                                              { Left, (1 << 1) },
-                                                                              { Right, (1) },
-                                                                              { Zoom_Out, (1 << 5) },
-                                                                              { Zoom_In, (1 << 4) },
-                                                                              { Focus_Out, 0 },
-                                                                              { Focus_In, ((1 << 6) | (1 << 1)) },
-                                                                              { Iris_Out, ((1 << 6) | (1 << 3)) },
-                                                                              { Iris_in, ((1 << 6) | (1 << 2)) },
-                                                                              { Set_Preset, 0x81 },
-                                                                              { Operator_Preset, 0x82 },
-                                                                              { Del_Preset, 0x83 },
-                                                                              { Add_Point, 0x84 },
-                                                                              { Del_Point, 0x85 },
-                                                                              { Set_Speed, 0x86 },
-                                                                              { Set_Remain, 0x87 },
-                                                                              { Begin_Cruise, 0x88 },
-                                                                              { Begin_Auto_Scan, 0x89 },
-                                                                              { Auto_Scan_Left, 0x89 },
-                                                                              { Auto_Scan_right, 0x89 },
-                                                                              { Auto_Scan_Speed, 0x8a },
-                                                                              { switch_open, 0x8c },
-                                                                              { switch_close, 0x8d } };
-        return _command_type_map;
+    void CalculateChecksum() {
+        bytes[7] = (bytes[6] + bytes[5] + bytes[4] + bytes[3] + bytes[2] + bytes[1] + bytes[0]) % 256;
     }
-    static uint8_t hexCharToUint8(char c) {
-        if (c >= '0' && c <= '9')
-            return static_cast<uint8_t>(c - '0');
-        if (c >= 'A' && c <= 'F')
-            return static_cast<uint8_t>(10 + (c - 'A'));
-        if (c >= 'a' && c <= 'f')
-            return static_cast<uint8_t>(10 + (c - 'a'));
-        return 0; // Invalid character, treat as 0
+    void CalculateBytes2() {
+        // 字节2 ： 组合码1， 高4位是版本信息，低4位是校验位， 校验位 = （字节1的高4位 + 字节1的低4位+字节2的高4位）
+        // % 16. 本文件的版本号 1.0， 版本信息 0H
+        bytes[1] = (bytes[1] & 0xF0) | (((bytes[0] >> 4) + (bytes[0] & 0x0F) + (bytes[1] >> 4)) % 16);
     }
-    mutable uint8_t _command[8] { 0xA5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    uint8_t _value1 { 0 };
-    uint8_t _value3 { 0 };
-    uint16_t _value2 { 0 };
-    CommandDefineType _define_type { PTZ };
-    bool _valid { false };
+    bool ValidateFrame() {
+        if (bytes[0] != 0xA5)
+            return false;
+        PTZCommand temp = *this;
+        temp.CalculateChecksum();
+        return temp.bytes[7] == bytes[7];
+    }
+    static std::optional<uint8_t> HexToByte(std::string_view hex) {
+        if (hex.size() != 2 || !std::isxdigit(hex[0]) || !std::isxdigit(hex[1])) {
+            return std::nullopt;
+        }
+        return static_cast<uint8_t>(std::stoi(std::string(hex), nullptr, 16));
+    }
+
+    uint8_t bytes[8] = {0xA5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 };
 
 /**

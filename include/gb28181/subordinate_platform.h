@@ -144,7 +144,7 @@ public:
      * @param rcb
      */
     virtual void device_control_ptz(
-        const std::string &device_id, PtzCmdType ptz_cmd, std::string name,
+        const std::string &device_id, PTZCommand ptz_cmd, std::string name,
         std::function<void(std::shared_ptr<RequestProxy>)> rcb)
         = 0;
 

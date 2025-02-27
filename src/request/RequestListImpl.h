@@ -15,7 +15,7 @@ class ListMessageBase;
 class RequestListImpl final : public RequestProxyImpl {
 public:
     ~RequestListImpl() override = default;
-    RequestListImpl(const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request);
+    RequestListImpl(const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
 
     std::shared_ptr<MessageBase> response() override;
 

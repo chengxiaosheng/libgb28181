@@ -51,33 +51,9 @@ std::ostream &gb28181::operator<<(std::ostream &os, const std::shared_ptr<Reques
     return os;
 }
 
-RequestProxyImpl::RequestProxyImpl(
-    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, RequestType type,
-    int32_t sn)
-    : RequestProxy()
-    , platform_(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform))
-    , request_(request)
-    , request_sn_(sn == 0 ? platform_->get_new_sn() : sn)
-    , request_type_(type) {
-    DebugL << *this;
-}
-RequestProxyImpl::RequestProxyImpl(
-    const std::shared_ptr<SuperPlatformImpl> &platform, const std::shared_ptr<MessageBase> &request, RequestType type,
-    int32_t sn)
-    : RequestProxy()
-    , platform_(platform)
-    , request_(request)
-    , request_sn_(sn == 0 ? platform_->get_new_sn() : sn)
-    , request_type_(type) {
-    DebugL << *this;
-}
-RequestProxyImpl::~RequestProxyImpl() {
-    DebugL << *this;
-}
-
-std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
-    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request) {
-    RequestType type { RequestType::OneResponse };
+std::shared_ptr<RequestProxy> newRequestProxy_(
+    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0) {
+    RequestProxy::RequestType type { RequestProxy::RequestType::OneResponse };
     auto command = request->command();
     auto root = request->root();
     if (root == MessageRootType::Query) {
@@ -89,7 +65,7 @@ std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
             | (1ULL << static_cast<int>(MessageCmdType::CruiseTrackQuery))
             | (1ULL << static_cast<int>(MessageCmdType::CruiseTrackListQuery));
         if (multi_response_cmds & (1ULL << static_cast<int>(command))) {
-            type = MultipleResponses;
+            type = RequestProxy::MultipleResponses;
         }
     } else if (root == MessageRootType::Control) {
         if (command == MessageCmdType::DeviceControl) {
@@ -106,23 +82,50 @@ std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
                 | (1ULL << static_cast<int>(DeviceControlType::TargetTrack));
             if (auto control_request = std::dynamic_pointer_cast<DeviceControlRequestMessage>(request)) {
                 if (no_response_cmds & (1ULL << static_cast<int>(control_request->control_type()))) {
-                    type = NoResponse;
+                    type = RequestProxy::NoResponse;
                 }
             }
         }
+    } else if (root == MessageRootType::Notify && command != MessageCmdType::Alarm) {
+        type = RequestProxy::NoResponse;
     } else if (root == MessageRootType::Notify || root == MessageRootType::Response) {
-        type = NoResponse;
+        type = RequestProxy::NoResponse;
     } else {
         return nullptr;
     }
-    if (type == MultipleResponses) {
+    if (type == RequestProxy::MultipleResponses) {
         if (command == MessageCmdType::ConfigDownload) {
-            return std::make_shared<RequestConfigDownloadImpl>(platform, request);
+            return std::make_shared<RequestConfigDownloadImpl>(platform, request, sn);
         }
-        return std::make_shared<RequestListImpl>(platform, request);
+        return std::make_shared<RequestListImpl>(platform, request, sn);
     }
-    return std::make_shared<RequestProxyImpl>(platform, request, type);
+    return std::make_shared<RequestProxyImpl>(platform, request, type, sn);
 }
+
+std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
+    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn) {
+    return newRequestProxy_(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), request, sn);
+}
+std::shared_ptr<RequestProxy> RequestProxy::newRequestProxy(
+    const std::shared_ptr<SuperPlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn) {
+    return newRequestProxy_(std::dynamic_pointer_cast<SuperPlatformImpl>(platform), request, sn);
+}
+
+RequestProxyImpl::RequestProxyImpl(
+    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, RequestType type,
+    int32_t sn)
+    : RequestProxy()
+    , platform_(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform))
+    , request_(request)
+    , request_sn_(sn == 0 ? platform_->get_new_sn() : sn)
+    , request_type_(type) {
+    DebugL << *this;
+}
+
+RequestProxyImpl::~RequestProxyImpl() {
+    DebugL << *this;
+}
+
 int RequestProxyImpl::on_recv_reply(
     void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
     if (param == nullptr)

@@ -290,7 +290,10 @@ void new_xml_element(DeviceConfigType val, tinyxml2::XMLElement *root, const cha
     }
 }
 void new_xml_element(FrameMirrorType val, tinyxml2::XMLElement *root, const char *key) {
-    MAKE_ENUM_XML_ELE(FrameMirrorType, FrameMirrorTypeMap)
+    if (root == nullptr || key == nullptr || key[0] == '\0')
+        return;
+    auto ele = root->InsertNewChildElement(key);
+    ele->SetText(static_cast<int>(val));
 }
 void new_xml_element(RecordType val, tinyxml2::XMLElement *root, const char *key) {
     MAKE_ENUM_XML_ELE(RecordType, RecordTypeMap)
@@ -682,9 +685,17 @@ bool from_xml_element(DeviceConfigType &val, const tinyxml2::XMLElement *root, c
     }
     return false;
 }
-MAKE_GET_ENUM_TYPE_FUNC(FrameMirrorType, FrameMirrorTypeMap);
 bool from_xml_element(FrameMirrorType &val, const tinyxml2::XMLElement *root, const char *key) {
-    FROM_ENUM_XML_ELE(FrameMirrorType);
+    if (root == nullptr)
+        return false;
+    if (auto ele = (key != nullptr && key[0] != '\0') ? root->FirstChildElement(key) : root) {
+        if (int v = 0; ele->QueryIntText(&v) == tinyxml2::XML_SUCCESS) {
+            val = static_cast<FrameMirrorType>(v);
+            return true;
+        }
+    }
+    return false;
+
 }
 MAKE_GET_ENUM_TYPE_FUNC(RecordType, RecordTypeMap);
 bool from_xml_element(RecordType &val, const tinyxml2::XMLElement *root, const char *key) {

@@ -6,8 +6,8 @@
 using namespace gb28181;
 
 RequestConfigDownloadImpl::RequestConfigDownloadImpl(
-    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request)
-    : RequestProxyImpl(platform, request, RequestType::MultipleResponses) {
+    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, int sn)
+    : RequestProxyImpl(platform, request, RequestType::MultipleResponses, sn) {
     request_config_type_ = std::dynamic_pointer_cast<ConfigDownloadRequestMessage>(request)->config_type();
 }
 
@@ -57,12 +57,15 @@ void RequestConfigDownloadImpl::on_reply_l() {
     }
 }
 
-std::shared_ptr<MessageBase> RequestConfigDownloadImpl::response()  {
-    if (response_) return response_;
-    if (responses_.empty()) return nullptr;
+std::shared_ptr<MessageBase> RequestConfigDownloadImpl::response() {
+    if (response_)
+        return response_;
+    if (responses_.empty())
+        return nullptr;
     response_ = std::dynamic_pointer_cast<ConfigDownloadResponseMessage>(responses_.front());
     for (auto &it : responses_) {
-        if (it == response_) continue;
+        if (it == response_)
+            continue;
         auto resp = std::dynamic_pointer_cast<ConfigDownloadResponseMessage>(it);
         for (auto &[fst, snd] : resp->configs_) {
             resp->configs_[fst] = snd;
@@ -70,7 +73,6 @@ std::shared_ptr<MessageBase> RequestConfigDownloadImpl::response()  {
     }
     return response_;
 }
-
 
 void RequestConfigDownloadImpl::on_completed_l() {
     timer_.reset(); // 目前timer 定义在 on_reply_l, 此处其实没有意义

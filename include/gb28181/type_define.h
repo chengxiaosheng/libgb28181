@@ -4,6 +4,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 #ifndef SIP_AGENT_STR
@@ -277,7 +278,7 @@ enum class DeviceConfigType : uint32_t {
  * 画面翻转类型定义
  */
 enum class FrameMirrorType : uint32_t {
-    invalid = 0,
+    no = 0,
 #define XX(type, name, value, str) name = value,
     FrameMirrorTypeMap(XX)
 #undef XX
@@ -506,7 +507,7 @@ public:
      *      - preset_id 表示 停止时间 单位为s
      * @return
      */
-    PTZCommand &Cruise(PTZ_CRUISE_TYPE type, uint8_t cruise_id, uint16_t preset_id) {
+    PTZCommand &Cruise(PTZ_CRUISE_TYPE type, uint8_t cruise_id, uint16_t preset_id = 0) {
         bytes[3] = static_cast<uint8_t>(type);
         bytes[4] = cruise_id;
         bytes[5] = static_cast<uint8_t>(preset_id);

@@ -23,6 +23,7 @@ using namespace toolkit;
 
 namespace gb28181 {
 
+static std::unordered_map<uint32_t, std::atomic_int32_t> server_ssrc_sn_;
 static TransportType get_sip_protocol(const struct cstring_t *protocol) {
     if (!protocol)
         return TransportType::udp;
@@ -42,6 +43,8 @@ SipServer::SipServer(local_account account)
     if (!account_.host.empty()) {
         local_ip_ = account_.host;
     }
+    tinyxml2::XMLUtil::ToUnsigned(account_.platform_id.substr(3,5).data(), &server_ssrc_domain_);
+    server_ssrc_sn_.try_emplace(server_ssrc_domain_, 1);
     init_agent();
 }
 void SipServer::init_agent() {
@@ -81,18 +84,34 @@ std::shared_ptr<SuperPlatform> SipServer::get_super_platform(const std::string &
     }
     return nullptr;
 }
-void SipServer::add_subordinate_platform(subordinate_account &&account) {
+std::shared_ptr<SubordinatePlatform> SipServer::add_subordinate_platform(subordinate_account &&account) {
     std::string platform_id = account.platform_id;
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
     auto platform = std::make_shared<SubordinatePlatformImpl>(std::move(account), shared_from_this());
     sub_platforms_[platform_id] = platform;
+    return platform;
 }
-void SipServer::add_super_platform(super_account &&account) {
+void SipServer::remove_subordinate_platform(const std::string &platform_id) {
+    std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+    if (auto it = sub_platforms_.find(platform_id); it != sub_platforms_.end()) {
+        it->second->shutdown();
+        sub_platforms_.erase(it);
+    }
+}
+std::shared_ptr<SuperPlatform> SipServer::add_super_platform(super_account &&account) {
     std::string platform_id = account.platform_id;
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
     auto platform = std::make_shared<SuperPlatformImpl>(std::move(account), shared_from_this());
     super_platforms_[platform_id] = platform;
     platform->start();
+    return platform;
+}
+void SipServer::remove_super_platform(const std::string &platform_id) {
+    std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+    if (auto it = super_platforms_.find(platform_id); it != super_platforms_.end()) {
+        it->second->shutdown();
+        super_platforms_.erase(it);
+    }
 }
 void SipServer::reload_account(sip_account account) {}
 
@@ -122,6 +141,22 @@ void SipServer::new_subordinate_account(
     } else {
         allow_cb(nullptr);
     }
+}
+uint32_t SipServer::make_ssrc(bool is_playback) {
+    auto& counter = server_ssrc_sn_[server_ssrc_domain_];
+    int32_t old_value = counter.load(std::memory_order_relaxed);
+    int32_t desired;
+    do {
+        desired = (old_value >= 9999) ? 1 : old_value + 1;
+    } while (!counter.compare_exchange_weak(
+        old_value,
+        desired,
+        std::memory_order_release,  // 确保写入对其他线程可见
+        std::memory_order_relaxed
+    ));
+    return (is_playback ? 1'000'000'000 : 0)
+           + (server_ssrc_domain_ * 100'000'000)
+           + old_value;
 }
 
 SipServer::~SipServer() = default;

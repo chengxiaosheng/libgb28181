@@ -1,5 +1,6 @@
 #ifndef gb28181_src_PLATFORM_HELPER_H
 #define gb28181_src_PLATFORM_HELPER_H
+#include <atomic>
 #include <functional>
 #include <gb28181/type_define.h>
 #include <mutex>

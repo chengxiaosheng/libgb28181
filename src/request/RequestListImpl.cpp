@@ -7,8 +7,8 @@
 using namespace gb28181;
 
 RequestListImpl::RequestListImpl(
-    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request)
-    : RequestProxyImpl(platform, request, MultipleResponses) {}
+    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, int sn)
+    : RequestProxyImpl(platform, request, MultipleResponses, sn) {}
 
 int RequestListImpl::on_response(const std::shared_ptr<MessageBase> &response) {
     int code = 200;

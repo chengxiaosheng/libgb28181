@@ -36,6 +36,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Iconv::Iconv)
 
 if(TARGET ZLToolKit)
     target_link_libraries(${PROJECT_NAME} PUBLIC ZLToolKit)
+elseif (TARGET ZlToolKit)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ZlToolKit)
 elseif (TARGET ZLToolKit_SHARED)
     target_link_libraries(${PROJECT_NAME} PUBLIC ZLToolKit_SHARED)
 elseif (TARGET ZLToolKit_static)

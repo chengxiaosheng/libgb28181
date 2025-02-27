@@ -45,7 +45,7 @@ public:
      *
      * @return 获取账户信息
      */
-    virtual const sip_account &get_account() const = 0;
+    virtual const local_account &get_account() const = 0;
 
     virtual void set_passwd(const std::string &passwd) = 0;
     virtual void set_name(const std::string &name) = 0;
@@ -79,18 +79,32 @@ public:
      * 添加下级平台
      * @param account
      */
-    virtual void add_subordinate_platform(subordinate_account &&account) = 0;
+    virtual std::shared_ptr<SubordinatePlatform> add_subordinate_platform(subordinate_account &&account) = 0;
+
+    /**
+     * 移除下级平台
+     * @param platform_id
+     */
+    virtual void remove_subordinate_platform(const std::string &platform_id) = 0;
+
     /**
      * 添加上级平台
      * @param account
      */
-    virtual void add_super_platform(super_account &&account) = 0;
+    virtual std::shared_ptr<SuperPlatform> add_super_platform(super_account &&account) = 0;
 
+    /**
+     * 移除上级平台
+     * @param platform_id
+     */
+    virtual void remove_super_platform(const std::string &platform_id) = 0;
     /**
      * 设置平台自动注册回调
      * @param cb
      */
     virtual void set_new_subordinate_account_callback(subordinate_account_callback cb) = 0;
+
+    virtual uint32_t make_ssrc(bool is_playback = false) = 0;
 
 protected:
     LocalServer() = default;

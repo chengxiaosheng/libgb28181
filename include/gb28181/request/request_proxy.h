@@ -5,6 +5,9 @@
 #include <string>
 
 namespace gb28181 {
+class SuperPlatform;
+}
+namespace gb28181 {
 class SubordinatePlatform;
 }
 namespace gb28181 {
@@ -123,7 +126,8 @@ public:
      * 构建一个请求
      */
     static std::shared_ptr<RequestProxy>
-    newRequestProxy(const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request);
+    newRequestProxy(const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
+    static std::shared_ptr<RequestProxy> newRequestProxy(const std::shared_ptr<SuperPlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
 
     explicit operator bool() const { return status() == Succeeded; }
 };

@@ -87,6 +87,9 @@ void SuperPlatformImpl::start() {
     to_register(account_.register_expired);
 }
 
+std::shared_ptr<LocalServer> SuperPlatformImpl::get_local_server() const {
+    return local_server_weak_.lock();
+}
 std::string SuperPlatformImpl::get_to_uri() {
     if (moved_uri_.empty())
         return PlatformHelper::get_to_uri();
@@ -279,7 +282,7 @@ void SuperPlatformImpl::to_keepalive() {
 void SuperPlatformImpl::on_invite(
     const std::shared_ptr<InviteRequest> &invite_request,
     std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) {
-    resp(400, nullptr);
+    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventOnInviteRequest, shared_from_this(), invite_request, std::move(resp));
 }
 
 template <typename Response>

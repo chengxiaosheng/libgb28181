@@ -1,5 +1,6 @@
 #ifndef gb28181_ALARM_REQUEST_MESSAGE_H
 #define gb28181_ALARM_REQUEST_MESSAGE_H
+
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
@@ -115,6 +116,47 @@ private:
     std::string alarm_type_;
     std::string start_alarm_time_;
     std::string end_alarm_time_;
+};
+
+/**
+ * 告警通知
+ */
+class AlarmNotifyMessage final : public MessageBase {
+public:
+    struct alarm_info_type {
+        int alarm_type { 0 };
+        struct {
+            int event_type { 0 };
+        } alarm_type_param;
+    };
+    explicit AlarmNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
+        : MessageBase(xml) {}
+    explicit AlarmNotifyMessage(MessageBase &&messageBase)
+        : MessageBase(std::move(messageBase)) {}
+    explicit AlarmNotifyMessage(const std::string &device_id);
+
+    std::string &alarm_priority() { return alarm_priority_; }
+    std::string &alarm_method() { return alarm_method_; }
+    std::string &alarm_time() { return alarm_time_; }
+    std::string &alarm_description() { return alarm_description_; }
+    double &longitude() { return longitude_; }
+    double &latitude() { return latitude_; }
+    alarm_info_type &info() { return info_; }
+    std::vector<std::string> &extra_info() { return extra_info_; }
+
+protected:
+    bool load_detail() override;
+    bool parse_detail() override;
+
+private:
+    std::string alarm_priority_;
+    std::string alarm_method_;
+    std::string alarm_time_;
+    std::string alarm_description_;
+    double longitude_ { 0.0 };
+    double latitude_ { 0.0 };
+    alarm_info_type info_{};
+    std::vector<std::string> extra_info_;
 };
 
 class AlarmNotifyResponseMessage : public MessageBase {

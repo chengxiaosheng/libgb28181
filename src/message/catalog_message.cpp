@@ -39,7 +39,11 @@ CatalogResponseMessage::CatalogResponseMessage(
     : MessageBase()
     , sum_num_(sum_num)
     , items_(std::move(items))
-    , extra_(std::move(extra)) {}
+    , extra_(std::move(extra)) {
+    device_id_ = device_id;
+    root_ = MessageRootType::Response;
+    cmd_ = MessageCmdType::Catalog;
+}
 
 static std::unordered_map<std::string_view,std::function<void(ItemTypeInfo &, const tinyxml2::XMLElement *)>> fields_map_ = {
 { "DeviceID", [](ItemTypeInfo &item, const tinyxml2::XMLElement *root) { from_xml_element(item.DeviceID, root, nullptr); } },

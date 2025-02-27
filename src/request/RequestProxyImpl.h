@@ -31,11 +31,8 @@ class RequestProxyImpl
     , public std::enable_shared_from_this<RequestProxyImpl> {
 public:
     RequestProxyImpl(
-        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request,
+        const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request,
         RequestType type, int32_t sn = 0);
-    RequestProxyImpl(
-    const std::shared_ptr<SuperPlatformImpl> &platform, const std::shared_ptr<MessageBase> &request,
-    RequestType type, int32_t sn = 0);
     ~RequestProxyImpl() override;
     void set_sn(int sn) { request_sn_ = sn; }
     Status status() const override { return status_; }

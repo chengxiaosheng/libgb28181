@@ -32,6 +32,8 @@ public:
     void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
     platform_account &sip_account()  override { return *(platform_account *)&account_; }
 
+    std::shared_ptr<LocalServer> get_local_server() const override;
+
     std::string get_to_uri() override;
     CharEncodingType get_encoding() const override { return account_.encoding; }
 

@@ -1,9 +1,10 @@
 #ifndef gb28181_include_gb28181_SUPER_PLATFORM_H
 #define gb28181_include_gb28181_SUPER_PLATFORM_H
 #include "gb28181/type_define.h"
-
+#include <memory>
 #include <functional>
 namespace gb28181 {
+class LocalServer;
 class DeviceInfoMessageResponse;
 class DeviceInfoMessageRequest;
 class DeviceStatusMessageResponse;
@@ -26,6 +27,8 @@ public:
     virtual void start() = 0;
     virtual const super_account &account() const = 0;
     virtual void set_encoding(CharEncodingType encoding) = 0;
+
+    virtual std::shared_ptr<LocalServer> get_local_server() const = 0;
 
 };
 } // namespace gb28181

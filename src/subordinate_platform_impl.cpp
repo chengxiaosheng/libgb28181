@@ -1,9 +1,11 @@
 #include "subordinate_platform_impl.h"
 
+#include "gb28181/message/alarm_request_message.h"
 #include "gb28181/message/catalog_message.h"
 #include "gb28181/message/cruise_track_message.h"
 #include "gb28181/message/device_control_message.h"
 #include "gb28181/message/home_position_message.h"
+#include "gb28181/message/notify_message.h"
 #include "gb28181/message/ptz_position_message.h"
 #include "gb28181/message/record_info_message.h"
 #include "gb28181/message/sd_card_status_message.h"
@@ -45,8 +47,12 @@ SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
 void SubordinatePlatformImpl::shutdown() {}
 
 void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string error) {
-    if (status == account_.plat_status.status)
+    // 当为伪装在线时， 下次状态变更不论是否在线都需要广播
+    if (status == account_.plat_status.status && !camouflage_online_)
         return;
+    if (camouflage_online_) {
+        camouflage_online_ = false;
+    }
     account_.plat_status.status = status;
     account_.plat_status.error = std::move(error);
     if (status == PlatformStatusType::online) {
@@ -54,17 +60,21 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
     } else {
         keepalive_timer_.reset();
     }
-    keepalive_timer_ = std::make_shared<toolkit::Timer>(5, [weak_this = weak_from_this()]() {
-        if (auto this_ptr = weak_this.lock()) {
-            auto last_time = ((std::max)(this_ptr->account_.plat_status.register_time, this_ptr->account_.plat_status.keepalive_time));
-            auto now_time = toolkit::getCurrentMicrosecond(true);
-            if (last_time + 3 * 30 * 1000000L <= now_time) {
-                this_ptr->set_status(PlatformStatusType::offline, "keepalive timeout");
+    keepalive_timer_ = std::make_shared<toolkit::Timer>(
+        5,
+        [weak_this = weak_from_this()]() {
+            if (auto this_ptr = weak_this.lock()) {
+                auto last_time = ((std::max)(this_ptr->account_.plat_status.register_time,
+                                             this_ptr->account_.plat_status.keepalive_time));
+                auto now_time = toolkit::getCurrentMicrosecond(true);
+                if (last_time + 3 * 30 * 1000000L <= now_time) {
+                    this_ptr->set_status(PlatformStatusType::offline, "keepalive timeout");
+                }
+                return true;
             }
-            return true;
-        }
-        return false;
-    }, nullptr);
+            return false;
+        },
+        nullptr);
     // 异步广播平台在线状态
     toolkit::EventPollerPool::Instance().getPoller()->async(
         [this_ptr = shared_from_this(), status, error]() {
@@ -150,31 +160,95 @@ int SubordinatePlatformImpl::on_notify(
         return on_keep_alive(keepalive_request);
     }
     if (message.command() == MessageCmdType::Alarm) {
+        auto alarm_ptr = std::make_shared<AlarmNotifyMessage>(std::move(message));
+        alarm_ptr->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [alarm_ptr, this_ptr = shared_from_this()]() {
+                // 广播通知
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyAlarm, this_ptr, alarm_ptr);
+                // 回复确认
+                auto reqeust = std::make_shared<AlarmNotifyResponseMessage>(alarm_ptr->device_id().value_or(""));
+                std::make_shared<RequestProxyImpl>(
+                    this_ptr, reqeust, RequestProxy::RequestType::NoResponse, alarm_ptr->sn())
+                    ->send([](std::shared_ptr<RequestProxy>) {});
+            },
+            false);
+        return 200;
+    }
+    if (message.command() == MessageCmdType::Catalog) {
+        auto notify = std::make_shared<CatalogNotifyMessage>(std::move(message));
+        notify->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this(), notify] {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyCatalog, this_ptr, notify);
+            },
+            false);
         return 200;
     }
     if (message.command() == MessageCmdType::MediaStatus) {
+        auto notify = std::make_shared<MediaStatusNotifyMessage>(std::move(message));
+        notify->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this(), notify] {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyMediaStatus, this_ptr, notify);
+            },
+            false);
         return 200;
     }
     if (message.command() == MessageCmdType::MobilePosition) {
+        auto notify = std::make_shared<MobilePositionNotifyMessage>(std::move(message));
+        notify->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this(), notify] {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyMobilePosition, this_ptr, notify);
+            },
+            false);
         return 200;
     }
     if (message.command() == MessageCmdType::UploadSnapShotFinished) {
+        auto notify = std::make_shared<UploadSnapShotFinishedNotifyMessage>(std::move(message));
+        notify->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this(), notify] {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyUploadSnapShotFinished, this_ptr, notify);
+            },
+            false);
         return 200;
     }
     if (message.command() == MessageCmdType::VideoUploadNotify) {
+        auto notify = std::make_shared<VideoUploadNotifyMessage>(std::move(message));
+        notify->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this(), notify] {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyVideoUploadNotify, this_ptr, notify);
+            },
+            false);
         return 200;
     }
     if (message.command() == MessageCmdType::DeviceUpgradeResult) {
+        auto notify = std::make_shared<DeviceUpgradeResultNotifyMessage>(std::move(message));
+        notify->load_from_xml();
+        toolkit::EventPollerPool::Instance().getPoller()->async(
+            [this_ptr = shared_from_this(), notify] {
+                toolkit::NoticeCenter::Instance().emitEvent(
+                    Broadcast::kEventSubordinateNotifyDeviceUpgradeResult, this_ptr, notify);
+            },
+            false);
         return 200;
     }
-    return 0;
+    return 404;
 }
 void SubordinatePlatformImpl::on_invite(
     const std::shared_ptr<InviteRequest> &invite_request,
     std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) {
     resp(400, nullptr);
 }
-
 
 void SubordinatePlatformImpl::query_device_status(
     const std::string &device_id, std::function<void(std::shared_ptr<RequestProxy>)> ret) {
@@ -327,6 +401,29 @@ std::shared_ptr<InviteRequest> SubordinatePlatformImpl::invite(const std::shared
 std::shared_ptr<SubscribeRequest>
 SubordinatePlatformImpl::subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) {
     return SubscribeRequest::new_subscribe(shared_from_this(), request, std::move(info));
+}
+void SubordinatePlatformImpl::camouflage_online(uint64_t register_time, uint64_t keepalive_time) {
+    if (account_.plat_status.status == PlatformStatusType::online)
+        return;
+    account_.plat_status.register_time = register_time;
+    account_.plat_status.keepalive_time = keepalive_time;
+    account_.plat_status.status = PlatformStatusType::online;
+    camouflage_online_ = true;
+    keepalive_timer_ = std::make_shared<toolkit::Timer>(
+        5,
+        [weak_this = weak_from_this()]() {
+            if (auto this_ptr = weak_this.lock()) {
+                auto last_time = ((std::max)(this_ptr->account_.plat_status.register_time,
+                                             this_ptr->account_.plat_status.keepalive_time));
+                auto now_time = toolkit::getCurrentMicrosecond(true);
+                if (last_time + 3 * 30 * 1000000L <= now_time) {
+                    this_ptr->set_status(PlatformStatusType::offline, "keepalive timeout");
+                }
+                return true;
+            }
+            return false;
+        },
+        nullptr);
 }
 
 /**********************************************************************************************************

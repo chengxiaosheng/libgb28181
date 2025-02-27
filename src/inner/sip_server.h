@@ -38,7 +38,7 @@ public:
 
     void run() override;
     void shutdown() override;
-    const sip_account &get_account() const override { return account_; }
+    const local_account &get_account() const override { return account_; }
     void set_passwd(const std::string &passwd) override { account_.password = passwd; }
     void set_name(const std::string &name) override { account_.name = name; }
     void set_platform_id(const std::string &id) override { account_.platform_id = id; }
@@ -67,11 +67,15 @@ public:
 
     std::shared_ptr<SubordinatePlatform> get_subordinate_platform(const std::string &platform_id) override;
     std::shared_ptr<SuperPlatform> get_super_platform(const std::string &platform_id) override;
-    void add_subordinate_platform(subordinate_account &&account) override;
-    void add_super_platform(super_account &&account) override;
+    std::shared_ptr<SubordinatePlatform> add_subordinate_platform(subordinate_account &&account) override;
+    void remove_subordinate_platform(const std::string &platform_id) override;
+    std::shared_ptr<SuperPlatform> add_super_platform(super_account &&account) override;
+    void remove_super_platform(const std::string &platform_id) override;
 
     void set_new_subordinate_account_callback(subordinate_account_callback cb) override { new_subordinate_account_callback_ = std::move(cb); }
     void new_subordinate_account(const std::shared_ptr<subordinate_account> &account, std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb);
+
+    uint32_t make_ssrc(bool is_playback) override;
 
 
 
@@ -116,6 +120,7 @@ private:
     std::string local_ip_{"::"};
     local_account account_; // 本地账户信息
     std::atomic_bool running_ { false };
+    uint32_t server_ssrc_domain_{0};
     toolkit::UdpServer::Ptr udp_server_ { nullptr };
     toolkit::TcpServer::Ptr tcp_server_ { nullptr };
     std::shared_ptr<sip_uas_handler_t> handler_ { nullptr };

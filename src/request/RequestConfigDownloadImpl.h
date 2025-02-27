@@ -16,7 +16,7 @@ class RequestConfigDownloadImpl final : public RequestProxyImpl {
 public:
     ~RequestConfigDownloadImpl() override = default;
     RequestConfigDownloadImpl(
-        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request);
+        const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
 
     std::shared_ptr<MessageBase> response() override;
 

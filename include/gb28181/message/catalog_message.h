@@ -31,7 +31,7 @@ public:
     explicit CatalogResponseMessage(MessageBase &&messageBase)
         : MessageBase(std::move(messageBase)) {}
     explicit CatalogResponseMessage(
-        const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra);
+        const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra = {});
 
     int sum_num() { return sum_num_; }
     std::vector<ItemTypeInfo> &items() { return items_; }

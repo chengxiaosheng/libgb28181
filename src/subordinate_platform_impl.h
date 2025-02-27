@@ -143,8 +143,11 @@ public:
     std::shared_ptr<SubscribeRequest>
     subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) override;
 
+    void camouflage_online(uint64_t register_time, uint64_t keepalive_time) override;
+
 private:
 
+    bool camouflage_online_ = false; // 伪装在线
     TransportType get_transport() const override {
         return account_.transport_type;
     }

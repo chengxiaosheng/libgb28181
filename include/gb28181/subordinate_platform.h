@@ -294,6 +294,14 @@ public:
      */
     virtual std::shared_ptr<SubscribeRequest>
     subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) = 0;
+
+    /**
+     * 配置在线伪装
+     * @param register_time 注册时间
+     * @param keepalive_time 心跳时间
+     * @remark 如果程序异常崩溃或重启 在启动时执行此函数可避免长时间的注册等待。
+     */
+    virtual void camouflage_online(uint64_t register_time, uint64_t keepalive_time) = 0;
 };
 } // namespace gb28181
 

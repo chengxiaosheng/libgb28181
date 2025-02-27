@@ -403,8 +403,8 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
 InviteRequestImpl::InviteRequestImpl(
     const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp)
     : InviteRequest()
-    , platform_helper_(platform)
-    , local_sdp_(sdp) {
+    , local_sdp_(sdp)
+    , platform_helper_(platform) {
     TraceL << "InviteRequestImpl::InviteRequestImpl()";
 }
 InviteRequestImpl::~InviteRequestImpl() {
@@ -428,6 +428,10 @@ void InviteRequestImpl::to_invite_request(
     set_message_header(uac_invite_transaction_.get());
     set_x_preferred_path(uac_invite_transaction_.get(), preferred_path_);
     set_message_content_type(uac_invite_transaction_.get(), SipContentType::SipContentType_SDP);
+    // 自动生成ssrc
+    if (local_sdp_->media().front().ssrc == 0) {
+        platform->get_sip_server()->make_ssrc(local_sdp_->session().sessionType == SessionType::PLAYBACK || local_sdp_->session().sessionType == SessionType::DOWNLOAD);
+    }
     std::string sdp_str = local_sdp_->generate();
     if (sdp_str.empty()) {
         rcb(false, "No local sdp description", nullptr);

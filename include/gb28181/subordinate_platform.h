@@ -2,32 +2,25 @@
 #define gb28181_include_gb28181_SUBORDINATE_PLATFORM_H
 #include "gb28181/type_define.h"
 #include "request/request_proxy.h"
+#include "request/subscribe_request.h"
 
 #include <functional>
 namespace gb28181 {
 class SdpDescription;
 class InviteRequest;
 class DeviceControlRequestMessage_TargetTrack;
-}
-namespace gb28181 {
 class DeviceControlRequestMessage_DeviceUpgrade;
-}
-namespace gb28181 {
 class DeviceControlRequestMessage_PtzPreciseCtrl;
-}
-namespace gb28181 {
 class DeviceControlRequestMessage_HomePosition;
-}
-namespace gb28181 {
 class RecordInfoRequestMessage;
-}
-namespace gb28181 {
 class DeviceInfoMessageRequest;
-}
-namespace gb28181 {
+class LocalServer;
 class SubordinatePlatform {
 public:
     virtual ~SubordinatePlatform() = default;
+    /**
+     * 关闭平台
+     */
     virtual void shutdown() = 0;
     /**
      * @brief  获取账户信息
@@ -35,8 +28,17 @@ public:
      */
     virtual const subordinate_account &account() const = 0;
 
+    /**
+     * 设置平台编码
+     * @param encoding
+     */
     virtual void set_encoding(CharEncodingType encoding) = 0;
 
+    /**
+     * 获取本地平台
+     * @return
+     */
+    virtual std::shared_ptr<LocalServer> get_local_server() const = 0;
     /**
      * A.2.4.2 设备状态查询请求
      * @param device_id
@@ -284,7 +286,8 @@ public:
      * @param sdp
      * @return
      */
-    virtual std::shared_ptr<InviteRequest> invite(const std::shared_ptr<SdpDescription> &sdp) = 0;
+    virtual std::shared_ptr<InviteRequest>
+    invite(const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id) = 0;
 
     /**
      * 创建一个订阅请求

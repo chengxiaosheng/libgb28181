@@ -30,7 +30,7 @@ class InviteRequestImpl
     , public std::enable_shared_from_this<InviteRequestImpl> {
 public:
     InviteRequestImpl() = default;
-    InviteRequestImpl(const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp);
+    InviteRequestImpl(const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id);
     ~InviteRequestImpl() override;
     void
     to_invite_request(std::function<void(bool, std::string, const std::shared_ptr<SdpDescription> &)> rcb) override;
@@ -56,6 +56,8 @@ public:
     void to_play(const BackPlayControlResponseCallback &rcb) override;
     void to_teardown(const std::string& reason) override;
     void to_seek_scale(std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb) override;
+
+    const std::string &device_id() const override { return device_id_; }
 
 private:
     void set_status(INVITE_STATUS_TYPE status, std::string error);
@@ -92,6 +94,7 @@ private:
     std::weak_ptr<PlatformHelper> platform_helper_;
     std::shared_ptr<sip_dialog_t> invite_dialog_;
     std::shared_ptr<sip_uac_transaction_t> uac_invite_transaction_;
+    std::string device_id_;
     uint64_t invite_time_ { 0 };
     uint64_t ack_time_ { 0 };
     uint64_t close_time_ { 0 };

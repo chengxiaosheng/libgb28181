@@ -11,13 +11,7 @@
 
 namespace gb28181 {
 class SubordinatePlatform;
-}
-namespace gb28181 {
 class SuperPlatform;
-}
-namespace gb28181 {
-class SipServer;
-
 class LocalServer {
 public:
     using subordinate_account_callback = std::function<void(

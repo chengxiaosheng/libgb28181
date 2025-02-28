@@ -401,7 +401,7 @@ public:
         FI_IrisIn = (0x01 << 6) | (0x01 << 2), // 光圈放大
         FI_FocusOut = (0x01 << 6) | (0x01 << 1), // 聚焦近
         FI_FocusIn = (0x01 << 6) | (0x01 << 0), // 聚焦远
-        Fi_Close = (0x01 << 6), // 停止镜头FI的所有动作
+        FI_Close = (0x01 << 6), // 停止镜头FI的所有动作
     };
     enum PTZ_PRESET_TYPE : uint8_t {
         PRESET_SetPreset = (0x01 << 7) | 0x01, // 设置预置位

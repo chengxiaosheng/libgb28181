@@ -35,7 +35,7 @@ public:
      * 回放控制的结果回调
      * @param PlaybackControlResponse 回放控制的结果
      */
-    using BackPlayControlResponseCallback = std::function<void(bool,std::string, PlaybackControlResponse)>;
+    using BackPlayControlResponseCallback = std::function<void(bool, std::string, PlaybackControlResponse)>;
     /**
      * 回放控制请求回调
      * @param PlaybackControl 请求信息
@@ -53,7 +53,9 @@ public:
 
     virtual ~InviteRequest() = default;
     static std::shared_ptr<InviteRequest> new_invite_request(
-        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp);
+        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id);
+    static std::shared_ptr<InviteRequest>
+    new_invite_request(const std::shared_ptr<SuperPlatform> &platform, const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id);
 
     virtual void to_invite_request(std::function<void(bool, std::string, const std::shared_ptr<SdpDescription> &)> rcb)
         = 0;
@@ -73,10 +75,10 @@ public:
     virtual void to_teardown(const std::string &reason) = 0;
     virtual void to_pause(const std::function<void(bool, std::string)> &rcb) = 0;
     virtual void to_play(const BackPlayControlResponseCallback &rcb) = 0;
-    virtual void to_seek_scale(
-        std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb)
+    virtual void
+    to_seek_scale(std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb)
         = 0;
-
+    virtual const std::string& device_id() const = 0;
 };
 } // namespace gb28181
 

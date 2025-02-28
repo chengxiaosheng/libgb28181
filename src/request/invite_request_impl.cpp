@@ -29,8 +29,15 @@ static std::unordered_map<
 static std::mutex info_request_map_mutex_;
 
 std::shared_ptr<InviteRequest> InviteRequest::new_invite_request(
-    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp) {
-    return std::make_shared<InviteRequestImpl>(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), sdp);
+    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp,
+    const std::string &device_id) {
+    return std::make_shared<InviteRequestImpl>(
+        std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), sdp, device_id);
+}
+std::shared_ptr<InviteRequest> InviteRequest::new_invite_request(
+    const std::shared_ptr<SuperPlatform> &platform, const std::shared_ptr<SdpDescription> &sdp,
+    const std::string &device_id) {
+    return std::make_shared<InviteRequestImpl>(std::dynamic_pointer_cast<SuperPlatformImpl>(platform), sdp, device_id);
 }
 
 std::shared_ptr<InviteRequestImpl> InviteRequestImpl::get_invite(void *p) {
@@ -369,6 +376,7 @@ int InviteRequestImpl::on_invite_reply(
 
 // todo: 此函数需要进一步完善
 void InviteRequestImpl::to_bye(const std::string &reason) {
+    if (status_ > INVITE_STATUS_TYPE::ack) return;
     auto platform = platform_helper_.lock();
     if (!platform) {
         set_status(INVITE_STATUS_TYPE::bye, reason);
@@ -401,10 +409,12 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
 }
 
 InviteRequestImpl::InviteRequestImpl(
-    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp)
+    const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp,
+    const std::string &device_id)
     : InviteRequest()
     , local_sdp_(sdp)
-    , platform_helper_(platform) {
+    , platform_helper_(platform)
+    , device_id_(device_id) {
     TraceL << "InviteRequestImpl::InviteRequestImpl()";
 }
 InviteRequestImpl::~InviteRequestImpl() {
@@ -418,6 +428,7 @@ void InviteRequestImpl::to_invite_request(
     auto platform = platform_helper_.lock();
     auto from = platform->get_from_uri();
     auto to = platform->get_to_uri();
+    toolkit::replace(to, platform->sip_account().platform_id, device_id_);
     uac_invite_transaction_.reset(
         sip_uac_invite(platform->get_sip_agent(), from.c_str(), to.c_str(), InviteRequestImpl::on_invite_reply, this),
         [](sip_uac_transaction_t *t) {
@@ -430,7 +441,9 @@ void InviteRequestImpl::to_invite_request(
     set_message_content_type(uac_invite_transaction_.get(), SipContentType::SipContentType_SDP);
     // 自动生成ssrc
     if (local_sdp_->media().front().ssrc == 0) {
-        platform->get_sip_server()->make_ssrc(local_sdp_->session().sessionType == SessionType::PLAYBACK || local_sdp_->session().sessionType == SessionType::DOWNLOAD);
+        platform->get_sip_server()->make_ssrc(
+            local_sdp_->session().sessionType == SessionType::PLAYBACK
+            || local_sdp_->session().sessionType == SessionType::DOWNLOAD);
     }
     std::string sdp_str = local_sdp_->generate();
     if (sdp_str.empty()) {
@@ -506,6 +519,7 @@ int InviteRequestImpl::on_recv_invite(
     invite_ptr->invite_time_ = toolkit::getCurrentMicrosecond(true);
     invite_ptr->set_status(INVITE_STATUS_TYPE::invite, "");
     invite_ptr->preferred_path_ = get_x_preferred_path(req.get());
+    invite_ptr->device_id_ = get_to_uri(req.get());
     // 发送 临时回复
     sip_uas_reply(transaction.get(), 100, nullptr, 0, sip_session.get());
     platform_ptr->on_invite(

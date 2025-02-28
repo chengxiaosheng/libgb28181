@@ -43,6 +43,9 @@ public:
     void shutdown() override;
 
     void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }
+
+    std::shared_ptr<LocalServer> get_local_server() const override;
+
     CharEncodingType get_encoding() const override { return account_.encoding; }
 
     std::shared_ptr<SubordinatePlatformImpl> shared_from_this() {
@@ -52,7 +55,7 @@ public:
 
     const subordinate_account &account() const override { return account_; }
 
-    platform_account &sip_account()  override { return *(platform_account *)&account_; }
+    platform_account &sip_account() override { return *(platform_account *)&account_; }
 
     void set_status(PlatformStatusType status, std::string error);
 
@@ -63,7 +66,6 @@ public:
     void device_config(
         const std::string &device_id, std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> &&config,
         std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
-
 
     int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
     void on_device_info(
@@ -138,7 +140,8 @@ public:
         const std::shared_ptr<DeviceControlRequestMessage_TargetTrack> &req,
         std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
 
-    std::shared_ptr<InviteRequest> invite(const std::shared_ptr<SdpDescription> &sdp) override;
+    std::shared_ptr<InviteRequest>
+    invite(const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id) override;
 
     std::shared_ptr<SubscribeRequest>
     subscribe(const std::shared_ptr<MessageBase> &request, SubscribeRequest::subscribe_info info) override;
@@ -146,11 +149,8 @@ public:
     void camouflage_online(uint64_t register_time, uint64_t keepalive_time) override;
 
 private:
-
     bool camouflage_online_ = false; // 伪装在线
-    TransportType get_transport() const override {
-        return account_.transport_type;
-    }
+    TransportType get_transport() const override { return account_.transport_type; }
 
     subordinate_account account_; // 账户信息
     // 心跳检测

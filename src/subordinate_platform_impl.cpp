@@ -45,6 +45,9 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
 SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
 
 void SubordinatePlatformImpl::shutdown() {}
+std::shared_ptr<LocalServer> SubordinatePlatformImpl::get_local_server() const {
+    return local_server_weak_.lock();
+}
 
 void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string error) {
     // 当为伪装在线时， 下次状态变更不论是否在线都需要广播
@@ -394,8 +397,9 @@ void SubordinatePlatformImpl::device_config(
     RequestProxy::newRequestProxy(shared_from_this(), request)->send(std::move(rcb));
 }
 
-std::shared_ptr<InviteRequest> SubordinatePlatformImpl::invite(const std::shared_ptr<SdpDescription> &sdp) {
-    return InviteRequest::new_invite_request(shared_from_this(), sdp);
+std::shared_ptr<InviteRequest>
+SubordinatePlatformImpl::invite(const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id) {
+    return InviteRequest::new_invite_request(shared_from_this(), sdp, device_id);
 }
 
 std::shared_ptr<SubscribeRequest>

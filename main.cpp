@@ -90,7 +90,7 @@ int main() {
 
         sdp_ptr->media().emplace_back(std::move(media));
 
-       auto invite_request = InviteRequest::new_invite_request(platform, sdp_ptr);
+       auto invite_request = InviteRequest::new_invite_request(platform, sdp_ptr, platform->account().platform_id);
         invite_request->to_invite_request([invite_request](bool ret, std::string err, const std::shared_ptr<SdpDescription> &remote_sdp) {
             InfoL << "invite request ret = " << ret << ", err = " << err ;
             if (remote_sdp) {

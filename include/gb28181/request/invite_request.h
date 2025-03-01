@@ -2,7 +2,12 @@
 #define gb28181_include_gb28181_request_INVATE_REQUEST_H
 #include "sdp.h"
 
+namespace toolkit {
+class Session;
+}
 namespace gb28181 {
+class SuperPlatform;
+class SubordinatePlatform;
 enum class INVITE_STATUS_TYPE { invite = 0, trying, ack, bye, cancel, failed };
 struct PlaybackState {
     float scale = 1.0; // 播放倍速
@@ -79,6 +84,13 @@ public:
     to_seek_scale(std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb)
         = 0;
     virtual const std::string& device_id() const = 0;
+
+    /**
+     * 获取网络交互的session
+     * @remark zlm 查找流可能需要
+     * - 其实伪造一个session也时可以的，此函数意义不大
+     */
+    virtual std::shared_ptr<toolkit::Session> get_connection_session() = 0;
 };
 } // namespace gb28181
 

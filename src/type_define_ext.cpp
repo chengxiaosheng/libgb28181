@@ -633,8 +633,8 @@ bool from_xml_element(double &val, const tinyxml2::XMLElement *root, const char 
 bool from_xml_element(std::string &val, const tinyxml2::XMLElement *root, const char *key) {
     if (root == nullptr)
         return false;
-    if (auto ele = (key != nullptr && key[0] != '\0') ? root->FirstChildElement(key) : root) {
-        val = ele->GetText();
+    if (auto ele = (key != nullptr && key[0] != '\0') ? root->FirstChildElement(key) : root; ele && ele->GetText()) {
+        val =   ele->GetText();
         return true;
     }
     return false;

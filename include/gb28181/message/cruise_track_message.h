@@ -53,7 +53,7 @@ private:
     std::vector<CruiseTrackListItemType> cruise_track_list_;
 };
 
-class CruiseTrackResponseMessage : public MessageBase {
+class CruiseTrackResponseMessage : public ListMessageBase {
 public:
     explicit CruiseTrackResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -66,9 +66,9 @@ public:
     explicit CruiseTrackResponseMessage(const std::string &device_id, int sum_num, std::vector<CruisePointType> &&list);
 
     ResultType &result() { return result_; }
-    int32_t &sum_num() { return sum_num_; }
     std::string &name() { return name_; }
     std::vector<CruisePointType> &points() { return cruise_points_; }
+    int32_t num() override { return  cruise_points_.size();}
 
 protected:
     bool load_detail() override;
@@ -76,7 +76,6 @@ protected:
 
 private:
     ResultType result_ { ResultType::invalid };
-    int32_t sum_num_ { 0 };
     std::string name_;
     std::vector<CruisePointType> cruise_points_;
 };

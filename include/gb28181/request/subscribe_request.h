@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <string>
+#include <memory>
 
 namespace gb28181 {
 class SubordinatePlatform;

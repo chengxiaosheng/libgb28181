@@ -4,9 +4,8 @@
 namespace gb28181 {
 class RequestCatalogImpl final : public RequestProxyImpl {
 public:
-    RequestCatalogImpl(
-        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request)
-        : RequestProxyImpl(platform, request, RequestType::MultipleResponses) {}
+    RequestCatalogImpl(const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request);
+
   protected:
   int on_response(const std::shared_ptr<MessageBase> &response) override;
 };

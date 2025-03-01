@@ -291,6 +291,9 @@ void InviteRequestImpl::to_seek_scale(
     });
 }
 
+std::shared_ptr<toolkit::Session> InviteRequestImpl::get_connection_session() {
+    return invite_session_.lock();
+}
 void InviteRequestImpl::set_status(INVITE_STATUS_TYPE status, std::string error) {
     error_ = error;
     bool status_changed = status_ != status;
@@ -452,9 +455,10 @@ void InviteRequestImpl::to_invite_request(
     }
     rcb_ = std::move(rcb);
     add_invite();
-    platform->uac_send(
-        uac_invite_transaction_, sdp_str.c_str(), [rcb, this_ptr = shared_from_this()](bool ret, std::string err) {
+    platform->uas_send2(
+        uac_invite_transaction_, sdp_str.c_str(), [rcb, this_ptr = shared_from_this()](bool ret, std::string err, const std::shared_ptr<SipSession> &session) {
             if (!ret && this_ptr->rcb_) {
+                this_ptr->invite_session_ = session;
                 this_ptr->set_status(INVITE_STATUS_TYPE::failed, err);
                 this_ptr->rcb_(ret, err, nullptr);
                 this_ptr->rcb_ = {};
@@ -520,6 +524,7 @@ int InviteRequestImpl::on_recv_invite(
     invite_ptr->set_status(INVITE_STATUS_TYPE::invite, "");
     invite_ptr->preferred_path_ = get_x_preferred_path(req.get());
     invite_ptr->device_id_ = get_to_uri(req.get());
+    invite_ptr->invite_session_ = sip_session;
     // 发送 临时回复
     sip_uas_reply(transaction.get(), 100, nullptr, 0, sip_session.get());
     platform_ptr->on_invite(

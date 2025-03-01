@@ -15,7 +15,7 @@ file(GLOB GB28181_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/**/*.cpp
 )
-target_sources(${PROJECT_NAME} PRIVATE ${GB28181_SRC} main.cpp)
+target_sources(${PROJECT_NAME} PRIVATE ${GB28181_SRC})
 target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -25,11 +25,11 @@ target_include_directories(${PROJECT_NAME}
 )
 add_subdirectory(3rdpart)
 target_link_libraries(${PROJECT_NAME} PRIVATE sip)
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DENABLE_OPENSSL)
 
 find_package(OpenSSL 1.1 REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::SSL)
 target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::Crypto)
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DENABLE_OPENSSL)
 
 find_package(Iconv REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Iconv::Iconv)
@@ -58,8 +58,8 @@ if (NOT TARGET tinyxml2)
 endif ()
 target_link_libraries(${PROJECT_NAME} PUBLIC tinyxml2)
 
-
-add_executable(gb28181-exe main.cpp)
-target_link_libraries(gb28181-exe PRIVATE ${PROJECT_NAME})
-target_include_directories(gb28181-exe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+#
+#add_executable(gb28181-exe main.cpp)
+#target_link_libraries(gb28181-exe PRIVATE ${PROJECT_NAME})
+#target_include_directories(gb28181-exe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

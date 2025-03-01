@@ -43,6 +43,34 @@ private:
     std::optional<double> vertical_field_angle_;
     std::optional<double> max_view_distance_;
 };
+
+class PTZPositionNotifyMessage final : public MessageBase {
+public:
+    explicit PTZPositionNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
+        : MessageBase(xml) {}
+    explicit PTZPositionNotifyMessage(MessageBase &&messageBase)
+        : MessageBase(std::move(messageBase)) {}
+    explicit PTZPositionNotifyMessage(const std::string &device_id, const std::string &reason = "");
+
+    std::optional<double> &pan() { return pan_; }
+    std::optional<double> &tilt() { return tilt_; }
+    std::optional<double> &zoom() { return zoom_; }
+    std::optional<double> &horizontal_field_angle() { return horizontal_field_angle_; }
+    std::optional<double> &vertical_field_angle() { return vertical_field_angle_; }
+    std::optional<double> &max_view_distance() { return max_view_distance_; }
+
+protected:
+    bool load_detail() override;
+    bool parse_detail() override;
+
+private:
+    std::optional<double> pan_;
+    std::optional<double> tilt_;
+    std::optional<double> zoom_;
+    std::optional<double> horizontal_field_angle_;
+    std::optional<double> vertical_field_angle_;
+    std::optional<double> max_view_distance_;
+};
 }; // namespace gb28181
 
 #endif // gb28181_include_gb28181_message_PTZ_POSITION_MESSAGE_H

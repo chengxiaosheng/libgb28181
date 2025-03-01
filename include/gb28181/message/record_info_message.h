@@ -146,7 +146,7 @@ private:
     std::optional<int8_t> stream_number_;
 };
 
-class RecordInfoResponseMessage final : public MessageBase {
+class RecordInfoResponseMessage final : public ListMessageBase {
 public:
     explicit RecordInfoResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -157,10 +157,6 @@ public:
         std::vector<std::string> &&extra_info = {});
     explicit RecordInfoResponseMessage(const std::string &device_id,int32_t sum_num, std::vector<ItemFileType> &&record_list);
 
-    /**
-     * 总数
-     */
-    int32_t &sum_num() { return sum_num_; }
 
     std::string &name() { return name_; }
     /**
@@ -172,12 +168,13 @@ public:
      */
     std::vector<std::string> &extra_info() { return extra_info_; }
 
+    int32_t num() override { return record_list_.size(); }
+
 protected:
     bool load_detail() override;
     bool parse_detail() override;
 
 private:
-    int32_t sum_num_ { 0 };
     std::string name_;
     std::vector<ItemFileType> record_list_;
     std::vector<std::string> extra_info_;

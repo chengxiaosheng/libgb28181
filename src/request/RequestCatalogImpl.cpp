@@ -1,13 +1,14 @@
 #include "RequestCatalogImpl.h"
+
+#include "subordinate_platform_impl.h"
 using namespace gb28181;
+RequestCatalogImpl::RequestCatalogImpl(
+    const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request)
+    : RequestProxyImpl(
+          std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), request, RequestType::MultipleResponses) {}
 int RequestCatalogImpl::on_response(const std::shared_ptr<MessageBase> &response) {
     return 0;
 }
-
-
-
-
-
 
 /**********************************************************************************************************
 文件名称:   RequestCatalogImpl.cpp

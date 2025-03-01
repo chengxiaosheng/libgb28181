@@ -130,7 +130,7 @@ void PlatformHelper::remove_request_proxy(int32_t sn) {
 }
 
 void PlatformHelper::uac_send(
-    std::shared_ptr<sip_uac_transaction_t> transaction, std::string &&payload,
+    const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string &&payload,
     const std::function<void(bool, std::string)> &rcb, bool force_tcp) {
     get_session(
         [transaction, payload = std::move(payload),
@@ -147,6 +147,25 @@ void PlatformHelper::uac_send(
             rcb(true, {});
         },
         force_tcp);
+}
+void PlatformHelper::uas_send2(
+    const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string &&payload,
+    const std::function<void(bool, std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp) {
+    get_session(
+    [transaction, payload = std::move(payload),
+     rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+        if (e) {
+            return rcb(false, e.what(), session);
+        }
+        if (0
+            != sip_uac_send(
+                transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
+                session.get())) {
+            return rcb(false, "failed to send request, call sip_uac_send failed", session);
+        }
+        rcb(true, {}, session);
+    },
+    force_tcp);
 }
 void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session) {
     if (session->is_udp()) {

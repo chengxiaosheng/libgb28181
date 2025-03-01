@@ -24,7 +24,7 @@ private:
     std::string end_time_;
 };
 
-class CatalogResponseMessage : public gb28181::MessageBase {
+class CatalogResponseMessage : public gb28181::ListMessageBase {
 public:
     explicit CatalogResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -33,16 +33,17 @@ public:
     explicit CatalogResponseMessage(
         const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra = {});
 
-    int sum_num() { return sum_num_; }
     std::vector<ItemTypeInfo> &items() { return items_; }
     std::vector<std::string> &extra_info() { return extra_; }
+    int32_t num() override {
+        return items_.size();
+    }
 
 protected:
     bool load_detail() override;
     bool parse_detail() override;
 
 private:
-    int32_t sum_num_ { 0 };
     std::vector<ItemTypeInfo> items_;
     std::vector<std::string> extra_;
 };

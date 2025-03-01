@@ -58,6 +58,14 @@ constexpr const char kEventSubordinatePlatformContactChanged[] = "kEventSubordin
 constexpr const char kEventSuperPlatformContactChanged[] = "kEventSuperPlatformContactChanged";
 #define kEventSuperPlatformContactChangedArgs std::shared_ptr<SuperPlatform> platform , const std::string& host,uint16_t port
 
+// 上级平台shutdown时 触发的事件， 用户收到这个事件后应该立即释放持有的平台智能指针
+constexpr const char kEventOnSuperPlatformShutdown[] = "kEventOnSuperPlatformShutdown";
+#define kEventOnSuperPlatformShutdownArgs std::shared_ptr<SuperPlatform> platform
+
+// 下级平台shutdown时 触发的事件， 用户收到这个事件后应该立即释放持有的平台智能指针
+constexpr const char kEventOnSubordinatePlatformShutdown[] = "kEventOnSubordinatePlatformShutdown";
+#define kEventOnSubordinatePlatformShutdownArgs std::shared_ptr<SubordinatePlatform> platform
+
 // 下级平台收到 告警通知
 constexpr const char kEventSubordinateNotifyAlarm[] = "kEventSubordinateNotifyAlarm";
 #define kEventSubordinateNotifyAlarmArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<AlarmNotifyMessage> message

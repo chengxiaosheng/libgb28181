@@ -59,6 +59,8 @@ public:
 
     const std::string &device_id() const override { return device_id_; }
 
+    std::shared_ptr<toolkit::Session> get_connection_session() override;
+
 private:
     void set_status(INVITE_STATUS_TYPE status, std::string error);
 
@@ -94,6 +96,7 @@ private:
     std::weak_ptr<PlatformHelper> platform_helper_;
     std::shared_ptr<sip_dialog_t> invite_dialog_;
     std::shared_ptr<sip_uac_transaction_t> uac_invite_transaction_;
+    std::weak_ptr<SipSession> invite_session_;
     std::string device_id_;
     uint64_t invite_time_ { 0 };
     uint64_t ack_time_ { 0 };

@@ -71,6 +71,7 @@ set(SIP_SRC
 add_library(sip STATIC ${SIP_SRC})
 target_link_libraries(sip PUBLIC ireader_sdk_lib)
 target_compile_definitions(sip PUBLIC -DSIP_REGISTER_WITH_USERINFO) # 基于GB/T 28181-2016 附录J 信令消息示范 J.1 注册信令消息示范 中描述 "J.1.1 Registersip:SIP服务器编码@目的域名或IP地址端口SIP/2.0" 注册头包含 SIP服务器编码
+target_compile_definitions(sip PUBLIC -DUDP_PACKET_SIZE=20480)
 target_include_directories(sip
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>

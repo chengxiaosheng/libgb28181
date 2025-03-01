@@ -71,10 +71,10 @@ RecordInfoResponseMessage::RecordInfoResponseMessage(
     const std::string &device_id, std::string name, int32_t sum_num, std::vector<ItemFileType> &&record_list,
     std::vector<std::string> &&extra_info)
     : MessageBase()
-    , sum_num_(sum_num)
     , name_(std::move(name))
     , record_list_(std::move(record_list))
     , extra_info_(std::move(extra_info)) {
+    sum_num_ = sum_num;
     device_id_ = device_id;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::RecordInfo;
@@ -82,8 +82,8 @@ RecordInfoResponseMessage::RecordInfoResponseMessage(
 RecordInfoResponseMessage::RecordInfoResponseMessage(
     const std::string &device_id, int32_t sum_num, std::vector<ItemFileType> &&record_list)
     : MessageBase()
-    , sum_num_(sum_num)
     , record_list_(std::move(record_list)) {
+    sum_num_ = sum_num;
     device_id_ = device_id;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::RecordInfo;

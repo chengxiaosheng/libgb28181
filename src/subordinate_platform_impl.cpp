@@ -26,6 +26,7 @@
 #include <sip-transport.h>
 
 using namespace gb28181;
+using namespace toolkit;
 
 SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, const std::shared_ptr<SipServer> &server)
     : SubordinatePlatform()
@@ -44,7 +45,9 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
 
 SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
 
-void SubordinatePlatformImpl::shutdown() {}
+void SubordinatePlatformImpl::shutdown() {
+    NOTICE_EMIT(kEventOnSubordinatePlatformShutdownArgs, Broadcast::kEventOnSubordinatePlatformShutdown, shared_from_this());
+}
 std::shared_ptr<LocalServer> SubordinatePlatformImpl::get_local_server() const {
     return local_server_weak_.lock();
 }

@@ -91,9 +91,9 @@ CruiseTrackResponseMessage::CruiseTrackResponseMessage(
     ResultType result, const std::string &reason)
     : MessageBase()
     , result_(result)
-    , sum_num_(sum_num)
     , name_(std::move(name))
     , cruise_points_(std::move(list)) {
+    sum_num_ = sum_num;
     device_id_ = device_id;
     reason_ = reason;
     root_ = MessageRootType::Response;
@@ -103,8 +103,8 @@ CruiseTrackResponseMessage::CruiseTrackResponseMessage(
     const std::string &device_id, int sum_num, std::vector<CruisePointType> &&list)
     : MessageBase()
     , result_(ResultType::OK)
-    , sum_num_(sum_num)
     , cruise_points_(std::move(list)) {
+    sum_num_ = sum_num;
     device_id_ = device_id;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::CruiseTrackQuery;

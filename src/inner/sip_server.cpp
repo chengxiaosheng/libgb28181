@@ -202,6 +202,7 @@ void SipServer::get_client_l(
         }
         return;
     }
+    if (!tcp_server_) return cb(toolkit::SockException(Err_other, "no tcp server"), nullptr);
     auto poller = EventPollerPool::Instance().getPoller();
     auto sock_ptr = Socket::createSocket(poller, false);
     auto session = std::make_shared<SipSession>(sock_ptr);
@@ -210,7 +211,7 @@ void SipServer::get_client_l(
     // tcp 下sipSession 模拟tcpclient 操作, 尝试往对端建立连接
     session->startConnect(
         SockUtil::inet_ntoa((const sockaddr *)&addr), SockUtil::inet_port((const sockaddr *)&addr),
-        tcp_server_->getPort(), local_ip_,
+        account_.port, local_ip_,
         [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
 }
 

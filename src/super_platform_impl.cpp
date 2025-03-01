@@ -30,6 +30,7 @@
 #include <sip-uas.h>
 
 using namespace gb28181;
+using namespace toolkit;
 
 static std::unordered_map<void *, std::shared_ptr<SuperPlatformImpl>> platform_registry_map_;
 static std::shared_mutex platform_registry_mutex_;
@@ -73,6 +74,7 @@ void SuperPlatformImpl::shutdown() {
     if (!running_.load()) {
         return;
     }
+    NOTICE_EMIT(kEventOnSuperPlatformShutdownArgs, Broadcast::kEventOnSuperPlatformShutdown, shared_from_this());
     running_.store(false);
     if (account_.plat_status.status == PlatformStatusType::online) {
         to_register(0);

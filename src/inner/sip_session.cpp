@@ -67,7 +67,7 @@ void SipSession::startConnect(
                 cb(err);
             }
         },
-        timeout_sec, local_ip, local_port);
+        timeout_sec);
 }
 
 void SipSession::onSockConnect(const toolkit::SockException &ex) {
@@ -221,6 +221,12 @@ void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
             WarnL << "input failed";
         }
         _wait_type = 0;
+        // 数据有余量
+        if (len) {
+            auto temp_buffer = BufferRaw::create();
+            temp_buffer->assign(buffer->data() + buffer->size() - len, len);
+            onRecv(buffer);
+        }
     } else if (ret < 0) {
         _wait_type = 0;
         WarnP(this)  << ", can't parse sip message :" << buffer->data();

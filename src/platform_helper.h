@@ -67,7 +67,9 @@ public:
     virtual int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual void on_invite(const std::shared_ptr<InviteRequest> &invite_request, std::function<void(int, std::shared_ptr<SdpDescription>)> && resp) = 0;
 
-    void uac_send(std::shared_ptr<sip_uac_transaction_t> transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool force_tcp = false);
+    void uac_send(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool force_tcp = false);
+
+    void uas_send2(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp = false);
 
     void set_tcp_session(const std::shared_ptr<SipSession> &session);
 

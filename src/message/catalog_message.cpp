@@ -37,10 +37,10 @@ bool CatalogRequestMessage::parse_detail() {
 CatalogResponseMessage::CatalogResponseMessage(
     const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra)
     : MessageBase()
-    , sum_num_(sum_num)
     , items_(std::move(items))
     , extra_(std::move(extra)) {
     device_id_ = device_id;
+    sum_num_ = sum_num;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::Catalog;
 }
@@ -116,7 +116,7 @@ bool CatalogResponseMessage::load_detail() {
                     auto detail_ele = item_ele->FirstChildElement();
                     while (detail_ele) {
                         if (auto detail_it = sub_elements_map_.find(detail_ele->Name()); detail_it != sub_elements_map_.end()) {
-                            detail_it->second(detail, item_ele);
+                            detail_it->second(detail, detail_ele);
                         }
                         detail_ele = detail_ele->NextSiblingElement();
                     }
@@ -129,6 +129,7 @@ bool CatalogResponseMessage::load_detail() {
                 item_ele = item_ele->NextSiblingElement();
             }
             items_.push_back(std::move(item_val));
+            item = item->NextSiblingElement("Item");
         }
     }
 

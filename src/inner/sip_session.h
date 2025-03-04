@@ -44,6 +44,9 @@ public:
     void set_local_port(uint16_t port) { local_port_ = port; }
 
 private:
+    void handle_recv();
+
+private:
     bool _is_udp = false;
     int8_t _wait_type { 0 };
     toolkit::Ticker _ticker;
@@ -59,6 +62,8 @@ private:
     std::function<void()> _on_manager;
     std::function<void(const toolkit::SockException &)> _on_error;
     std::shared_ptr<toolkit::Ticker> ticker_; // 计时器
+    std::deque<toolkit::Buffer::Ptr> _recv_buffers;
+    std::mutex _recv_buffers_mutex;
 };
 
 } // namespace gb28181

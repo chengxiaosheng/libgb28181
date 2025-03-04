@@ -4,7 +4,7 @@
 #include "gb28181/message/message_base.h"
 #include "gb28181/message/mobile_position_request_message.h"
 #include "gb28181/message/ptz_position_message.h"
-#include "gb28181/sip_common.h"
+#include "gb28181/sip_event.h"
 #include "inner/sip_common.h"
 #include "inner/sip_server.h"
 #include "inner/sip_session.h"

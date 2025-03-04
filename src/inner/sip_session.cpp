@@ -1,7 +1,8 @@
 #include "sip_session.h"
 #include "http-parser.h"
+#include "sip_common.h"
 
-#include <gb28181/sip_common.h>
+#include <gb28181/sip_event.h>
 #include <sip-agent.h>
 #include <sip-message.h>
 #include <sip-transport.h>
@@ -196,10 +197,18 @@ std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_M
     return ss.str();
 }
 
-void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
-    TraceL << "recv " << buffer->size() << " bytes" << ", local: " << get_local_ip() << ", remote: " << get_peer_ip();
-    ticker_->resetTime();
-    if (buffer->size() == 0) return;
+void SipSession::handle_recv() {
+    std::shared_ptr<Buffer> buffer;
+    {
+        std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
+        if (_recv_buffers.empty()) return;
+        buffer = _recv_buffers.front();
+        _recv_buffers.pop_front();
+    }
+    if (buffer->size() == 0) {
+        return handle_recv();
+    }
+
     if (_wait_type == 0) {
         if (strncasecmp("SIP", buffer->data(), 3) == 0) {
             http_parser_reset(_sip_parse.get(), HTTP_PARSER_RESPONSE);
@@ -225,12 +234,29 @@ void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
         if (len) {
             auto temp_buffer = BufferRaw::create();
             temp_buffer->assign(buffer->data() + buffer->size() - len, len);
-            onRecv(buffer);
+            std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
+            _recv_buffers.insert(_recv_buffers.begin(), temp_buffer);
         }
     } else if (ret < 0) {
         _wait_type = 0;
         WarnP(this)  << ", can't parse sip message :" << buffer->data();
     }
+    handle_recv();
+}
+
+
+void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
+    TraceL << "recv " << buffer->size() << " bytes" << ", local: " << get_local_ip() << ", remote: " << get_peer_ip();
+    ticker_->resetTime();
+    {
+        std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
+        _recv_buffers.push_back(buffer);
+    }
+    getPoller()->async([weak_this = weak_from_this()]() {
+        if (auto this_ptr = std::dynamic_pointer_cast<SipSession>(weak_this.lock())) {
+            this_ptr->handle_recv();
+        }
+    }, false);
 }
 
 void SipSession::onError(const toolkit::SockException &err) {

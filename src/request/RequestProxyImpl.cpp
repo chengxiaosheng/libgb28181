@@ -21,7 +21,7 @@
 #include <gb28181/message/ptz_position_message.h>
 #include <gb28181/message/record_info_message.h>
 #include <gb28181/message/sd_card_status_message.h>
-#include <gb28181/sip_common.h>
+#include <gb28181/sip_event.h>
 #include <gb28181/type_define_ext.h>
 #include <inner/sip_common.h>
 #include <inner/sip_session.h>

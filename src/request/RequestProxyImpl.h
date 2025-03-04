@@ -89,6 +89,8 @@ private:
     static int on_recv_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code);
     friend class PlatformHelper;
 };
+std::ostream &operator<<(std::ostream &os, const RequestProxyImpl &proxy);
+
 } // namespace gb28181
 
 #endif // gb28181_src_request_REQUESTPROXYIMPL_H

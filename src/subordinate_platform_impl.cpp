@@ -10,6 +10,7 @@
 #include "gb28181/message/record_info_message.h"
 #include "gb28181/message/sd_card_status_message.h"
 #include "gb28181/request/subscribe_request.h"
+#include "inner/sip_common.h"
 #include "request/invite_request_impl.h"
 
 #include <Util/NoticeCenter.h>
@@ -19,11 +20,13 @@
 #include <gb28181/message/device_status_message.h>
 #include <gb28181/message/keepalive_message.h>
 #include <gb28181/message/preset_message.h>
-#include <gb28181/sip_common.h>
+#include <gb28181/sip_event.h>
 #include <inner/sip_server.h>
 #include <inner/sip_session.h>
 #include <request/RequestProxyImpl.h>
 #include <sip-transport.h>
+#include <sip-uas.h>
+
 
 using namespace gb28181;
 using namespace toolkit;
@@ -43,7 +46,76 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
         + std::to_string(account_.local_port);
 }
 
-SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
+SubordinatePlatformImpl::~SubordinatePlatformImpl() {
+
+}
+int SubordinatePlatformImpl::on_recv_register(
+    const std::shared_ptr<SipSession> &session, const std::shared_ptr<sip_uas_transaction_t> &transaction,
+    const std::shared_ptr<sip_message_t> &req, const std::string &user, const std::string &location, int expires) {
+
+    auto sip_server = session->getSipServer();
+    if (!sip_server) {
+        return sip_uas_reply(transaction.get(), 403, nullptr, 0, session.get());
+    }
+    if (auto platform
+        = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(user))) {
+        // 将session 添加到平台
+        if (!session->is_udp()) {
+            platform->set_tcp_session(session);
+        }
+        if (expires == 0) {
+            platform->set_status(PlatformStatusType::offline, "logout");
+            return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
+        }
+        auto &account = platform->account();
+        if (account.auth_type == SipAuthType::none || verify_authorization(req.get(), user, account.password)) {
+            platform->set_status(PlatformStatusType::online, {});
+            set_message_date(transaction.get());
+            set_message_expires(transaction.get(), expires);
+            return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
+        }
+        set_message_www_authenticate(transaction.get(), sip_server->get_account().domain);
+        return sip_uas_reply(transaction.get(), 401, nullptr, 0, session.get());
+    }
+    if (sip_server->allow_auto_register()) {
+        if (expires == 0) {
+            return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
+        }
+        const auto &server_account = sip_server->get_account();
+        if (server_account.auth_type == SipAuthType::none
+            || verify_authorization(req.get(), user, server_account.password)) {
+            // 构建一个新的平台
+            subordinate_account account;
+            account.name = user;
+            account.platform_id = user;
+            account.domain = user.substr(0, 10);
+            account.host = session->get_peer_ip();
+            account.port = session->get_peer_port();
+            account.password = server_account.password;
+            account.auth_type = server_account.auth_type;
+            account.transport_type = session->is_udp() ? TransportType::udp : TransportType::tcp;
+            auto account_ptr = std::make_shared<subordinate_account>(std::move(account));
+            sip_server->new_subordinate_account(
+                account_ptr, [session, transaction, expires](std::shared_ptr<SubordinatePlatformImpl> platform) {
+                    if (platform) {
+                        if (session->is_udp()) {
+                            platform->set_tcp_session(session);
+                        }
+                        platform->set_status(PlatformStatusType::online, {});
+                        set_message_date(transaction.get());
+                        set_message_expires(transaction.get(), expires);
+                        return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
+                    }
+                    return sip_uas_reply(transaction.get(), 403, nullptr, 0, session.get());
+                });
+            return sip_ok;
+        }
+        set_message_www_authenticate(transaction.get(), server_account.domain);
+        return sip_uas_reply(transaction.get(), 401, nullptr, 0, session.get());
+    }
+    return sip_uas_reply(transaction.get(), 403, nullptr, 0, session.get());
+
+}
 
 void SubordinatePlatformImpl::shutdown() {
     NOTICE_EMIT(kEventOnSubordinatePlatformShutdownArgs, Broadcast::kEventOnSubordinatePlatformShutdown, shared_from_this());

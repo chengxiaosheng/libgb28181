@@ -1,4 +1,3 @@
-#include "gb28181/sip_common.h"
 #include "sip-agent.h"
 #include "subordinate_platform_impl.h"
 #include <Thread/WorkThreadPool.h>
@@ -15,7 +14,6 @@
 #include "sip_common.h"
 
 #include <gb28181/super_platform.h>
-#include <handler/uas_message_handler.h>
 #include <sip-message.h>
 #include <super_platform_impl.h>
 
@@ -43,7 +41,7 @@ SipServer::SipServer(local_account account)
     if (!account_.host.empty()) {
         local_ip_ = account_.host;
     }
-    tinyxml2::XMLUtil::ToUnsigned(account_.platform_id.substr(3,5).data(), &server_ssrc_domain_);
+    tinyxml2::XMLUtil::ToUnsigned(account_.platform_id.substr(3, 5).data(), &server_ssrc_domain_);
     server_ssrc_sn_.try_emplace(server_ssrc_domain_, 1);
     init_agent();
 }
@@ -143,19 +141,17 @@ void SipServer::new_subordinate_account(
     }
 }
 uint32_t SipServer::make_ssrc(bool is_playback) {
-    auto& counter = server_ssrc_sn_[server_ssrc_domain_];
+    auto &counter = server_ssrc_sn_[server_ssrc_domain_];
     int32_t old_value = counter.load(std::memory_order_relaxed);
     int32_t desired;
     do {
         desired = (old_value >= 9999) ? 1 : old_value + 1;
     } while (!counter.compare_exchange_weak(
-        old_value,
-        desired,
-        std::memory_order_release,  // 确保写入对其他线程可见
-        std::memory_order_relaxed
-    ));
+        old_value, desired,
+        std::memory_order_release, // 确保写入对其他线程可见
+        std::memory_order_relaxed));
     return (is_playback ? 1'000'000'000 : 0)
-           + (server_ssrc_domain_ * 100'000'000)
+           + (server_ssrc_domain_ * 100'00)
            + old_value;
 }
 
@@ -175,7 +171,6 @@ void SipServer::run() {
                 session->_sip_server = weak_this;
                 session->_sip_agent = weak_this.lock()->sip_.get();
             });
-        udp_server_->setOnCreateSocket({});
     }
     if (account_.transport_type == TransportType::both || account_.transport_type == TransportType::tcp) {
         tcp_server_ = std::make_shared<TcpServer>();
@@ -202,7 +197,8 @@ void SipServer::get_client_l(
         }
         return;
     }
-    if (!tcp_server_) return cb(toolkit::SockException(Err_other, "no tcp server"), nullptr);
+    if (!tcp_server_)
+        return cb(toolkit::SockException(Err_other, "no tcp server"), nullptr);
     auto poller = EventPollerPool::Instance().getPoller();
     auto sock_ptr = Socket::createSocket(poller, false);
     auto session = std::make_shared<SipSession>(sock_ptr);
@@ -210,9 +206,8 @@ void SipServer::get_client_l(
     session->_sip_agent = sip_.get();
     // tcp 下sipSession 模拟tcpclient 操作, 尝试往对端建立连接
     session->startConnect(
-        SockUtil::inet_ntoa((const sockaddr *)&addr), SockUtil::inet_port((const sockaddr *)&addr),
-        account_.port, local_ip_,
-        [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
+        SockUtil::inet_ntoa((const sockaddr *)&addr), SockUtil::inet_port((const sockaddr *)&addr), account_.port,
+        local_ip_, [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
 }
 
 void SipServer::get_client(
@@ -249,7 +244,7 @@ void SipServer::get_client(
 #define GetSipSession(s)                                                                                               \
     if (s == nullptr)                                                                                                  \
         return sip_unknown_host;                                                                                       \
-    auto session_ptr = std::dynamic_pointer_cast<SipSession>((static_cast<SipSession *>(param))->shared_from_this());  \
+    auto session_ptr = std::dynamic_pointer_cast<SipSession>((static_cast<SipSession *>(s))->shared_from_this());      \
     if (session_ptr == nullptr)                                                                                        \
         return sip_unknown_host;
 
@@ -282,7 +277,7 @@ int SipServer::onregister(
     // 设置通用 header
     set_message_header(t);
     std::string user_str(user), location_str(location);
-    return on_uas_register(session_ptr, trans_ref, req_ptr, user_str, location_str, expires);
+    return SubordinatePlatformImpl::on_recv_register(session_ptr, trans_ref, req_ptr, user_str, location_str, expires);
 }
 int SipServer::oninvite(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_dialog_t *dialog,
@@ -403,7 +398,7 @@ int SipServer::onmessage(
         }
     }
     // 设置通用 header
-    return on_uas_message(session_ptr, trans_ref, req_ptr, session);
+    return PlatformHelper::on_recv_message(session_ptr, trans_ref, req_ptr, session);
 }
 int SipServer::onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
     set_message_agent(t);

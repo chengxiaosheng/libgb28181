@@ -24,7 +24,7 @@
 
 #include <Poller/EventPoller.h>
 #include <Util/NoticeCenter.h>
-#include <gb28181/sip_common.h>
+#include <gb28181/sip_event.h>
 #include <inner/sip_server.h>
 #include <sip-uac.h>
 #include <sip-uas.h>
@@ -267,8 +267,11 @@ void SuperPlatformImpl::to_keepalive() {
                 if (proxy->status() == RequestProxy::Status::Succeeded) {
                     this_ptr->account_.plat_status.keepalive_time = toolkit::getCurrentMicrosecond(true);
                     this_ptr->keepalive_ticker_->resetTime();
+                    // 广播心跳事件
+                    NOTICE_EMIT(kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive, this_ptr, true, "");
                     return;
                 }
+                NOTICE_EMIT(kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive, this_ptr, false, proxy->error());
                 // 心跳超时 ? 应该重新注册
                 if (this_ptr->keepalive_ticker_->elapsedTime()
                     >= this_ptr->account_.keepalive_interval * this_ptr->account_.keepalive_times * 1000) {

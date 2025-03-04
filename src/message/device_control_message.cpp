@@ -66,10 +66,10 @@ bool DeviceControlRequestMessage_PTZCmd::parse_detail() {
     DeviceControlRequestMessage::parse_detail();
 
     auto root = xml_ptr_->RootElement();
-    auto cmd_ele = root->FirstChildElement("PTZCmd");
+    auto cmd_ele = root->InsertNewChildElement("PTZCmd");
     cmd_ele->SetText(ptz_cmd_type_.ToHex().c_str());
     if (ptz_cmd_params_) {
-        auto p_ele = root->FirstChildElement("PTZCmdParams");
+        auto p_ele = root->InsertNewChildElement("PTZCmdParams");
         if (!ptz_cmd_params_->PresetName.empty()) {
             new_xml_element(ptz_cmd_params_->PresetName, p_ele, "PresetName");
         }

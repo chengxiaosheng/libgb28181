@@ -62,6 +62,11 @@ public:
     void add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy);
     void remove_request_proxy(int32_t sn);
     int on_response(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
+
+    static int on_recv_message(
+    const std::shared_ptr<SipSession> &session, const std ::shared_ptr<sip_uas_transaction_t> &transaction,
+    const std ::shared_ptr<sip_message_t> &req, void *dialog_ptr);
+
     virtual int on_notify(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual int on_query(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
     virtual int on_control(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);

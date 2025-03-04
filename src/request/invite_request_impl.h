@@ -30,7 +30,7 @@ class InviteRequestImpl
     , public std::enable_shared_from_this<InviteRequestImpl> {
 public:
     InviteRequestImpl() = default;
-    InviteRequestImpl(const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp, const std::string &device_id);
+    InviteRequestImpl(const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp, std::string device_id);
     ~InviteRequestImpl() override;
     void
     to_invite_request(std::function<void(bool, std::string, const std::shared_ptr<SdpDescription> &)> rcb) override;
@@ -62,7 +62,7 @@ public:
     std::shared_ptr<toolkit::Session> get_connection_session() override;
 
 private:
-    void set_status(INVITE_STATUS_TYPE status, std::string error);
+    void set_status(INVITE_STATUS_TYPE status, const std::string& error);
 
     void add_invite();
     void remove_invite();
@@ -98,6 +98,7 @@ private:
     std::shared_ptr<sip_uac_transaction_t> uac_invite_transaction_;
     std::weak_ptr<SipSession> invite_session_;
     std::string device_id_;
+    std::string subject_;
     uint64_t invite_time_ { 0 };
     uint64_t ack_time_ { 0 };
     uint64_t close_time_ { 0 };

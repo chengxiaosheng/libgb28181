@@ -10,7 +10,7 @@
 #include <Util/NoticeCenter.h>
 #include <csignal>
 #include <gb28181/message/device_info_message.h>
-#include <gb28181/sip_common.h>
+#include <gb28181/sip_event.h>
 #include <gb28181/subordinate_platform.h>
 #include <gb28181/type_define_ext.h>
 #include <thread>

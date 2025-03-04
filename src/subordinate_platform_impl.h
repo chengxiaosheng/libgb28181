@@ -40,6 +40,10 @@ public:
     explicit SubordinatePlatformImpl(subordinate_account account, const std::shared_ptr<SipServer> &server);
     ~SubordinatePlatformImpl() override;
 
+    static int on_recv_register(
+    const std::shared_ptr<SipSession> &session, const std::shared_ptr<sip_uas_transaction_t> &transaction,
+    const std::shared_ptr<sip_message_t> &req, const std::string &user, const std::string &location, int expires);
+
     void shutdown() override;
 
     void set_encoding(CharEncodingType encoding) override { account_.encoding = std::move(encoding); }

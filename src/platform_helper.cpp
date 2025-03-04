@@ -1,9 +1,13 @@
 #include "platform_helper.h"
 
-#include "gb28181/sip_common.h"
+#include "gb28181/sip_event.h"
+#include "gb28181/type_define_ext.h"
+#include "inner/sip_common.h"
+#include "sip-message.h"
 #include "sip-uac.h"
 #include "subordinate_platform_impl.h"
 #include "super_platform_impl.h"
+#include <sip-uas.h>
 
 #include <Util/NoticeCenter.h>
 #include <gb28181/message/message_base.h>
@@ -195,6 +199,150 @@ int PlatformHelper::on_response(
         return proxy->on_response(std::move(message), std::move(transaction), std::move(request));
     }
     return 0;
+}
+int PlatformHelper::on_recv_message(
+    const std::shared_ptr<SipSession> &session, const std::shared_ptr<sip_uas_transaction_t> &transaction,
+    const std::shared_ptr<sip_message_t> &req, void *dialog_ptr) {
+    // 验证消息负载
+    if (req->payload == nullptr) {
+        WarnL << "SIP message payload is null or empty";
+        set_message_reason(transaction.get(), "payload is empty");
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+    }
+    // 验证from 标记中的用户
+    auto &&platform_id = get_platform_id(req.get());
+    if (platform_id.empty()) {
+        ErrorL << "SIP message platform id is empty";
+        set_message_reason(transaction.get(), "unable to identify the user");
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+    }
+
+    auto sip_server = session->getSipServer();
+    if (!sip_server) {
+        WarnL << "sip_server has been destroyed";
+        set_message_reason(transaction.get(), "service is temporarily unavailable");
+        return sip_uas_reply(transaction.get(), 503, nullptr, 0, session.get());
+    }
+
+    auto xml_ptr = std::make_shared<tinyxml2::XMLDocument>();
+    if (xml_ptr->Parse((const char *)req->payload, req->size) != tinyxml2::XML_SUCCESS) {
+        WarnL << "XML parse error (" << xml_ptr->ErrorID() << ":" << xml_ptr->ErrorName() << ")" << xml_ptr->ErrorStr()
+              << ", xml = " << std::string_view((const char *)req->payload, req->size);
+        set_message_reason(transaction.get(), xml_ptr->ErrorStr());
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+    }
+
+    MessageBase message(xml_ptr);
+    if (!message.load_from_xml()) {
+        ErrorL << "SIP message load failed: " << message.get_error()
+               << "xml = " << std::string_view((const char *)req->payload, req->size);
+        set_message_reason(transaction.get(), message.get_error().c_str());
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+    }
+    if (message.root() == MessageRootType::invalid) {
+        WarnL << "SIP message root is invalid";
+        set_message_reason(transaction.get(), "invalid root message");
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+    }
+    if (message.command() == MessageCmdType::invalid) {
+        WarnL << "SIP message command is invalid";
+        set_message_reason(transaction.get(), "invalid Command");
+        return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+    }
+
+    CharEncodingType message_encoding { message.encoding() };
+    // [fold] region get platform
+    bool from_super_platform = false;
+    // 查询请求 与 设备控制 一定来自上级平台
+    if (message.root() == MessageRootType::Query || message.root() == MessageRootType::Control) {
+        from_super_platform = true;
+    } else if (message.root() == MessageRootType::Notify && message.command() == MessageCmdType::Broadcast) {
+        // 语音广播 一般由上级发起
+        from_super_platform = true;
+    }
+    std::variant<std::shared_ptr<SubordinatePlatformImpl>, std::shared_ptr<SuperPlatformImpl>> platform_;
+    if (from_super_platform) {
+        platform_ = std::dynamic_pointer_cast<SuperPlatformImpl>(sip_server->get_super_platform(platform_id));
+    } else {
+        platform_
+            = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
+    }
+    bool has_platform = false;
+    if (std::holds_alternative<std::shared_ptr<SuperPlatformImpl>>(platform_)) {
+        if (auto platform = std::get<std::shared_ptr<SuperPlatformImpl>>(platform_)) {
+            has_platform = true;
+            if (message_encoding == CharEncodingType::invalid) {
+                message_encoding = platform->account().encoding;
+            } else if (platform->account().encoding == CharEncodingType::invalid) {
+                // 反向设置是否合理？
+                platform->set_encoding(message_encoding);
+            }
+        }
+    } else if (std::holds_alternative<std::shared_ptr<SubordinatePlatformImpl>>(platform_)) {
+        if (auto platform = std::get<std::shared_ptr<SubordinatePlatformImpl>>(platform_)) {
+            has_platform = true;
+            if (message_encoding == CharEncodingType::invalid) {
+                message_encoding = platform->account().encoding;
+            } else if (platform->account().encoding == CharEncodingType::invalid) {
+                // 反向设置是否合理？
+                platform->set_encoding(message_encoding);
+            }
+        }
+    }
+    if (!has_platform) {
+        WarnL << "platform was not found";
+        if (message.command() == MessageCmdType::Keepalive) {
+            return 0;
+        }
+        set_message_reason(transaction.get(), "user not logged in");
+        return sip_uas_reply(transaction.get(), 401, nullptr, 0, session.get());
+    }
+    // [fold] endregion get platform
+    std::string convert_xml_str;
+    switch (message.encoding()) {
+        case CharEncodingType::gbk: convert_xml_str = gbk_to_utf8((const char *)req->payload); break;
+        case CharEncodingType::gb2312: convert_xml_str = gb2312_to_utf8((const char *)req->payload); break;
+        default: break;
+    }
+    // 基于指定编码重新解析xml
+    if (!convert_xml_str.empty()) {
+        xml_ptr = std::make_shared<tinyxml2::XMLDocument>();
+        if (xml_ptr->Parse(convert_xml_str.c_str(), convert_xml_str.size()) != tinyxml2::XML_SUCCESS) {
+            WarnL << "XML parse error (" << xml_ptr->ErrorID() << ":" << xml_ptr->ErrorName() << ")"
+                  << xml_ptr->ErrorStr() << ", xml = " << convert_xml_str;
+            set_message_reason(transaction.get(), xml_ptr->ErrorStr());
+            return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+        }
+        message = MessageBase(xml_ptr);
+        if (!message.load_from_xml()) {
+            ErrorL << "SIP message load failed: " << message.get_error() << ", xml = " << convert_xml_str;
+            set_message_reason(transaction.get(), message.get_error().c_str());
+            return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
+        }
+    }
+
+    DebugL << "handler sip message, root = " << message.root() << ", command = " << message.command()
+           << ", sn = " << message.sn();
+
+    // 如果是应答消息，一定来自下级平台
+    int sip_code = 0;
+    std::visit(
+        [&](auto &platform) {
+            if (message.root() == MessageRootType::Response)
+                sip_code = platform->on_response(std::move(message), transaction, req);
+            else if (message.root() == MessageRootType::Notify)
+                sip_code = platform->on_notify(std::move(message), transaction, req);
+            else if (message.root() == MessageRootType::Control)
+                sip_code = platform->on_control(std::move(message), transaction, req);
+            else if (message.root() == MessageRootType::Query)
+                sip_code = platform->on_query(std::move(message), transaction, req);
+        },
+        platform_);
+
+    if (sip_code > 0) {
+        return sip_uas_reply(transaction.get(), sip_code, nullptr, 0, session.get());
+    }
+    return sip_code;
 }
 
 int PlatformHelper::on_query(

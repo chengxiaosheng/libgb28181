@@ -3,23 +3,6 @@
 
 namespace gb28181 {
 
-enum SipError : int {
-    sip_undefined_error = -1, // 未定义的错误
-    sip_bad_parameter = -2, // 参数错误
-    sip_wrong_state = -3, // 状态~？
-    sip_syntax_error = -5, // 语法错误
-    sip_not_found = -6, // 未找到
-    sip_not_implemented = -7, // 为实现
-    sip_no_network= -10, // 没有网络连接
-    sip_port_busy = -11, // 端口被占用或忙碌
-    sip_unknown_host = -12, // 未知的主机
-    sip_timeout = -50, // 超时
-    sip_too_much_call = -51, // call 过多？
-    sip_wrong_format = -52, // 格式问题
-    sip_retry_limit= -60, // 重试超过限制
-    sip_ok = 0, // 无错误
-};
-
 #ifndef GB28181_QUERY_TIMEOUT_MS
 #define GB28181_QUERY_TIMEOUT_MS 5*1000
 #endif
@@ -49,6 +32,10 @@ constexpr const char kEventSubordinatePlatformStatus[] = "kEventSubordinatePlatf
 // 上级平台在线状态变更
 constexpr const char kEventSuperPlatformStatus[] = "kEventSuperPlatformStatus";
 #define kEventSuperPlatformStatusArgs std::shared_ptr<SuperPlatform> platform , PlatformStatusType status, const std::string& message
+
+// 上级平台心跳通知
+constexpr const char kEventSuperPlatformKeepalive[] = "kEventSuperPlatformKeepalive";
+#define kEventSuperPlatformKeepaliveArgs std::shared_ptr<SuperPlatform> platform, bool success, std::string message
 
 // 下级平台本地联系信息变更
 constexpr const char kEventSubordinatePlatformContactChanged[] = "kEventSubordinatePlatformContactChanged";

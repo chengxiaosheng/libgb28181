@@ -14,6 +14,7 @@
 #define SIP_CONTENT_TYPE_MANSRTSP "Application/MANSRTSP"
 #define SIP_HEADER_X_ROUTE_PATH "X-RoutePath"
 #define SIP_HEADER_X_PREFERRED_PATH "X-PreferredPath"
+#define SIP_HEADER_SUBJECT "Subject"
 
 #include <gb28181/type_define.h>
 
@@ -26,6 +27,23 @@ struct sip_message_t;
 #endif
 
 namespace gb28181 {
+
+enum SipError : int {
+    sip_undefined_error = -1, // 未定义的错误
+    sip_bad_parameter = -2, // 参数错误
+    sip_wrong_state = -3, // 状态~？
+    sip_syntax_error = -5, // 语法错误
+    sip_not_found = -6, // 未找到
+    sip_not_implemented = -7, // 为实现
+    sip_no_network= -10, // 没有网络连接
+    sip_port_busy = -11, // 端口被占用或忙碌
+    sip_unknown_host = -12, // 未知的主机
+    sip_timeout = -50, // 超时
+    sip_too_much_call = -51, // call 过多？
+    sip_wrong_format = -52, // 格式问题
+    sip_retry_limit= -60, // 重试超过限制
+    sip_ok = 0, // 无错误
+};
 
 enum SipContentType {
     SipContentType_XML,
@@ -42,6 +60,7 @@ void set_message_reason(struct sip_uac_transaction_t *transaction, const char *r
 void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const char *path);
 void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const std::vector<std::string> &path);
 void set_message_authorization(struct sip_uac_transaction_t *transaction, const std::string &authorization);
+void set_invite_subject(struct sip_uac_transaction_t *transaction, const char *subject);
 
 void set_message_agent(struct sip_uas_transaction_t *transaction);
 void set_message_gbt_version(
@@ -64,6 +83,7 @@ std::vector<std::string> get_x_route_path(const struct sip_message_t *msg);
 int get_expires(const struct sip_message_t *msg);
 std::string get_message_contact(const struct sip_message_t *msg);
 std::pair<std::string,uint32_t> get_via_rport(const struct sip_message_t *msg);
+std::string get_invite_subject(const struct sip_message_t *msg);
 
 
 bool verify_authorization(struct sip_message_t *msg, const std::string &user, const std::string &password);

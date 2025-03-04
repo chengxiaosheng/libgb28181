@@ -158,6 +158,7 @@ ICECandidate parseIceCandidate(const std::string &str) {
 std::ostream &operator<<(std::ostream &os, const URIInfo &uri) {
     if (uri.content.empty())
         return os;
+    os << "u=";
     os << uri.content;
     if (uri.type != URIInfo::HTTP) {
         os << ":" << static_cast<int>(uri.file_type);

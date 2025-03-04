@@ -69,6 +69,11 @@ void set_message_authorization(struct sip_uac_transaction_t *transaction, const 
         sip_uac_add_header(transaction, SIP_HEADER_AUTHORIZATION, authorization.c_str());
     }
 }
+void set_invite_subject(struct sip_uac_transaction_t *transaction, const char *subject) {
+    if (!transaction)
+        return;
+    sip_uac_add_header(transaction, SIP_HEADER_SUBJECT, subject);
+}
 
 void set_message_agent(struct sip_uas_transaction_t *transaction) {
     sip_uas_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);
@@ -211,15 +216,17 @@ int get_expires(const struct sip_message_t *msg) {
     return 0;
 }
 std::string get_message_contact(const struct sip_message_t *msg) {
-    if (!msg) return "";
+    if (!msg)
+        return "";
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_CONTACT);
     if (cstrvalid(hv)) {
         return std::string(hv->p, hv->n);
     }
     return "";
 }
-std::pair<std::string,uint32_t> get_via_rport(const struct sip_message_t *msg) {
-    if (!msg) return std::make_pair("", 0);
+std::pair<std::string, uint32_t> get_via_rport(const struct sip_message_t *msg) {
+    if (!msg)
+        return std::make_pair("", 0);
     if (auto via = sip_vias_get(&msg->vias, 0)) {
         std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
         if (via->rport <= 0) {
@@ -229,6 +236,15 @@ std::pair<std::string,uint32_t> get_via_rport(const struct sip_message_t *msg) {
         }
     }
     return std::make_pair("", 0);
+}
+std::string get_invite_subject(const struct sip_message_t *msg) {
+    if (!msg)
+        return "";
+    auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_SUBJECT);
+    if (cstrvalid(hv)) {
+        return std::string(hv->p, hv->n);
+    }
+    return "";
 }
 
 std::unordered_map<std::string, std::string> parseAuthorizationHeader(const std::string &authHeader) {
@@ -333,31 +349,35 @@ void set_message_www_authenticate(struct sip_uas_transaction_t *transaction, con
     sip_uas_add_header(transaction, SIP_HEADER_WWW_AUTHENTICATE, generate_www_authentication_(realm).c_str());
 }
 std::string get_www_authenticate(const struct sip_message_t *msg) {
-    if (!msg) return "";
+    if (!msg)
+        return "";
     auto auth_str = sip_message_get_header_by_name(msg, SIP_HEADER_WWW_AUTHENTICATE);
     if (cstrvalid(auth_str)) {
         return std::string(auth_str->p, auth_str->n);
     }
     return "";
-
 }
-std::string generate_authorization(const struct sip_message_t *msg, const std::string &username, const std::string &password,const std::string &uri, std::pair<std::string,int> &nc_pair) {
+std::string generate_authorization(
+    const struct sip_message_t *msg, const std::string &username, const std::string &password, const std::string &uri,
+    std::pair<std::string, int> &nc_pair) {
     std::string www_authorization = get_www_authenticate(msg);
-    if (www_authorization.empty()) return "";
+    if (www_authorization.empty())
+        return "";
     auto &&fields = parseAuthorizationHeader(www_authorization);
-    if (fields.empty()) return "";
+    if (fields.empty())
+        return "";
     // 校验必要参数
     if (!fields.count("realm") || !fields.count("nonce")) {
         return "";
     }
     // 提取认证参数
-    const std::string& realm = fields["realm"];
-    const std::string& nonce = fields["nonce"];
-    const std::string& qop = fields.count("qop") ? fields["qop"] : "";
-    const std::string& algorithm = fields.count("algorithm") ? fields["algorithm"] : "MD5";
+    const std::string &realm = fields["realm"];
+    const std::string &nonce = fields["nonce"];
+    const std::string &qop = fields.count("qop") ? fields["qop"] : "";
+    const std::string &algorithm = fields.count("algorithm") ? fields["algorithm"] : "MD5";
 
     if (nc_pair.first == nonce) {
-        nc_pair.second ++;
+        nc_pair.second++;
         if (nc_pair.second >= 0xFFFFFFFF) {
             nc_pair.second = 1;
         }

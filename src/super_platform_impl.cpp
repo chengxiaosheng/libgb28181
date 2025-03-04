@@ -69,7 +69,9 @@ SuperPlatformImpl::SuperPlatformImpl(super_account account, const std::shared_pt
         + std::to_string(account_.local_port);
 }
 
-SuperPlatformImpl::~SuperPlatformImpl() {}
+SuperPlatformImpl::~SuperPlatformImpl() {
+    DebugL << account_.platform_id;
+}
 void SuperPlatformImpl::shutdown() {
     if (!running_.load()) {
         return;
@@ -265,13 +267,18 @@ void SuperPlatformImpl::to_keepalive() {
         ->send([weak_this = weak_from_this()](std::shared_ptr<RequestProxy> proxy) {
             if (auto this_ptr = weak_this.lock()) {
                 if (proxy->status() == RequestProxy::Status::Succeeded) {
-                    this_ptr->account_.plat_status.keepalive_time = toolkit::getCurrentMicrosecond(true);
+                    this_ptr->account_.plat_status.keepalive_time = getCurrentMicrosecond(true);
                     this_ptr->keepalive_ticker_->resetTime();
                     // 广播心跳事件
-                    NOTICE_EMIT(kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive, this_ptr, true, "");
+                    NoticeCenter::Instance().emitEvent(Broadcast::kEventSuperPlatformKeepalive, this_ptr, true, proxy->error());
                     return;
                 }
-                NOTICE_EMIT(kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive, this_ptr, false, proxy->error());
+                EventPollerPool::Instance().getPoller()->async([weak_this, proxy]() {
+                    if (auto this_ptr = weak_this.lock()) {
+                        NoticeCenter::Instance().emitEvent(
+                            Broadcast::kEventSuperPlatformKeepalive, this_ptr, false, proxy->error());
+                    }
+                });
                 // 心跳超时 ? 应该重新注册
                 if (this_ptr->keepalive_ticker_->elapsedTime()
                     >= this_ptr->account_.keepalive_interval * this_ptr->account_.keepalive_times * 1000) {
@@ -287,7 +294,8 @@ void SuperPlatformImpl::to_keepalive() {
 void SuperPlatformImpl::on_invite(
     const std::shared_ptr<InviteRequest> &invite_request,
     std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) {
-    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventOnInviteRequest, shared_from_this(), invite_request, std::move(resp));
+    toolkit::NoticeCenter::Instance().emitEvent(
+        Broadcast::kEventOnInviteRequest, shared_from_this(), invite_request, std::move(resp));
 }
 
 template <typename Response>
@@ -547,8 +555,7 @@ int SuperPlatformImpl::on_query(
                 .process(std::move(message), transaction, shared_from_this());
         case MessageCmdType::CruiseTrackQuery:
             return MultiResponseQueryHandler<
-                       CruiseTrackRequestMessage, CruiseTrackResponseMessage,
-                       Broadcast::kEventOnCruiseTrackRequest>()
+                       CruiseTrackRequestMessage, CruiseTrackResponseMessage, Broadcast::kEventOnCruiseTrackRequest>()
                 .process(std::move(message), transaction, shared_from_this());
         case MessageCmdType::PTZPosition:
             return OneResponseQueryHandler<
@@ -571,20 +578,69 @@ int SuperPlatformImpl::on_control(
         // 目标跟踪命令后，目标设备不发送应答命令，命令流程见9.3.2.1;
         for (auto ele = xml_root->FirstChildElement(); ele != nullptr; ele = ele->NextSiblingElement()) {
             const auto name = ele->Name();
-            if (name == "CmdType" || name == "SN" || name == "DeviceID") continue;
-            if (name == "PTZCmd") return NoResponseQueryHandler<DeviceControlRequestMessage_PTZCmd, Broadcast::kEventOnDeviceControlPtzRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "RecordCmd")return OneResponseQueryHandler<DeviceControlRequestMessage_RecordCmd, DeviceControlResponseMessage, Broadcast::kEventOnSdCardStatusRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "IFrameCmd" || name == "IFameCmd")  return NoResponseQueryHandler<DeviceControlRequestMessage_IFrameCmd, Broadcast::kEventOnDeviceControlIFrameCmdRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "DragZoomIn") return NoResponseQueryHandler<DeviceControlRequestMessage_DragZoomIn, Broadcast::kEventOnDeviceControlDragZoomInRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "DragZoomOut") return  NoResponseQueryHandler<DeviceControlRequestMessage_DragZoomOut, Broadcast::kEventOnDeviceControlDragZoomOutRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "TargetTrack") return NoResponseQueryHandler<DeviceControlRequestMessage_TargetTrack, Broadcast::kEventOnDeviceControlTargetTrackRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "PTZPreciseCtrl") return NoResponseQueryHandler<DeviceControlRequestMessage_PtzPreciseCtrl, Broadcast::kEventOnDeviceControlPTZPreciseCtrlRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "HomePosition") return OneResponseQueryHandler<DeviceControlRequestMessage_HomePosition,DeviceControlResponseMessage, Broadcast::kEventOnDeviceControlHomePositionRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "AlarmCmd") return OneResponseQueryHandler<DeviceControlRequestMessage_AlarmCmd, DeviceControlResponseMessage, Broadcast::kEventOnDeviceControlAlarmCmdRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "GuardCmd") return OneResponseQueryHandler<DeviceControlRequestMessage_GuardCmd, DeviceControlResponseMessage, Broadcast::kEventOnDeviceControlGuardCmdRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "TeleBoot") return NoResponseQueryHandler<DeviceControlRequestMessage_TeleBoot, Broadcast::kEventOnDeviceControlTeleBootRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "FormatSDCard") return NoResponseQueryHandler<DeviceControlRequestMessage_FormatSDCard, Broadcast::kEventOnDeviceControlFormatSDCardRequest>().process(std::move(message), transaction, shared_from_this());
-            if (name == "DeviceUpgrade") return OneResponseQueryHandler<DeviceControlRequestMessage_DeviceUpgrade,DeviceControlResponseMessage, Broadcast::kEventOnDeviceControlDeviceUpgradeRequest>().process(std::move(message), transaction, shared_from_this());
+            if (name == "CmdType" || name == "SN" || name == "DeviceID")
+                continue;
+            if (name == "PTZCmd")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_PTZCmd, Broadcast::kEventOnDeviceControlPtzRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "RecordCmd")
+                return OneResponseQueryHandler<
+                           DeviceControlRequestMessage_RecordCmd, DeviceControlResponseMessage,
+                           Broadcast::kEventOnSdCardStatusRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "IFrameCmd" || name == "IFameCmd")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_IFrameCmd, Broadcast::kEventOnDeviceControlIFrameCmdRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "DragZoomIn")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_DragZoomIn, Broadcast::kEventOnDeviceControlDragZoomInRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "DragZoomOut")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_DragZoomOut,
+                           Broadcast::kEventOnDeviceControlDragZoomOutRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "TargetTrack")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_TargetTrack,
+                           Broadcast::kEventOnDeviceControlTargetTrackRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "PTZPreciseCtrl")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_PtzPreciseCtrl,
+                           Broadcast::kEventOnDeviceControlPTZPreciseCtrlRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "HomePosition")
+                return OneResponseQueryHandler<
+                           DeviceControlRequestMessage_HomePosition, DeviceControlResponseMessage,
+                           Broadcast::kEventOnDeviceControlHomePositionRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "AlarmCmd")
+                return OneResponseQueryHandler<
+                           DeviceControlRequestMessage_AlarmCmd, DeviceControlResponseMessage,
+                           Broadcast::kEventOnDeviceControlAlarmCmdRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "GuardCmd")
+                return OneResponseQueryHandler<
+                           DeviceControlRequestMessage_GuardCmd, DeviceControlResponseMessage,
+                           Broadcast::kEventOnDeviceControlGuardCmdRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "TeleBoot")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_TeleBoot, Broadcast::kEventOnDeviceControlTeleBootRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "FormatSDCard")
+                return NoResponseQueryHandler<
+                           DeviceControlRequestMessage_FormatSDCard,
+                           Broadcast::kEventOnDeviceControlFormatSDCardRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
+            if (name == "DeviceUpgrade")
+                return OneResponseQueryHandler<
+                           DeviceControlRequestMessage_DeviceUpgrade, DeviceControlResponseMessage,
+                           Broadcast::kEventOnDeviceControlDeviceUpgradeRequest>()
+                    .process(std::move(message), transaction, shared_from_this());
         }
     } else if (message.command() == MessageCmdType::DeviceConfig) {
         return OneResponseQueryHandler<

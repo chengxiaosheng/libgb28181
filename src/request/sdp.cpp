@@ -67,7 +67,7 @@ std::string address_type_to_string(SDPAddressType type) {
 }
 
 Origin parseOrigin(const std::string &value) {
-    auto parts = toolkit::split(value.substr(2), " ");
+    auto parts = toolkit::split(value, " ");
     if (parts.size() < 6) {
         return {};
     }
@@ -88,7 +88,7 @@ std::ostream &operator<<(std::ostream &os, const Origin &origin) {
 }
 
 Connection parseConnection(const std::string &value) {
-    auto parts = toolkit::split(value.substr(2), " ");
+    auto parts = toolkit::split(value, " ");
     if (parts.size() < 3) {
         return {};
     }
@@ -210,10 +210,6 @@ MediaDescription mediaParser(const std::string &value) {
     iss >> media_type_str >> md.port >> protoStr;
     md.mediaType = media_type_str == "video" ? MediaDescription::video : MediaDescription::audio;
     md.proto = (protoStr == "TCP/RTP/AVP") ? TransportProtocol::TCP : TransportProtocol::UDP;
-    uint8_t payload;
-    while (iss >> payload)
-        md.payloads.push_back({ payload, 0, "" });
-
     return md;
 }
 

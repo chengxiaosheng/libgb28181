@@ -84,6 +84,7 @@ int get_expires(const struct sip_message_t *msg);
 std::string get_message_contact(const struct sip_message_t *msg);
 std::pair<std::string,uint32_t> get_via_rport(const struct sip_message_t *msg);
 std::string get_invite_subject(const struct sip_message_t *msg);
+std::string get_invite_device_id(const struct sip_message_t *msg);
 
 
 bool verify_authorization(struct sip_message_t *msg, const std::string &user, const std::string &password);

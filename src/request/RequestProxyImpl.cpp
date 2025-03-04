@@ -115,7 +115,7 @@ RequestProxyImpl::RequestProxyImpl(
     const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, RequestType type,
     int32_t sn)
     : RequestProxy()
-    , platform_(std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform))
+    , platform_(platform)
     , request_(request)
     , request_sn_(sn == 0 ? platform_->get_new_sn() : sn)
     , request_type_(type) {

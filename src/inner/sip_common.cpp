@@ -246,6 +246,18 @@ std::string get_invite_subject(const struct sip_message_t *msg) {
     }
     return "";
 }
+std::string get_invite_device_id(const struct sip_message_t *msg) {
+    if (!msg)
+        return "";
+    cstring_t str {};
+    if (0 == sip_uri_username(&msg->u.c.uri, &str) && cstrvalid(&str)) {
+        return std::string(str.p, str.n);
+    }
+    if (0 == sip_uri_username(&msg->to.uri, &str) && cstrvalid(&str)) {
+        return std::string(str.p, str.n);
+    }
+    return "";
+}
 
 std::unordered_map<std::string, std::string> parseAuthorizationHeader(const std::string &authHeader) {
     std::unordered_map<std::string, std::string> fields;

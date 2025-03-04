@@ -173,9 +173,9 @@ int SubordinatePlatformImpl::on_keep_alive(std::shared_ptr<KeepaliveMessageReque
             [this_ptr = shared_from_this(), request = std::move(request)]() {
                 this_ptr->on_keep_alive_callback_(this_ptr, request);
             });
-        // 广播通知心跳消息
-        toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSubKeepalive, shared_from_this(), request);
     }
+    // 广播通知心跳消息
+    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSubKeepalive, shared_from_this(), request);
     return 200;
 }
 void SubordinatePlatformImpl::on_device_info(

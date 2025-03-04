@@ -347,21 +347,27 @@ int InviteRequestImpl::on_invite_reply(
     bool result = true;
     std::string error;
     if (SIP_IS_SIP_SUCCESS(code)) {
-        // 1. 解析sdp
-        SdpDescription sdp;
-        if (sdp.parse(std::string(static_cast<const char *>(reply->payload), reply->size))) {
-            this_ptr->remote_sdp_ = std::make_shared<SdpDescription>(std::move(sdp));
-            // 发送ack
-            if (0 == sip_uac_ack(t, nullptr, 0, nullptr)) {
-                this_ptr->set_status(INVITE_STATUS_TYPE::ack, "");
+        if (reply->payload  == nullptr || reply->size == 0) {
+            result = false;
+            error = "no reply remote sdp";
+            ErrorL << "no reply remote sdp";
+        } else {
+            // 1. 解析sdp
+            SdpDescription sdp;
+            if (sdp.parse(std::string(static_cast<const char *>(reply->payload), reply->size))) {
+                this_ptr->remote_sdp_ = std::make_shared<SdpDescription>(std::move(sdp));
+                // 发送ack
+                if (0 == sip_uac_ack(t, nullptr, 0, nullptr)) {
+                    this_ptr->set_status(INVITE_STATUS_TYPE::ack, "");
+                } else {
+                    result = false;
+                    error = "send ack failed";
+                }
             } else {
                 result = false;
-                error = "send ack failed";
+                error = "parse sdp failed";
+                WarnL << "parse sdp failed , sdp = " << std::string_view(static_cast<const char *>(reply->payload), reply->size);
             }
-        } else {
-            result = false;
-            error = "parse sdp failed";
-            WarnL << "parse sdp failed , sdp = " << std::string_view(static_cast<const char *>(reply->payload), reply->size);
         }
         if (!result) {
             this_ptr->to_bye("");
@@ -535,7 +541,7 @@ int InviteRequestImpl::on_recv_invite(
     invite_ptr->invite_time_ = toolkit::getCurrentMicrosecond(true);
     invite_ptr->set_status(INVITE_STATUS_TYPE::invite, "");
     invite_ptr->preferred_path_ = get_x_preferred_path(req.get());
-    invite_ptr->device_id_ = get_to_uri(req.get());
+    invite_ptr->device_id_ = get_invite_device_id(req.get());
     invite_ptr->subject_ = get_invite_subject(req.get());
     invite_ptr->invite_session_ = sip_session;
     // 发送 临时回复
@@ -565,7 +571,8 @@ int InviteRequestImpl::on_recv_invite(
                 }
                 set_message_content_type(transaction.get(), SipContentType::SipContentType_SDP);
                 invite_ptr->add_invite();
-                sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());
+
+                sip_uas_reply(transaction.get(), sip_code, payload.c_str(), payload.size(), sip_session.get());
 
                 // 添加一个超时定时器， 一段时间内没有收到ack 则关闭会话？
                 std::weak_ptr<InviteRequestImpl> invite_weak = invite_ptr;
@@ -578,7 +585,7 @@ int InviteRequestImpl::on_recv_invite(
                     return 0;
                 });
             } else {
-                sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());
+                sip_uas_reply(transaction.get(), sip_code, nullptr, 0, sip_session.get());
                 invite_ptr->set_status(INVITE_STATUS_TYPE::failed, "rejected");
             }
         });

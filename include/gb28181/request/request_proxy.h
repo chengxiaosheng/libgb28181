@@ -82,7 +82,7 @@ public:
     /**
      * 获取错误信息
      */
-    virtual std::string error() const = 0;
+    virtual const std::string & error() const = 0;
 
     /**
      * 发送请求

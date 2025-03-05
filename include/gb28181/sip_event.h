@@ -41,15 +41,15 @@ constexpr const char kEventSuperPlatformStatus[] = "kEventSuperPlatformStatus";
 
 // 上级平台心跳通知
 constexpr const char kEventSuperPlatformKeepalive[] = "kEventSuperPlatformKeepalive";
-#define kEventSuperPlatformKeepaliveArgs const std::shared_ptr<SuperPlatform>& platform,bool success, const std::string & message
+#define kEventSuperPlatformKeepaliveArgs const std::shared_ptr<SuperPlatform>& platform, const bool& success, const std::string & message
 
 // 下级平台本地联系信息变更
 constexpr const char kEventSubordinatePlatformContactChanged[] = "kEventSubordinatePlatformContactChanged";
-#define kEventSubordinatePlatformContactChangedArgs const std::shared_ptr<SubordinatePlatform>& platform , const std::string& host,uint16_t port
+#define kEventSubordinatePlatformContactChangedArgs const std::shared_ptr<SubordinatePlatform>& platform , const std::string& host, const uint16_t& port
 
 // 上级平台本地联系信息变更
 constexpr const char kEventSuperPlatformContactChanged[] = "kEventSuperPlatformContactChanged";
-#define kEventSuperPlatformContactChangedArgs const std::shared_ptr<SuperPlatform> & platform , const std::string& host,uint16_t port
+#define kEventSuperPlatformContactChangedArgs const std::shared_ptr<SuperPlatform> & platform , const std::string& host, const uint16_t& port
 
 // 上级平台shutdown时 触发的事件， 用户收到这个事件后应该立即释放持有的平台智能指针
 constexpr const char kEventOnSuperPlatformShutdown[] = "kEventOnSuperPlatformShutdown";

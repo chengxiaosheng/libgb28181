@@ -38,7 +38,7 @@ public:
     Status status() const override { return status_; }
     int reply_code() const override { return reply_code_; }
     RequestType type() const override { return request_type_; }
-    std::string error() const override { return error_; }
+    const std::string& error() const override { return error_; }
     uint64_t send_time() const override { return send_time_; }
     uint64_t reply_time() const override { return reply_time_; }
     uint64_t response_begin_time() const override { return response_end_time_; }

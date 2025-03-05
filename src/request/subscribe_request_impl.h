@@ -16,6 +16,7 @@ extern "C" {
 struct sip_subscribe_t;
 struct sip_uac_transaction_t;
 struct sip_uas_transaction_t;
+struct sip_message_t;
 }
 #endif
 
@@ -54,7 +55,7 @@ public:
     static int recv_subscribe_request(
         const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &message,
         const std::shared_ptr<sip_uas_transaction_t> &transaction,
-        const std::shared_ptr<struct sip_subscribe_t> &subscribe_ptr, void **sub);
+        const std::shared_ptr<struct sip_subscribe_t> &sip_subscribe_ptr, void **sub);
 
     /**
      * 收到一个通知

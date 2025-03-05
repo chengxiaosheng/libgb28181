@@ -30,11 +30,16 @@ int RequestConfigDownloadImpl::on_response(const std::shared_ptr<MessageBase> &r
         on_completed();
         return 200;
     }
-    if (response_callback_) {
-        code = response_callback_(shared_from_this(), response, is_end);
-    }
-    if (is_end) {
-        on_completed();
+    try {
+        if (response_callback_) {
+            code = response_callback_(shared_from_this(), response, is_end);
+        }
+        if (is_end) {
+            on_completed();
+        }
+    } catch (const std::exception &e) {
+        error_ = e.what();
+        code = 500;
     }
     return code;
 }

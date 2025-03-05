@@ -1,6 +1,5 @@
 #include "RequestProxyImpl.h"
 
-#include "RequestCatalogImpl.h"
 #include "RequestConfigDownloadImpl.h"
 #include "RequestListImpl.h"
 #include "subordinate_platform_impl.h"

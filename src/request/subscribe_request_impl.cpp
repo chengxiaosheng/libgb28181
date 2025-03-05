@@ -1,5 +1,4 @@
 #include "subscribe_request_impl.h"
-
 #include "gb28181/message/catalog_message.h"
 #include "gb28181/message/message_base.h"
 #include "gb28181/message/mobile_position_request_message.h"
@@ -20,6 +19,7 @@
 #include <Util/NoticeCenter.h>
 #include <utility>
 using namespace gb28181;
+using namespace toolkit;
 
 static std::unordered_map<void *, std::shared_ptr<SubscribeRequestImpl>> subscribe_request_map_; // 对订阅对象本身的存储
 static std::shared_mutex subscribe_request_map_mutex_;
@@ -153,10 +153,10 @@ std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(void *
 int SubscribeRequestImpl::recv_subscribe_request(
     const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &message,
     const std::shared_ptr<sip_uas_transaction_t> &transaction,
-    const std::shared_ptr<struct sip_subscribe_t> &subscribe_ptr, void **sub) {
+    const std::shared_ptr<struct sip_subscribe_t> &sip_subscribe_ptr, void **sub) {
 
     // 针对已有订阅的刷新或取消
-    if (auto subscribe = get_subscribe(*sub); subscribe && subscribe->sip_subscribe_ptr_ == subscribe_ptr) {
+    if (auto subscribe = get_subscribe(*sub); subscribe && subscribe->sip_subscribe_ptr_ == sip_subscribe_ptr) {
         auto sip_code = subscribe->on_subscribe(message, transaction);
         return sip_uas_reply(transaction.get(), sip_code, nullptr, 0, sip_session.get());
     }
@@ -175,7 +175,7 @@ int SubscribeRequestImpl::recv_subscribe_request(
         return sip_uas_reply(transaction.get(), 403, nullptr, 0, sip_session.get());
     }
 
-    std::shared_ptr<MessageBase> gb_message_ptr = nullptr;
+    std::shared_ptr<MessageBase> subscribe_message_ptr = nullptr;
     if (message->payload && message->size) {
         std::shared_ptr<tinyxml2::XMLDocument> xml_ptr = std::make_shared<tinyxml2::XMLDocument>();
         if (xml_ptr->Parse((const char *)message->payload, message->size) != tinyxml2::XML_SUCCESS) {
@@ -185,27 +185,28 @@ int SubscribeRequestImpl::recv_subscribe_request(
             set_message_reason(transaction.get(), xml_ptr->ErrorStr());
             return sip_uas_reply(transaction.get(), 400, nullptr, 0, sip_session.get());
         }
-        gb_message_ptr = std::make_shared<MessageBase>(xml_ptr);
-        if (gb_message_ptr->load_from_xml()) {
-            if (gb_message_ptr->command() == MessageCmdType::Catalog) {
-                gb_message_ptr = std::make_shared<CatalogRequestMessage>(std::move(*gb_message_ptr));
-                gb_message_ptr->load_from_xml();
-            } else if (gb_message_ptr->command() == MessageCmdType::MobilePosition) {
-                gb_message_ptr = std::make_shared<MobilePositionRequestMessage>(std::move(*gb_message_ptr));
-                gb_message_ptr->load_from_xml();
-            } else if (gb_message_ptr->command() == MessageCmdType::PTZPosition) {
-                gb_message_ptr = std::make_shared<PTZPositionRequestMessage>(std::move(*gb_message_ptr));
-                gb_message_ptr->load_from_xml();
+        subscribe_message_ptr = std::make_shared<MessageBase>(xml_ptr);
+        if (subscribe_message_ptr->load_from_xml()) {
+            if (subscribe_message_ptr->command() == MessageCmdType::Catalog) {
+                subscribe_message_ptr = std::make_shared<CatalogRequestMessage>(std::move(*subscribe_message_ptr));
+                subscribe_message_ptr->load_from_xml();
+            } else if (subscribe_message_ptr->command() == MessageCmdType::MobilePosition) {
+                subscribe_message_ptr = std::make_shared<MobilePositionRequestMessage>(std::move(*subscribe_message_ptr));
+                subscribe_message_ptr->load_from_xml();
+            } else if (subscribe_message_ptr->command() == MessageCmdType::PTZPosition) {
+                subscribe_message_ptr = std::make_shared<PTZPositionRequestMessage>(std::move(*subscribe_message_ptr));
+                subscribe_message_ptr->load_from_xml();
             }
         }
     }
-    auto ptr = std::make_shared<SubscribeRequestImpl>(platform_ptr, subscribe_ptr);
+    const auto subscribe_ptr = std::dynamic_pointer_cast<SubscribeRequest>(std::make_shared<SubscribeRequestImpl>(platform_ptr, sip_subscribe_ptr));
+    if (sub) {
+        *sub = subscribe_ptr.get();
+    }
     if (0
-        == toolkit::NoticeCenter::Instance().emitEvent(
-            Broadcast::kEventOnSubscribeRequest, platform_ptr, ptr, gb_message_ptr)) {
+        == NOTICE_EMIT(kEventOnSubscribeRequestArgs, Broadcast::kEventOnSubscribeRequest, std::dynamic_pointer_cast<SuperPlatform>(platform_ptr), subscribe_ptr, subscribe_message_ptr))  {
         return sip_uas_reply(transaction.get(), 404, nullptr, 0, sip_session.get());
     }
-    *sub = ptr.get();
     return sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());
 }
 
@@ -279,8 +280,7 @@ int SubscribeRequestImpl::on_recv_notify(
     if (notify_callback_) {
         sip_code = notify_callback_(shared_from_this(), xml_ptr, reason);
     } else {
-        toolkit::NoticeCenter::Instance().emitEvent(
-            Broadcast::kEventOnSubscribeNotify, shared_from_this(), xml_ptr, reason);
+        NOTICE_EMIT(kEventOnSubscribeNotifyArgs, Broadcast::kEventOnSubscribeNotify, std::dynamic_pointer_cast<SubscribeRequest>(shared_from_this()), xml_ptr, reason);
     }
     if (!reason.empty()) {
         set_message_reason(transaction.get(), reason.c_str());

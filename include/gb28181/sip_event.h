@@ -1,6 +1,10 @@
 #ifndef gb28181_include_gb28181_SIP_COMMON_H
 #define gb28181_include_gb28181_SIP_COMMON_H
 
+#include <functional>
+#include <memory>
+#include <deque>
+
 namespace gb28181 {
 
 #ifndef GB28181_QUERY_TIMEOUT_MS
@@ -20,72 +24,73 @@ namespace gb28181 {
 /** is the status code a server error  */
 #define SIP_IS_SIP_SERVER_ERROR(x) (((x) >= 500) && ((x) < 600))
 
+class SubscribeRequest;
+
 namespace Broadcast {
 //下级平台心跳
 constexpr const char kEventSubKeepalive[] = "kEventSubKeepalive";
-#define kEventSubKeepaliveArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<KeepaliveMessageRequest> message
+#define kEventSubKeepaliveArgs const std::shared_ptr<SubordinatePlatform>& platform, const std::shared_ptr<KeepaliveMessageRequest> & message
 
 // 下级平台在线状态变更
 constexpr const char kEventSubordinatePlatformStatus[] = "kEventSubordinatePlatformStatus";
-#define kEventSubordinatePlatformStatusArgs std::shared_ptr<SubordinatePlatform> platform , PlatformStatusType status, const std::string& message
+#define kEventSubordinatePlatformStatusArgs const std::shared_ptr<SubordinatePlatform> & platform , const PlatformStatusType& status, const std::string& message
 
 // 上级平台在线状态变更
 constexpr const char kEventSuperPlatformStatus[] = "kEventSuperPlatformStatus";
-#define kEventSuperPlatformStatusArgs std::shared_ptr<SuperPlatform> platform , PlatformStatusType status, const std::string& message
+#define kEventSuperPlatformStatusArgs const std::shared_ptr<SuperPlatform>& platform , const PlatformStatusType& status, const std::string& message
 
 // 上级平台心跳通知
 constexpr const char kEventSuperPlatformKeepalive[] = "kEventSuperPlatformKeepalive";
-#define kEventSuperPlatformKeepaliveArgs std::shared_ptr<SuperPlatform> platform, bool success, std::string message
+#define kEventSuperPlatformKeepaliveArgs const std::shared_ptr<SuperPlatform>& platform,bool success, const std::string & message
 
 // 下级平台本地联系信息变更
 constexpr const char kEventSubordinatePlatformContactChanged[] = "kEventSubordinatePlatformContactChanged";
-#define kEventSubordinatePlatformContactChangedArgs std::shared_ptr<SubordinatePlatform> platform , const std::string& host,uint16_t port
+#define kEventSubordinatePlatformContactChangedArgs const std::shared_ptr<SubordinatePlatform>& platform , const std::string& host,uint16_t port
 
 // 上级平台本地联系信息变更
 constexpr const char kEventSuperPlatformContactChanged[] = "kEventSuperPlatformContactChanged";
-#define kEventSuperPlatformContactChangedArgs std::shared_ptr<SuperPlatform> platform , const std::string& host,uint16_t port
+#define kEventSuperPlatformContactChangedArgs const std::shared_ptr<SuperPlatform> & platform , const std::string& host,uint16_t port
 
 // 上级平台shutdown时 触发的事件， 用户收到这个事件后应该立即释放持有的平台智能指针
 constexpr const char kEventOnSuperPlatformShutdown[] = "kEventOnSuperPlatformShutdown";
-#define kEventOnSuperPlatformShutdownArgs std::shared_ptr<SuperPlatform> platform
+#define kEventOnSuperPlatformShutdownArgs const std::shared_ptr<SuperPlatform> & platform
 
 // 下级平台shutdown时 触发的事件， 用户收到这个事件后应该立即释放持有的平台智能指针
 constexpr const char kEventOnSubordinatePlatformShutdown[] = "kEventOnSubordinatePlatformShutdown";
-#define kEventOnSubordinatePlatformShutdownArgs std::shared_ptr<SubordinatePlatform> platform
+#define kEventOnSubordinatePlatformShutdownArgs const std::shared_ptr<SubordinatePlatform> & platform
 
 // 下级平台收到 告警通知
 constexpr const char kEventSubordinateNotifyAlarm[] = "kEventSubordinateNotifyAlarm";
-#define kEventSubordinateNotifyAlarmArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<AlarmNotifyMessage> message
+#define kEventSubordinateNotifyAlarmArgs const std::shared_ptr<SubordinatePlatform> & platform, const std::shared_ptr<AlarmNotifyMessage> & message
 
 // 下级平台收到 目录通知 （仅仅来自Message 中的通知 ?）
 constexpr const char kEventSubordinateNotifyCatalog[] = "kEventSubordinateNotifyCatalog";
-#define kEventSubordinateNotifyCatalogArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<CatalogNotifyMessage> message
+#define kEventSubordinateNotifyCatalogArgs const std::shared_ptr<SubordinatePlatform>& platform , const std::shared_ptr<CatalogNotifyMessage> & message
 
 // 下级平台收到 媒体状态通知
 constexpr const char kEventSubordinateNotifyMediaStatus[] = "kEventSubordinateNotifyMediaStatus";
-#define kEventSubordinateNotifyMediaStatusArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<MediaStatusNotifyMessage> message
+#define kEventSubordinateNotifyMediaStatusArgs const std::shared_ptr<SubordinatePlatform> & platform , const std::shared_ptr<MediaStatusNotifyMessage>& message
 
 // 下级平台收到 移动设备位置通知
 constexpr const char kEventSubordinateNotifyMobilePosition[] = "kEventSubordinateNotifyMobilePosition";
-#define kEventSubordinateNotifyMobilePositionArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<MobilePositionNotifyMessage> message
+#define kEventSubordinateNotifyMobilePositionArgs const std::shared_ptr<SubordinatePlatform>& platform , const std::shared_ptr<MobilePositionNotifyMessage>& message
 
 // 下级平台收到 截图上传完成通知
 constexpr const char kEventSubordinateNotifyUploadSnapShotFinished[] = "kEventSubordinateNotifyUploadSnapShotFinished";
-#define kEventSubordinateNotifyUploadSnapShotFinishedArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<UploadSnapShotFinishedNotifyMessage> message
+#define kEventSubordinateNotifyUploadSnapShotFinishedArgs const std::shared_ptr<SubordinatePlatform>& platform , const std::shared_ptr<UploadSnapShotFinishedNotifyMessage> & message
 
 // 下级平台收到 视频上传完成通知
 constexpr const char kEventSubordinateNotifyVideoUploadNotify[] = "kEventSubordinateNotifyVideoUploadNotify";
-#define kEventSubordinateNotifyVideoUploadNotifyArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<VideoUploadNotifyMessage> message
+#define kEventSubordinateNotifyVideoUploadNotifyArgs const std::shared_ptr<SubordinatePlatform> & platform , const std::shared_ptr<VideoUploadNotifyMessage> & message
 
 // 下级平台收到 设备升级结果通知
 constexpr const char kEventSubordinateNotifyDeviceUpgradeResult[] = "kEventSubordinateNotifyDeviceUpgradeResult";
-#define kEventSubordinateNotifyDeviceUpgradeResultArgs std::shared_ptr<SubordinatePlatform> platform , std::shared_ptr<DeviceUpgradeResultNotifyMessage> message
-
+#define kEventSubordinateNotifyDeviceUpgradeResultArgs const std::shared_ptr<SubordinatePlatform> & platform , const std::shared_ptr<DeviceUpgradeResultNotifyMessage>& message
 
 
 // 收到来自上级平台的 设备状态查询请求
 constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusRequest";
-#define kEventOnDeviceStatusRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceStatusMessageRequest> message, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> callback
+#define kEventOnDeviceStatusRequestArgs const std::shared_ptr<SuperPlatform>& platform,const std::shared_ptr<DeviceStatusMessageRequest> & message, const std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)> & callback
 
 // 收到来自上级平台的 目录查询请求
 constexpr const char kEventOnCatalogRequest[] = "kEventOnCatalogRequest";
@@ -104,10 +109,10 @@ constexpr const char kEventOnCatalogRequest[] = "kEventOnCatalogRequest";
  *      - true: 当对端返回4xx 时继续发送下一个
  *      - false: 当对端返回4xx 时立即结束任务
  */
-#define kEventOnCatalogRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CatalogRequestMessage> message, std::function<void(std::deque<std::shared_ptr<CatalogResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+#define kEventOnCatalogRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<CatalogRequestMessage>& message, const std::function<void(std::deque<std::shared_ptr<CatalogResponseMessage>>&& response, int concurrency, bool ignore_4xx)>& callback
 
 constexpr const char kEventOnDeviceInfoRequest[] = "kEventOnDeviceInfoRequest";
-#define kEventOnDeviceInfoRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceInfoMessageRequest> message, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)> callback
+#define kEventOnDeviceInfoRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceInfoMessageRequest> & message, const std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)>& callback
 
 // 收到来自上级平台的 目录查询请求
 constexpr const char kEventOnRecordInfoRequest[] = "kEventOnRecordInfoRequest";
@@ -126,7 +131,7 @@ constexpr const char kEventOnRecordInfoRequest[] = "kEventOnRecordInfoRequest";
  *      - true: 当对端返回4xx 时继续发送下一个
  *      - false: 当对端返回4xx 时立即结束任务
  */
-#define kEventOnRecordInfoRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<RecordInfoRequestMessage> message, std::function<void(std::deque<std::shared_ptr<RecordInfoResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+#define kEventOnRecordInfoRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<RecordInfoRequestMessage> message, const std::function<void(std::deque<std::shared_ptr<RecordInfoResponseMessage>>&& response, int concurrency, bool ignore_4xx)>& callback
 
 // 收到来自上级平台的 目录查询请求
 constexpr const char kEventOnConfigDownloadRequest[] = "kEventOnConfigDownloadRequest";
@@ -145,7 +150,7 @@ constexpr const char kEventOnConfigDownloadRequest[] = "kEventOnConfigDownloadRe
  *      - true: 当对端返回4xx 时继续发送下一个
  *      - false: 当对端返回4xx 时立即结束任务
  */
-#define kEventOnConfigDownloadRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<ConfigDownloadRequestMessage> message, std::function<void(std::deque<std::shared_ptr<ConfigDownloadResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+#define kEventOnConfigDownloadRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<ConfigDownloadRequestMessage>& message, const std::function<void(std::deque<std::shared_ptr<ConfigDownloadResponseMessage>> && response, int concurrency, bool ignore_4xx)>& callback
 
 // 收到来自上级平台的 目录查询请求
 constexpr const char kEventOnPresetListRequest[] = "kEventOnPresetListRequest";
@@ -164,11 +169,11 @@ constexpr const char kEventOnPresetListRequest[] = "kEventOnPresetListRequest";
  *      - true: 当对端返回4xx 时继续发送下一个
  *      - false: 当对端返回4xx 时立即结束任务
  */
-#define kEventOnPresetListRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<PresetRequestMessage> message, std::function<void(std::deque<std::shared_ptr<PresetResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+#define kEventOnPresetListRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<PresetRequestMessage>& message, const std::function<void(std::deque<std::shared_ptr<PresetResponseMessage>>&& response, int concurrency, bool ignore_4xx)>& callback
 
 
 constexpr const char kEventOnHomePositionRequest[] = "kEventOnHomePositionRequest";
-#define kEventOnHomePositionRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<HomePositionRequestMessage> message, std::function<void(std::shared_ptr<HomePositionResponseMessage>)> callback
+#define kEventOnHomePositionRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<HomePositionRequestMessage>& message, const std::function<void(std::shared_ptr<HomePositionResponseMessage>)> & callback
 
 constexpr const char kEventOnCruiseTrackListRequest[] = "kEventOnCruiseTrackListRequest";
 /**
@@ -186,7 +191,7 @@ constexpr const char kEventOnCruiseTrackListRequest[] = "kEventOnCruiseTrackList
  *      - true: 当对端返回4xx 时继续发送下一个
  *      - false: 当对端返回4xx 时立即结束任务
  */
-#define kEventOnCruiseTrackListRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CruiseTrackListRequestMessage> message, std::function<void(std::deque<std::shared_ptr<CruiseTrackListResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+#define kEventOnCruiseTrackListRequestArgs const std::shared_ptr<SuperPlatform>& platform,const std::shared_ptr<CruiseTrackListRequestMessage>& message, const std::function<void(std::deque<std::shared_ptr<CruiseTrackListResponseMessage>>&& response, int concurrency, bool ignore_4xx)>& callback
 
 constexpr const char kEventOnCruiseTrackRequest[] = "kEventOnCruiseTrackRequest";
 /**
@@ -204,72 +209,72 @@ constexpr const char kEventOnCruiseTrackRequest[] = "kEventOnCruiseTrackRequest"
  *      - true: 当对端返回4xx 时继续发送下一个
  *      - false: 当对端返回4xx 时立即结束任务
  */
-#define kEventOnCruiseTrackRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<CruiseTrackRequestMessage> message, std::function<void(std::deque<std::shared_ptr<CruiseTrackResponseMessage>> response, int concurrency, bool ignore_4xx)> callback
+#define kEventOnCruiseTrackRequestArgs const std::shared_ptr<SuperPlatform>& platform,std::shared_ptr<CruiseTrackRequestMessage> message, const std::function<void(std::deque<std::shared_ptr<CruiseTrackResponseMessage>>&& response, int concurrency, bool ignore_4xx)> & callback
 
 
 constexpr const char kEventOnPTZPositionRequest[] = "kEventOnPTZPositionRequest";
-#define kEventOnPTZPositionRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<PTZPositionRequestMessage> message, std::function<void(std::shared_ptr<PTZPositionResponseMessage>)> callback
+#define kEventOnPTZPositionRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<PTZPositionRequestMessage>& message, const std::function<void(std::shared_ptr<PTZPositionResponseMessage>)>& callback
 
 
 constexpr const char kEventOnSdCardStatusRequest[] = "kEventOnSdCardStatusRequest";
-#define kEventOnSdCardStatusRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<SdCardRequestMessage> message, std::function<void(std::shared_ptr<SdCardResponseMessage>)> callback
+#define kEventOnSdCardStatusRequestArgs const std::shared_ptr<SuperPlatform>& platform,const std::shared_ptr<SdCardRequestMessage>& message, const std::function<void(std::shared_ptr<SdCardResponseMessage>)> & callback
 
 
 constexpr const char kEventOnDeviceControlPtzRequest[] = "kEventOnDeviceControlPtzRequest";
-#define kEventOnDeviceControlPtzRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_PTZCmd> message
+#define kEventOnDeviceControlPtzRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_PTZCmd>& message
 
 constexpr const char kEventOnDeviceControlTeleBootRequest[] = "kEventOnDeviceControlTeleBootRequest";
-#define kEventOnDeviceControlTeleBootRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_TeleBoot> message
+#define kEventOnDeviceControlTeleBootRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_TeleBoot>& message
 
 constexpr const char kEventOnDeviceControlRecordCmdRequest[] = "kEventOnDeviceControlRecordCmdRequest";
-#define kEventOnDeviceControlRecordCmdRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_RecordCmd> message, std::function<void(std::shared_ptr<DeviceControlResponseMessage>)> callback
+#define kEventOnDeviceControlRecordCmdRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_RecordCmd> & message, const std::function<void(std::shared_ptr<DeviceControlResponseMessage>)>& callback
 
 constexpr const char kEventOnDeviceControlGuardCmdRequest[] = "kEventOnDeviceControlGuardCmdRequest";
-#define kEventOnDeviceControlGuardCmdRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_GuardCmd> message, std::function<void(std::shared_ptr<DeviceControlResponseMessage>)> callback
+#define kEventOnDeviceControlGuardCmdRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_GuardCmd>& message, const std::function<void(std::shared_ptr<DeviceControlResponseMessage>)>& callback
 
 constexpr const char kEventOnDeviceControlAlarmCmdRequest[] = "kEventOnDeviceControlAlarmCmdRequest";
-#define kEventOnDeviceControlAlarmCmdRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_AlarmCmd> message, std::function<void(std::shared_ptr<DeviceControlResponseMessage>)> callback
+#define kEventOnDeviceControlAlarmCmdRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_AlarmCmd>& message, const std::function<void(std::shared_ptr<DeviceControlResponseMessage>)>& callback
 
 constexpr const char kEventOnDeviceControlIFrameCmdRequest[] = "kEventOnDeviceControlIFrameCmdRequest";
-#define kEventOnDeviceControlIFrameCmdRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_IFrameCmd> message
+#define kEventOnDeviceControlIFrameCmdRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_IFrameCmd>& message
 
 constexpr const char kEventOnDeviceControlDragZoomInRequest[] = "kEventOnDeviceControlDragZoomInRequest";
-#define kEventOnDeviceControlDragZoomInRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_DragZoomIn> message
+#define kEventOnDeviceControlDragZoomInRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_DragZoomIn>& message
 
 constexpr const char kEventOnDeviceControlDragZoomOutRequest[] = "kEventOnDeviceControlDragZoomOutRequest";
-#define kEventOnDeviceControlDragZoomOutRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_DragZoomOut> message
+#define kEventOnDeviceControlDragZoomOutRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_DragZoomOut>& message
 
 constexpr const char kEventOnDeviceControlHomePositionRequest[] = "kEventOnDeviceControlHomePositionRequest";
-#define kEventOnDeviceControlHomePositionRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_HomePosition> message, std::function<void(std::shared_ptr<DeviceControlResponseMessage>)> callback
+#define kEventOnDeviceControlHomePositionRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_HomePosition>& message, const std::function<void(std::shared_ptr<DeviceControlResponseMessage>)>& callback
 
 constexpr const char kEventOnDeviceControlPTZPreciseCtrlRequest[] = "kEventOnDeviceControlPTZPreciseCtrlRequest";
-#define kEventOnDeviceControlPTZPreciseCtrlRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_PtzPreciseCtrl> message
+#define kEventOnDeviceControlPTZPreciseCtrlRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_PtzPreciseCtrl>& message
 
 constexpr const char kEventOnDeviceControlDeviceUpgradeRequest[] = "kEventOnDeviceControlDeviceUpgradeRequest";
-#define kEventOnDeviceControlDeviceUpgradeRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_DeviceUpgrade> message, std::function<void(std::shared_ptr<DeviceControlResponseMessage>)> callback
+#define kEventOnDeviceControlDeviceUpgradeRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_DeviceUpgrade>& message, const std::function<void(std::shared_ptr<DeviceControlResponseMessage>)>& callback
 
 constexpr const char kEventOnDeviceControlFormatSDCardRequest[] = "kEventOnDeviceControlFormatSDCardRequest";
-#define kEventOnDeviceControlFormatSDCardRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_FormatSDCard> message
+#define kEventOnDeviceControlFormatSDCardRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_FormatSDCard>& message
 
 constexpr const char kEventOnDeviceControlTargetTrackRequest[] = "kEventOnDeviceControlTargetTrackRequest";
-#define kEventOnDeviceControlTargetTrackRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceControlRequestMessage_TargetTrack> message
+#define kEventOnDeviceControlTargetTrackRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceControlRequestMessage_TargetTrack>& message
 
 constexpr const char kEventOnDeviceConfigRequest[] = "kEventOnDeviceConfigRequest";
-#define kEventOnDeviceConfigRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<DeviceConfigRequestMessage> message, std::function<void(std::shared_ptr<DeviceConfigResponseMessage>)> callback
+#define kEventOnDeviceConfigRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<DeviceConfigRequestMessage>& message, const std::function<void(std::shared_ptr<DeviceConfigResponseMessage>)>& callback
 
 constexpr const char kEventOnBroadcastNotifyRequest[] = "kEventOnBroadcastNotifyRequest";
-#define kEventOnBroadcastNotifyRequestArgs std::shared_ptr<SuperPlatform> platform,std::shared_ptr<BroadcastNotifyRequest> message, std::function<void(std::shared_ptr<BroadcastNotifyResponse>)> callback
+#define kEventOnBroadcastNotifyRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<BroadcastNotifyRequest>& message, const std::function<void(std::shared_ptr<BroadcastNotifyResponse>)> & callback
 
 // 收到订阅通知
 constexpr const char kEventOnSubscribeNotify[] = "kEventOnSubscribeNotify";
-#define kEventOnSubscribeNotifyArgs std::shared_ptr<SubscribeRequest> subscribe, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, std::string &reason
+#define kEventOnSubscribeNotifyArgs std::shared_ptr<SubscribeRequest> subscribe, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, const std::string &reason
 
 constexpr const char kEventOnSubscribeRequest[] = "kEventOnSubscribeRequest";
-#define kEventOnSubscribeRequestArgs const std::shared_ptr<SuperPlatform> platform,const std::shared_ptr<SubscribeRequest>& subscribe, const std::shared_ptr<MessageBase> &message
+#define kEventOnSubscribeRequestArgs const std::shared_ptr<SuperPlatform> & platform, const std::shared_ptr<SubscribeRequest> & subscribe, const std::shared_ptr<MessageBase> &message
 
 // 收到播放请求
 constexpr const char kEventOnInviteRequest[] = "kEventOnInviteRequest";
-#define kEventOnInviteRequestArgs std::shared_ptr<SuperPlatform> platform,const std::shared_ptr<InviteRequest> &message, std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp
+#define kEventOnInviteRequestArgs const std::shared_ptr<SuperPlatform>& platform, const std::shared_ptr<InviteRequest> &message, const std::function<void(int, std::shared_ptr<SdpDescription>)> &resp
 
 
 

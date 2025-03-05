@@ -72,10 +72,7 @@ public:
         std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
 
     int on_keep_alive(std::shared_ptr<KeepaliveMessageRequest> request);
-    void on_device_info(
-        std::shared_ptr<DeviceInfoMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
-    void on_device_status(
-        std::shared_ptr<DeviceStatusMessageRequest> request, std::function<void(std::shared_ptr<MessageBase>)> &&reply);
+
 
     int on_notify(
         MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,

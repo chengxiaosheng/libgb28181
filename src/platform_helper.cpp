@@ -15,6 +15,8 @@
 #include <inner/sip_session.h>
 #include <request/RequestProxyImpl.h>
 
+using namespace toolkit;
+
 namespace gb28181 {
 class MessageBase;
 }
@@ -78,7 +80,8 @@ struct sip_agent_t *PlatformHelper::get_sip_agent() {
     return server->get_sip_agent().get();
 }
 bool PlatformHelper::update_remote_via(std::pair<std::string, uint32_t> val) {
-    if (val.first.empty() && val.second == 0) return false;
+    if (val.first.empty() && val.second == 0)
+        return false;
     std::string &host = val.first;
     uint32_t &port = val.second;
 
@@ -102,16 +105,15 @@ bool PlatformHelper::update_remote_via(std::pair<std::string, uint32_t> val) {
         toolkit::EventPollerPool::Instance().getExecutor()->async(
             [this_ptr = shared_from_this()]() {
                 if (auto platform = std::dynamic_pointer_cast<SuperPlatformImpl>(this_ptr)) {
-                    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSuperPlatformContactChanged, platform, this_ptr->sip_account().local_host,this_ptr->sip_account().local_port);
+                    NOTICE_EMIT(kEventSuperPlatformContactChangedArgs, Broadcast::kEventSuperPlatformContactChanged, std::dynamic_pointer_cast<SuperPlatform>(platform), this_ptr->sip_account().local_host, this_ptr->sip_account().local_port);
                 }
                 if (auto platform = std::dynamic_pointer_cast<SubordinatePlatformImpl>(this_ptr)) {
-                    toolkit::NoticeCenter::Instance().emitEvent(Broadcast::kEventSubordinatePlatformContactChanged, platform, this_ptr->sip_account().local_host,this_ptr->sip_account().local_port);
+                    NOTICE_EMIT(kEventSubordinatePlatformContactChangedArgs, Broadcast::kEventSubordinatePlatformContactChanged, std::dynamic_pointer_cast<SubordinatePlatform>(platform), this_ptr->sip_account().local_host, this_ptr->sip_account().local_port);
                 }
             },
             false);
     }
     return changed;
-
 }
 std::string PlatformHelper::get_from_uri() {
     return from_uri_;
@@ -134,7 +136,7 @@ void PlatformHelper::remove_request_proxy(int32_t sn) {
 }
 
 void PlatformHelper::uac_send(
-    const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string &&payload,
+    const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string)> &rcb, bool force_tcp) {
     get_session(
         [transaction, payload = std::move(payload),
@@ -153,23 +155,23 @@ void PlatformHelper::uac_send(
         force_tcp);
 }
 void PlatformHelper::uas_send2(
-    const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string &&payload,
+    const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp) {
     get_session(
-    [transaction, payload = std::move(payload),
-     rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
-        if (e) {
-            return rcb(false, e.what(), session);
-        }
-        if (0
-            != sip_uac_send(
-                transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
-                session.get())) {
-            return rcb(false, "failed to send request, call sip_uac_send failed", session);
-        }
-        rcb(true, {}, session);
-    },
-    force_tcp);
+        [transaction, payload = std::move(payload),
+         rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+            if (e) {
+                return rcb(false, e.what(), session);
+            }
+            if (0
+                != sip_uac_send(
+                    transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
+                    session.get())) {
+                return rcb(false, "failed to send request, call sip_uac_send failed", session);
+            }
+            rcb(true, {}, session);
+        },
+        force_tcp);
 }
 void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session) {
     if (session->is_udp()) {
@@ -250,7 +252,6 @@ int PlatformHelper::on_recv_message(
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
 
-    CharEncodingType message_encoding { message.encoding() };
     // [fold] region get platform
     bool from_super_platform = false;
     // 查询请求 与 设备控制 一定来自上级平台
@@ -260,36 +261,14 @@ int PlatformHelper::on_recv_message(
         // 语音广播 一般由上级发起
         from_super_platform = true;
     }
-    std::variant<std::shared_ptr<SubordinatePlatformImpl>, std::shared_ptr<SuperPlatformImpl>> platform_;
+    std::shared_ptr<PlatformHelper> platform_;
     if (from_super_platform) {
         platform_ = std::dynamic_pointer_cast<SuperPlatformImpl>(sip_server->get_super_platform(platform_id));
     } else {
         platform_
             = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
     }
-    bool has_platform = false;
-    if (std::holds_alternative<std::shared_ptr<SuperPlatformImpl>>(platform_)) {
-        if (auto platform = std::get<std::shared_ptr<SuperPlatformImpl>>(platform_)) {
-            has_platform = true;
-            if (message_encoding == CharEncodingType::invalid) {
-                message_encoding = platform->account().encoding;
-            } else if (platform->account().encoding == CharEncodingType::invalid) {
-                // 反向设置是否合理？
-                platform->set_encoding(message_encoding);
-            }
-        }
-    } else if (std::holds_alternative<std::shared_ptr<SubordinatePlatformImpl>>(platform_)) {
-        if (auto platform = std::get<std::shared_ptr<SubordinatePlatformImpl>>(platform_)) {
-            has_platform = true;
-            if (message_encoding == CharEncodingType::invalid) {
-                message_encoding = platform->account().encoding;
-            } else if (platform->account().encoding == CharEncodingType::invalid) {
-                // 反向设置是否合理？
-                platform->set_encoding(message_encoding);
-            }
-        }
-    }
-    if (!has_platform) {
+    if (!platform_) {
         WarnL << "platform was not found";
         if (message.command() == MessageCmdType::Keepalive) {
             return 0;
@@ -297,11 +276,18 @@ int PlatformHelper::on_recv_message(
         set_message_reason(transaction.get(), "user not logged in");
         return sip_uas_reply(transaction.get(), 401, nullptr, 0, session.get());
     }
+    CharEncodingType message_encoding { message.encoding() };
+    if (message_encoding == CharEncodingType::invalid) {
+        message_encoding = platform_->sip_account().encoding;
+        message.encoding(message_encoding);
+    } else if (platform_->sip_account().encoding == CharEncodingType::invalid) {
+        platform_->sip_account().encoding = message_encoding;
+    }
     // [fold] endregion get platform
     std::string convert_xml_str;
     switch (message.encoding()) {
-        case CharEncodingType::gbk: convert_xml_str = gbk_to_utf8((const char *)req->payload); break;
-        case CharEncodingType::gb2312: convert_xml_str = gb2312_to_utf8((const char *)req->payload); break;
+        case CharEncodingType::gbk: convert_xml_str = gbk_to_utf8(static_cast<const char *>(req->payload)); break;
+        case CharEncodingType::gb2312: convert_xml_str = gb2312_to_utf8(static_cast<const char *>(req->payload)); break;
         default: break;
     }
     // 基于指定编码重新解析xml
@@ -326,23 +312,17 @@ int PlatformHelper::on_recv_message(
 
     // 如果是应答消息，一定来自下级平台
     int sip_code = 0;
-    std::visit(
-        [&](auto &platform) {
-            if (message.root() == MessageRootType::Response)
-                sip_code = platform->on_response(std::move(message), transaction, req);
-            else if (message.root() == MessageRootType::Notify)
-                sip_code = platform->on_notify(std::move(message), transaction, req);
-            else if (message.root() == MessageRootType::Control)
-                sip_code = platform->on_control(std::move(message), transaction, req);
-            else if (message.root() == MessageRootType::Query)
-                sip_code = platform->on_query(std::move(message), transaction, req);
-        },
-        platform_);
-
+    switch (message.root()) {
+        case MessageRootType::Query: sip_code = platform_->on_query(std::move(message), transaction, req); break;
+        case MessageRootType::Control: sip_code = platform_->on_control(std::move(message), transaction, req); break;
+        case MessageRootType::Notify: sip_code = platform_->on_notify(std::move(message), transaction, req); break;
+        case MessageRootType::Response: sip_code = platform_->on_response(std::move(message), transaction, req); break;
+        default: break;
+    }
     if (sip_code > 0) {
         return sip_uas_reply(transaction.get(), sip_code, nullptr, 0, session.get());
     }
-    return sip_code;
+    return 0;
 }
 
 int PlatformHelper::on_query(

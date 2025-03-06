@@ -263,7 +263,7 @@ void SuperPlatformImpl::to_keepalive() {
         = std::make_shared<KeepaliveMessageRequest>(local_server_weak_.lock()->get_account().platform_id);
     keepalive_ptr->info() = fault_devices_;
     std::make_shared<RequestProxyImpl>(shared_from_this(), keepalive_ptr, RequestProxy::RequestType::NoResponse)
-        ->send([weak_this = weak_from_this()](std::shared_ptr<RequestProxy> proxy) {
+        ->send([weak_this = weak_from_this()](const std::shared_ptr<RequestProxy>& proxy) {
             if (auto this_ptr = weak_this.lock()) {
                 if (proxy->status() == RequestProxy::Status::Succeeded) {
                     this_ptr->account_.plat_status.keepalive_time = getCurrentMicrosecond(true);
@@ -280,9 +280,12 @@ void SuperPlatformImpl::to_keepalive() {
                 // 心跳超时 ? 应该重新注册
                 if (this_ptr->keepalive_ticker_->elapsedTime()
                     >= this_ptr->account_.keepalive_interval * this_ptr->account_.keepalive_times * 1000) {
+                    // 停止心跳检测
+                    this_ptr->keepalive_timer_.reset();
                     this_ptr->set_status(
                         PlatformStatusType::offline,
                         "keepalive timeout, " + std::to_string(this_ptr->keepalive_ticker_->elapsedTime() / 1000));
+                    // 发起注册请求
                     this_ptr->to_register(this_ptr->account_.register_expired);
                 }
             }

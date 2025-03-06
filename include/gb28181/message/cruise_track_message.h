@@ -3,7 +3,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class CruiseTrackListRequestMessage : public MessageBase {
+class CruiseTrackListRequestMessage final : public MessageBase {
 public:
     explicit CruiseTrackListRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -11,7 +11,7 @@ public:
         : MessageBase(std::move(messageBase)) {}
     explicit CruiseTrackListRequestMessage(const std::string &device_id);
 };
-class CruiseTrackRequestMessage : public MessageBase {
+class CruiseTrackRequestMessage final: public MessageBase {
 public:
     explicit CruiseTrackRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -29,7 +29,7 @@ private:
     int32_t number_ { 0 };
 };
 
-class CruiseTrackListResponseMessage : public MessageBase {
+class CruiseTrackListResponseMessage final: public ListMessageBase {
 public:
     explicit CruiseTrackListResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -43,13 +43,14 @@ public:
 
     std::vector<CruiseTrackListItemType> &cruise_track_list() { return cruise_track_list_; }
 
+    int32_t num() override { return cruise_track_list_.size(); }
+
 protected:
     bool load_detail() override;
     bool parse_detail() override;
 
 private:
     ResultType result_ { ResultType::invalid };
-    int32_t sum_num_ { 0 };
     std::vector<CruiseTrackListItemType> cruise_track_list_;
 };
 

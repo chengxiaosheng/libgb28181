@@ -38,9 +38,9 @@ CruiseTrackListResponseMessage::CruiseTrackListResponseMessage(
     const std::string &reason)
     : MessageBase()
     , result_(result)
-    , sum_num_(sum_num)
     , cruise_track_list_(std::move(list)) {
     device_id_ = device_id;
+    sum_num_ = sum_num;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::CruiseTrackListQuery;
 }
@@ -48,9 +48,9 @@ CruiseTrackListResponseMessage::CruiseTrackListResponseMessage(
     const std::string &device_id, int32_t sum_num, std::vector<CruiseTrackListItemType> &&list)
     : MessageBase()
     , result_(ResultType::OK)
-    , sum_num_(sum_num)
     , cruise_track_list_(std::move(list)) {
     device_id_ = device_id;
+    sum_num_ = sum_num;
     root_ = MessageRootType::Response;
     cmd_ = MessageCmdType::CruiseTrackListQuery;
 }

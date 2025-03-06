@@ -53,7 +53,7 @@ public:
 protected:
     virtual int on_response(const std::shared_ptr<MessageBase> &response);
 
-    void on_reply(std::shared_ptr<sip_message_t> sip_message, int code);
+    void on_reply(const std::shared_ptr<sip_message_t> &sip_message, int code);
 
     void on_completed();
 

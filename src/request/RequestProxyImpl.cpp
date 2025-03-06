@@ -29,6 +29,9 @@
 
 using namespace gb28181;
 
+static std::unordered_map<void *, std::shared_ptr<RequestProxyImpl>> request_proxy_map_;
+static std::mutex request_proxy_mutex_;
+
 std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxyImpl &proxy) {
     os << "(";
     os << proxy.platform_->sip_account().platform_id << ":" << proxy.request_->root() << ":"
@@ -129,23 +132,29 @@ int RequestProxyImpl::on_recv_reply(
     void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
     if (param == nullptr)
         return 0;
-    auto request = static_cast<RequestProxyImpl *>(param);
+    std::shared_ptr<RequestProxyImpl> request;
+    {
+        std::lock_guard<decltype(request_proxy_mutex_)> lck(request_proxy_mutex_);
+        if (auto it = request_proxy_map_.find(param); it != request_proxy_map_.end()) {
+            request = it->second;
+        }
+    }
+    if (!request) {
+        return 0;
+    }
+    std::shared_ptr<sip_message_t> sip_message = nullptr;
     if (reply) {
         request->platform_->update_remote_via(get_via_rport(reply));
-        // if (auto via = sip_vias_get(&reply->vias, 0)) {
-        //     std::string host = cstrvalid(&via->received) ? std::string(via->received.p, via->received.n) : "";
-        //     request->platform_->update_local_via(host, static_cast<uint16_t>(via->rport));
-        // }
+        sip_message.reset(const_cast<sip_message_t *>(reply), [](sip_message_t *reply) {
+            if (reply) {
+                sip_message_destroy(reply);
+            }
+        });
     }
-    std::shared_ptr<sip_message_t> sip_message(const_cast<sip_message_t *>(reply), [](sip_message_t *reply) {
-        if (reply) {
-            sip_message_destroy(reply);
-        }
-    });
     request->on_reply(sip_message, code);
     return 0;
 }
-void RequestProxyImpl::on_reply(std::shared_ptr<sip_message_t> sip_message, int code) {
+void RequestProxyImpl::on_reply(const std::shared_ptr<sip_message_t> &sip_message, int code) {
     reply_time_ = toolkit::getCurrentMicrosecond(true);
     reply_code_ = code;
     uac_transaction_.reset();
@@ -190,6 +199,10 @@ void RequestProxyImpl::on_completed() {
         reply_callback_ = nullptr;
         response_callback_ = nullptr;
         rcb_ = nullptr;
+        {
+            std::lock_guard<decltype(request_proxy_mutex_)> lck(request_proxy_mutex_);
+            request_proxy_map_.erase(this);
+        }
         on_completed_l();
         platform_->remove_request_proxy(request_sn_);
     }
@@ -224,6 +237,10 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
     }
     platform_->add_request_proxy(request_sn_, shared_from_this());
     send_time_ = toolkit::getCurrentMicrosecond(true);
+    {
+        std::lock_guard<decltype(request_proxy_mutex_)> lck(request_proxy_mutex_);
+        request_proxy_map_.emplace(this, shared_from_this());
+    }
     platform_->uac_send(uac_transaction_, request_->str(), [weak_this = weak_from_this()](bool ret, std::string err) {
         if (auto this_ptr = weak_this.lock()) {
             if (!ret) {

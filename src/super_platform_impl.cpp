@@ -439,8 +439,6 @@ struct  MultiResponseQueryHandler<Request,Response,EventType, RET(Args...)> {
         std::deque<ResponsePtr> responses; // 回复数据据队列
         RequestPtr request;
     };
-
-public:
     // 主处理模板方法
     int process(
         MessageBase &&message,  std::shared_ptr<sip_uas_transaction_t> &&transaction,
@@ -520,10 +518,14 @@ public:
                return 0;
            });
         // 事件派发
-        if (0 == NOTICE_EMIT(Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), ctx->request, response)) {
-            ctx->timeout->cancel();
-            ctx->timeout.reset();
-            return 404;
+        try {
+            if (0 == NOTICE_EMIT(Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), ctx->request, response)) {
+                ctx->timeout->cancel();
+                ctx->timeout.reset();
+                return 404;
+            }
+        } catch (std::exception &e) {
+            ErrorL << "notify message " << *ctx->request <<  " failed: " << e.what();
         }
         return 200;
     }
@@ -533,7 +535,8 @@ public:
 int SuperPlatformImpl::on_query(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
     WarnL << "on query " << message;
-    switch (message.command()) {
+    const MessageCmdType type = message.command();
+    switch (type) {
         case MessageCmdType::DeviceStatus:
             return OneResponseQueryHandler<
                        DeviceStatusMessageRequest, DeviceStatusMessageResponse,

@@ -225,10 +225,17 @@ void SipSession::handle_recv() {
         ret = sip_message_load(request, _sip_parse.get());
         TraceP(this) << " recv: \n" << print_recv_message(_sip_parse.get(), (HTTP_PARSER_MODE)_wait_type);
         sip_agent_set_rport(request, get_peer_ip().c_str(), get_peer_port());
-        ret = sip_agent_input(_sip_agent, request, this);
-        if (ret != 0) {
-            WarnL << "input failed";
-        }
+        // 捕获this_ptr 防止当前session 被干掉
+        // 异步执行 sip_agent_input 避免消息在网络侧积压
+        // 一一般一个平台都在同一个poller中处理， 这里是否有必要将事件分摊到不同的线程？
+        // EventPollerPool::Instance().getPoller(false);
+        getPoller()->async([this_ptr = std::dynamic_pointer_cast<SipSession>(shared_from_this()), request]() {
+            auto ret = sip_agent_input(this_ptr->_sip_agent, request, this_ptr.get());
+            if (ret != 0) {
+                WarnL << "input failed";
+            }
+        });
+
         _wait_type = 0;
         // 数据有余量
         if (len) {

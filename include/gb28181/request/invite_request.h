@@ -9,6 +9,18 @@ namespace gb28181 {
 class SuperPlatform;
 class SubordinatePlatform;
 enum class INVITE_STATUS_TYPE { invite = 0, trying, ack, bye, cancel, failed };
+inline const char *to_string(INVITE_STATUS_TYPE e) {
+    switch (e) {
+        case INVITE_STATUS_TYPE::invite: return "invite";
+        case INVITE_STATUS_TYPE::trying: return "trying";
+        case INVITE_STATUS_TYPE::ack: return "ack";
+        case INVITE_STATUS_TYPE::bye: return "bye";
+        case INVITE_STATUS_TYPE::cancel: return "cancel";
+        case INVITE_STATUS_TYPE::failed: return "failed";
+        default: return "unknown";
+    }
+}
+
 struct PlaybackState {
     float scale = 1.0; // 播放倍速
     uint32_t current_npt = 0; // 当前播放位置（秒）

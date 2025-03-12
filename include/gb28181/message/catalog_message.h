@@ -40,6 +40,7 @@ public:
     }
 
 protected:
+    CatalogResponseMessage() = default;
     bool load_detail() override;
     bool parse_detail() override;
 
@@ -48,14 +49,20 @@ private:
     std::vector<std::string> extra_;
 };
 
-class CatalogNotifyMessage : public CatalogResponseMessage {
+class CatalogNotifyMessage final: public CatalogResponseMessage {
 public:
     explicit CatalogNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
-        : CatalogResponseMessage(xml) {}
+        : MessageBase(xml)
+        , CatalogResponseMessage() {}
     explicit CatalogNotifyMessage(MessageBase &&messageBase)
-        : CatalogResponseMessage(std::move(messageBase)) {}
+        : MessageBase(std::move(messageBase))
+        , CatalogResponseMessage() {}
     explicit CatalogNotifyMessage(
         const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra);
+
+protected:
+    bool load_detail() override;
+    bool parse_detail() override;
 };
 
 } // namespace gb28181

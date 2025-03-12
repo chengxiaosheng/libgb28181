@@ -1,17 +1,12 @@
 #ifndef gb28181_src_request_SUBSCRIBE_REQUEST_IMPL_H
 #define gb28181_src_request_SUBSCRIBE_REQUEST_IMPL_H
-#include "RequestConfigDownloadImpl.h"
 #include "gb28181/request/subscribe_request.h"
 #include "sip-subscribe.h"
 #include <Poller/EventPoller.h>
 #include <memory>
 #include <string>
-#include <variant>
 
 #if defined(__cplusplus)
-namespace gb28181 {
-class SuperPlatformImpl;
-}
 extern "C" {
 struct sip_subscribe_t;
 struct sip_uac_transaction_t;
@@ -21,13 +16,13 @@ struct sip_message_t;
 #endif
 
 namespace gb28181 {
+class SuperPlatform;
+class PlatformHelper;
 class MessageBase;
-}
-namespace gb28181 {
+class SipSession;
+class SuperPlatformImpl;
 class SubordinatePlatformImpl;
-}
-namespace gb28181 {
-class SubscribeRequestImpl
+class SubscribeRequestImpl final
     : public SubscribeRequest
     , public std::enable_shared_from_this<SubscribeRequestImpl> {
 public:
@@ -40,13 +35,22 @@ public:
 
     void set_status_callback(SubscriberStatusCallback cb) override { subscriber_callback_ = std::move(cb); }
     void set_notify_callback(SubscriberNotifyCallback cb) override { notify_callback_ = std::move(cb); }
+    const subscribe_info &get_subscribe_info() const override {
+        return subscribe_info_;
+    }
     void start() override;
     void shutdown(std::string reason) override;
+    std::shared_ptr<SubordinatePlatform> get_sub_platform() override;
+    std::shared_ptr<SuperPlatform> get_super_platform() override;
 
     SUBSCRIBER_STATUS_TYPE_E status() const override { return status_; }
     const std::string &error() const override { return error_; }
     int time_remain() const override;
     bool is_incoming() const override { return incoming_; }
+
+    uint64_t get_subscribe_time() override {
+        return subscribe_time_;
+    }
 
     void send_notify(const std::shared_ptr<MessageBase> &message, SubscriberNotifyReplyCallback rcb) override;
 
@@ -89,8 +93,7 @@ private:
     std::string get_notify_state_str() const;
 
 private:
-    std::variant<std::shared_ptr<SubordinatePlatformImpl>, std::shared_ptr<SuperPlatformImpl>>
-        platform_; // 订阅所属平台指针
+    std::shared_ptr<PlatformHelper> platform_; // 订阅所属平台指针
     std::shared_ptr<MessageBase> subscribe_message_; // 订阅请求的
     std::string error_; // 错误信息
     uint64_t subscribe_time_ { 0 }; // 订阅成功时间
@@ -100,6 +103,7 @@ private:
     TERMINATED_TYPE_E terminated_type_ { invalid }; // 终止状态
     bool incoming_ { false }; // 是否为传入
     std::atomic<bool> running_ { false }; // 是否正在运行
+    int expires_ { 0 }; // 发送订阅时 设置的过期时间
     std::shared_ptr<sip_subscribe_t> sip_subscribe_ptr_; // sip订阅指针
     SubscriberStatusCallback subscriber_callback_; // 订阅状态回调
     SubscriberNotifyCallback notify_callback_; // 收到通知的回调

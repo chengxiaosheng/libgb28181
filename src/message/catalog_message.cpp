@@ -208,10 +208,16 @@ bool CatalogResponseMessage::parse_detail() {
 }
 
  CatalogNotifyMessage::CatalogNotifyMessage(
-    const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra) : CatalogResponseMessage(device_id, sum_num,std::move(items), std::move(extra)) {
+    const std::string &device_id, int sum_num, std::vector<ItemTypeInfo> &&items, std::vector<std::string> &&extra)
+    : CatalogResponseMessage(device_id, sum_num, std::move(items), std::move(extra)) {
     root_ = MessageRootType::Notify;
 }
-
+bool CatalogNotifyMessage::load_detail() {
+    return CatalogResponseMessage::load_detail();
+}
+bool CatalogNotifyMessage::parse_detail() {
+    return CatalogResponseMessage::parse_detail();
+}
 
 /**********************************************************************************************************
 文件名称:   catalog_message.cpp

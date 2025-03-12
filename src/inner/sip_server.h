@@ -66,7 +66,9 @@ public:
     inline std::shared_ptr<sip_agent_t> get_sip_agent() const { return sip_; }
 
     std::shared_ptr<SubordinatePlatform> get_subordinate_platform(const std::string &platform_id) override;
+    std::vector<std::shared_ptr<SubordinatePlatform>> get_all_subordinate_platform() override;
     std::shared_ptr<SuperPlatform> get_super_platform(const std::string &platform_id) override;
+    std::vector<std::shared_ptr<SuperPlatform>> get_all_super_platforms() override;
     std::shared_ptr<SubordinatePlatform> add_subordinate_platform(subordinate_account &&account) override;
     void remove_subordinate_platform(const std::string &platform_id) override;
     std::shared_ptr<SuperPlatform> add_super_platform(super_account &&account) override;

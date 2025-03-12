@@ -75,12 +75,32 @@ std::shared_ptr<SubordinatePlatform> SipServer::get_subordinate_platform(const s
     }
     return nullptr;
 }
+std::vector<std::shared_ptr<SubordinatePlatform>> SipServer::get_all_subordinate_platform() {
+    std::vector<std::shared_ptr<SubordinatePlatform>> platforms;
+    {
+        std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+        for(auto &it : sub_platforms_) {
+            platforms.emplace_back(it.second);
+        }
+    }
+    return platforms;
+}
 std::shared_ptr<SuperPlatform> SipServer::get_super_platform(const std::string &platform_id) {
     std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
     if (auto it = super_platforms_.find(platform_id); it != super_platforms_.end()) {
         return it->second;
     }
     return nullptr;
+}
+std::vector<std::shared_ptr<SuperPlatform>> SipServer::get_all_super_platforms() {
+    std::vector<std::shared_ptr<SuperPlatform>> platforms;
+    {
+        std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+        for(auto &it : super_platforms_) {
+            platforms.emplace_back(it.second);
+        }
+    }
+    return platforms;
 }
 std::shared_ptr<SubordinatePlatform> SipServer::add_subordinate_platform(subordinate_account &&account) {
     std::string platform_id = account.platform_id;
@@ -182,8 +202,23 @@ void SipServer::run() {
     }
 }
 void SipServer::shutdown() {
-    udp_server_.reset();
-    tcp_server_.reset();
+    if (running_.exchange(false)) {
+        std::unordered_map<std::string, std::shared_ptr<SuperPlatformImpl>> super_platforms;
+        std::unordered_map<std::string, std::shared_ptr<SubordinatePlatformImpl>> sub_platforms;
+        {
+            std::unique_lock<decltype(platform_mutex_)> lock(platform_mutex_);
+            super_platforms_.swap(super_platforms);
+            sub_platforms_.swap(sub_platforms);
+        }
+        for (const auto& it : super_platforms) {
+            it.second->shutdown();
+        }
+        for (const auto& it : sub_platforms) {
+            it.second->shutdown();
+        }
+        udp_server_.reset();
+        tcp_server_.reset();
+    }
 }
 
 void SipServer::get_client_l(
@@ -371,12 +406,18 @@ int SipServer::onnotify(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *sub,
     const struct cstring_t *event) {
     set_message_agent(t);
+    DebugL << "on notify , session = " << sub;
     if (auto subscribe = SubscribeRequestImpl::get_subscribe(sub)) {
         GetSipSession(param);
         RefTransaction(t);
         RefSipMessage(req);
         return subscribe->on_recv_notify(session_ptr, req_ptr, trans_ref);
     }
+    // 如果通知负载数据，但无法找到订阅, 将notify消息降级为 message 消息处理
+    if (req->payload && req->size > 0) {
+        return onmessage(param, req, t, sub, req->payload, req->size);
+    }
+    // 直接返回481 会话不存在
     return sip_uas_reply(t, 481, nullptr, 0, param);
 }
 int SipServer::onpublish(

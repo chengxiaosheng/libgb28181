@@ -1,14 +1,15 @@
 #ifndef gb28181_include_gb28181_request_SUBSCRIBE_REQUEST_H
 #define gb28181_include_gb28181_request_SUBSCRIBE_REQUEST_H
 #include "tinyxml2.h"
-
+#include "gb28181/type_define.h"
 #include <functional>
-#include <string>
 #include <memory>
+#include <string>
 
 namespace gb28181 {
 class SubordinatePlatform;
 class MessageBase;
+class SuperPlatform;
 class SubscribeRequest {
 public:
     enum TERMINATED_TYPE_E : uint8_t {
@@ -23,6 +24,7 @@ public:
         invariant, // 订阅因违反协议或服务端的约束条件而被终止。
     };
     enum SUBSCRIBER_STATUS_TYPE_E : uint8_t {
+        unknown = 0,
         active, // 表示订阅有效。
         pending, // 表示订阅已被服务器接收，但尚未完成相关处理。
         terminated, // 表示订阅已终止，订阅者不会再接收任何事件通知。
@@ -31,6 +33,7 @@ public:
         std::string event; // 事件名称
         uint64_t subscribe_id { 0 }; // 订阅唯一标识
         uint32_t expires { 3600 }; // 订阅有效期
+        SubscribeType type { SubscribeType::invalid };
     };
     /**
      * 订阅状态变更回调
@@ -38,8 +41,8 @@ public:
     using SubscriberStatusCallback
         = std::function<void(std::shared_ptr<SubscribeRequest>, SUBSCRIBER_STATUS_TYPE_E, std::string)>;
     using SubscriberNotifyReplyCallback = std::function<void(int, std::string)>;
-    using SubscriberNotifyCallback
-        = std::function<int(std::shared_ptr<SubscribeRequest>, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, std::string &reason)>;
+    using SubscriberNotifyCallback = std::function<int(
+        std::shared_ptr<SubscribeRequest>, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, std::string &reason)>;
 
     virtual ~SubscribeRequest() = default;
     /**
@@ -54,6 +57,20 @@ public:
      * @remark 同步回调，请勿阻塞， 回调应返回一个sip状态码
      */
     virtual void set_notify_callback(SubscriberNotifyCallback cb) = 0;
+
+    virtual const subscribe_info &get_subscribe_info() const = 0;
+
+    /**
+     * 获取订阅对应的平台
+     * @remark 传入的订阅此函数无效
+     */
+    virtual std::shared_ptr<SubordinatePlatform> get_sub_platform() = 0;
+    /**
+     * 获取订阅对应的上级平台
+     * @remark 传出的订阅此函数无效
+     */
+    virtual std::shared_ptr<SuperPlatform> get_super_platform() = 0;
+
     /**
      * 启动订阅
      * - 当 <b>is_incoming() = false</b> 时， 此函数用来启动订阅
@@ -88,6 +105,8 @@ public:
      * @return
      */
     virtual int time_remain() const = 0;
+
+ virtual uint64_t get_subscribe_time() = 0;
 
     /**
      * 是否为传入的订阅

@@ -32,6 +32,16 @@ using namespace gb28181;
 static std::unordered_map<void *, std::shared_ptr<RequestProxyImpl>> request_proxy_map_;
 static std::mutex request_proxy_mutex_;
 
+const char * to_string(const RequestProxy::RequestType &type) {
+    switch (type) {
+        case RequestProxy::invalid: return "invalid"; ;
+        case RequestProxy::NoResponse: return "NoResponse";
+        case RequestProxy::OneResponse: return "OneResponse";
+        case RequestProxy::MultipleResponses: return "MultipleResponses";
+    }
+    return "";
+}
+
 std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxyImpl &proxy) {
     os << "(";
     os << proxy.platform_->sip_account().platform_id << ":" << proxy.request_->root() << ":"
@@ -39,7 +49,7 @@ std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxyImpl &prox
 
     if (proxy.request_sn_)
         os << ":" << proxy.request_sn_;
-    os << ") ";
+    os << ")->" << to_string(proxy.request_type_);
     return os;
 }
 std::ostream &gb28181::operator<<(std::ostream &os, const RequestProxy &proxy) {

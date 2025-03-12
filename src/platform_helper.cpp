@@ -200,7 +200,7 @@ int PlatformHelper::on_response(
     if (proxy) {
         return proxy->on_response(std::move(message), std::move(transaction), std::move(request));
     }
-    return 0;
+    return 404;
 }
 int PlatformHelper::on_recv_message(
     const std::shared_ptr<SipSession> &session, const std::shared_ptr<sip_uas_transaction_t> &transaction,
@@ -241,6 +241,7 @@ int PlatformHelper::on_recv_message(
         set_message_reason(transaction.get(), message.get_error().c_str());
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, session.get());
     }
+    DebugL << "recv message " << message;
     if (message.root() == MessageRootType::invalid) {
         WarnL << "SIP message root is invalid";
         set_message_reason(transaction.get(), "invalid root message");
@@ -307,8 +308,7 @@ int PlatformHelper::on_recv_message(
         }
     }
 
-    DebugL << "handler sip message, root = " << message.root() << ", command = " << message.command()
-           << ", sn = " << message.sn();
+    DebugL << "handle message " << message;
 
     // 如果是应答消息，一定来自下级平台
     int sip_code = 0;

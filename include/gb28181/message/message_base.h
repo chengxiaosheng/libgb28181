@@ -11,7 +11,7 @@ class MessageBase {
 public:
     virtual ~MessageBase() = default;
     explicit MessageBase(const std::shared_ptr<tinyxml2::XMLDocument> &xml);
-    MessageBase(MessageBase &&) = default;
+    MessageBase(MessageBase &&) noexcept;
     MessageBase &operator=(MessageBase &&) = default;
     /**
      * 消息类型

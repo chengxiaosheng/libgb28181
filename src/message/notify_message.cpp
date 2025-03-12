@@ -40,7 +40,7 @@ bool UploadSnapShotFinishedNotifyMessage::parse_detail() {
     new_xml_element(session_id_, root, "SessionID");
     auto list = root->InsertNewChildElement("SnapShotList");
     for (auto &it : snap_shot_lists_) {
-        auto item = list->FirstChildElement("SnapShotFileID");
+        auto item = list->InsertNewChildElement("SnapShotFileID");
         item->SetText(it.c_str());
     }
     return true;

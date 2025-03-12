@@ -27,7 +27,6 @@
 #include <sip-transport.h>
 #include <sip-uas.h>
 
-
 using namespace gb28181;
 using namespace toolkit;
 
@@ -46,9 +45,7 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
         + std::to_string(account_.local_port);
 }
 
-SubordinatePlatformImpl::~SubordinatePlatformImpl() {
-
-}
+SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
 int SubordinatePlatformImpl::on_recv_register(
     const std::shared_ptr<SipSession> &session, const std::shared_ptr<sip_uas_transaction_t> &transaction,
     const std::shared_ptr<sip_message_t> &req, const std::string &user, const std::string &location, int expires) {
@@ -114,11 +111,12 @@ int SubordinatePlatformImpl::on_recv_register(
         return sip_uas_reply(transaction.get(), 401, nullptr, 0, session.get());
     }
     return sip_uas_reply(transaction.get(), 403, nullptr, 0, session.get());
-
 }
 
 void SubordinatePlatformImpl::shutdown() {
-    NOTICE_EMIT(kEventOnSubordinatePlatformShutdownArgs, Broadcast::kEventOnSubordinatePlatformShutdown, std::dynamic_pointer_cast<SubordinatePlatform>(shared_from_this()));
+    NOTICE_EMIT(
+        kEventOnSubordinatePlatformShutdownArgs, Broadcast::kEventOnSubordinatePlatformShutdown,
+        std::dynamic_pointer_cast<SubordinatePlatform>(shared_from_this()));
 }
 std::shared_ptr<LocalServer> SubordinatePlatformImpl::get_local_server() const {
     return local_server_weak_.lock();
@@ -156,7 +154,9 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
     // 异步广播平台在线状态
     toolkit::EventPollerPool::Instance().getPoller()->async(
         [this_ptr = shared_from_this(), status, error]() {
-            NOTICE_EMIT(kEventSubordinatePlatformStatusArgs, Broadcast::kEventSubordinatePlatformStatus, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), status, error);
+            NOTICE_EMIT(
+                kEventSubordinatePlatformStatusArgs, Broadcast::kEventSubordinatePlatformStatus,
+                std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), status, error);
         },
         false);
 }
@@ -175,92 +175,117 @@ int SubordinatePlatformImpl::on_keep_alive(std::shared_ptr<KeepaliveMessageReque
     }
     // 广播通知心跳消息
     toolkit::EventPollerPool::Instance().getPoller()->async([this_ptr = shared_from_this(), request]() {
-        NOTICE_EMIT(kEventSubKeepaliveArgs,Broadcast::kEventSubKeepalive, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), request);
+        NOTICE_EMIT(
+            kEventSubKeepaliveArgs, Broadcast::kEventSubKeepalive,
+            std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), request);
     });
     return 200;
 }
 
 int SubordinatePlatformImpl::on_notify(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
-    if (message.command() == MessageCmdType::Keepalive) {
-        auto keepalive_request = std::make_shared<KeepaliveMessageRequest>(std::move(message));
-        return on_keep_alive(keepalive_request);
-    }
-    if (message.command() == MessageCmdType::Alarm) {
-        auto alarm_ptr = std::make_shared<AlarmNotifyMessage>(std::move(message));
-        alarm_ptr->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [alarm_ptr, this_ptr = shared_from_this()]() {
-                // 广播通知
-                    NOTICE_EMIT(kEventSubordinateNotifyAlarmArgs, Broadcast::kEventSubordinateNotifyAlarm, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr),alarm_ptr);
-                // 回复确认
-                auto reqeust = std::make_shared<AlarmNotifyResponseMessage>(alarm_ptr->device_id().value_or(""));
-                std::make_shared<RequestProxyImpl>(
-                    this_ptr, reqeust, RequestProxy::RequestType::NoResponse, alarm_ptr->sn())
-                    ->send([](std::shared_ptr<RequestProxy>) {});
-            },
-            false);
-        return 200;
-    }
-    if (message.command() == MessageCmdType::Catalog) {
-        auto notify = std::make_shared<CatalogNotifyMessage>(std::move(message));
-        notify->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this(), notify] {
-                NOTICE_EMIT(kEventSubordinateNotifyCatalogArgs, Broadcast::kEventSubordinateNotifyCatalog, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
-            },
-            false);
-        return 200;
-    }
-    if (message.command() == MessageCmdType::MediaStatus) {
-        auto notify = std::make_shared<MediaStatusNotifyMessage>(std::move(message));
-        notify->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this(), notify] {
-                NOTICE_EMIT(kEventSubordinateNotifyMediaStatusArgs, Broadcast::kEventSubordinateNotifyMediaStatus, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
-            },
-            false);
-        return 200;
-    }
-    if (message.command() == MessageCmdType::MobilePosition) {
-        auto notify = std::make_shared<MobilePositionNotifyMessage>(std::move(message));
-        notify->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this(), notify] {
-                NOTICE_EMIT(kEventSubordinateNotifyMobilePositionArgs, Broadcast::kEventSubordinateNotifyMobilePosition, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
-            },
-            false);
-        return 200;
-    }
-    if (message.command() == MessageCmdType::UploadSnapShotFinished) {
-        auto notify = std::make_shared<UploadSnapShotFinishedNotifyMessage>(std::move(message));
-        notify->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this(), notify] {
-                NOTICE_EMIT(kEventSubordinateNotifyUploadSnapShotFinishedArgs, Broadcast::kEventSubordinateNotifyUploadSnapShotFinished, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
-            },
-            false);
-        return 200;
-    }
-    if (message.command() == MessageCmdType::VideoUploadNotify) {
-        auto notify = std::make_shared<VideoUploadNotifyMessage>(std::move(message));
-        notify->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this(), notify] {
-                NOTICE_EMIT(kEventSubordinateNotifyVideoUploadNotifyArgs, Broadcast::kEventSubordinateNotifyVideoUploadNotify, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
-            },
-            false);
-        return 200;
-    }
-    if (message.command() == MessageCmdType::DeviceUpgradeResult) {
-        auto notify = std::make_shared<DeviceUpgradeResultNotifyMessage>(std::move(message));
-        notify->load_from_xml();
-        toolkit::EventPollerPool::Instance().getPoller()->async(
-            [this_ptr = shared_from_this(), notify] {
-                NOTICE_EMIT(kEventSubordinateNotifyDeviceUpgradeResultArgs, Broadcast::kEventSubordinateNotifyDeviceUpgradeResult, std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
-            },
-            false);
-        return 200;
+    DebugL << "on notify , " << message;
+    const auto type = message.command();
+    switch (type) {
+        case MessageCmdType::Keepalive: {
+            auto keepalive_request = std::make_shared<KeepaliveMessageRequest>(std::move(message));
+            return on_keep_alive(keepalive_request);
+        }
+        case MessageCmdType::Alarm: {
+            auto alarm_ptr = std::make_shared<AlarmNotifyMessage>(std::move(message));
+            alarm_ptr->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [alarm_ptr, this_ptr = shared_from_this()]() {
+                    // 广播通知
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyAlarmArgs, Broadcast::kEventSubordinateNotifyAlarm,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), alarm_ptr);
+                    // 回复确认
+                    auto reqeust = std::make_shared<AlarmNotifyResponseMessage>(alarm_ptr->device_id().value_or(""));
+                    std::make_shared<RequestProxyImpl>(
+                        this_ptr, reqeust, RequestProxy::RequestType::NoResponse, alarm_ptr->sn())
+                        ->send([](std::shared_ptr<RequestProxy>) {});
+                },
+                false);
+            return 200;
+        }
+        case MessageCmdType::Catalog: {
+            DebugL << "on catalog";
+            auto notify = std::make_shared<CatalogNotifyMessage>(std::move(message));
+            notify->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [this_ptr = shared_from_this(), notify] {
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyCatalogArgs, Broadcast::kEventSubordinateNotifyCatalog,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
+                },
+                false);
+            return 200;
+        }
+        case MessageCmdType::MediaStatus: {
+            auto notify = std::make_shared<MediaStatusNotifyMessage>(std::move(message));
+            notify->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [this_ptr = shared_from_this(), notify] {
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyMediaStatusArgs, Broadcast::kEventSubordinateNotifyMediaStatus,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
+                },
+                false);
+            return 200;
+        }
+        case MessageCmdType::MobilePosition: {
+            auto notify = std::make_shared<MobilePositionNotifyMessage>(std::move(message));
+            notify->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [this_ptr = shared_from_this(), notify] {
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyMobilePositionArgs, Broadcast::kEventSubordinateNotifyMobilePosition,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
+                },
+                false);
+            return 200;
+        }
+        case MessageCmdType::UploadSnapShotFinished: {
+            auto notify = std::make_shared<UploadSnapShotFinishedNotifyMessage>(std::move(message));
+            notify->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [this_ptr = shared_from_this(), notify] {
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyUploadSnapShotFinishedArgs,
+                        Broadcast::kEventSubordinateNotifyUploadSnapShotFinished,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
+                },
+                false);
+            return 200;
+        }
+        case MessageCmdType::VideoUploadNotify: {
+            auto notify = std::make_shared<VideoUploadNotifyMessage>(std::move(message));
+            notify->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [this_ptr = shared_from_this(), notify] {
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyVideoUploadNotifyArgs,
+                        Broadcast::kEventSubordinateNotifyVideoUploadNotify,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
+                },
+                false);
+            return 200;
+        }
+        case MessageCmdType::DeviceUpgradeResult: {
+            auto notify = std::make_shared<DeviceUpgradeResultNotifyMessage>(std::move(message));
+            notify->load_from_xml();
+            toolkit::EventPollerPool::Instance().getPoller()->async(
+                [this_ptr = shared_from_this(), notify] {
+                    NOTICE_EMIT(
+                        kEventSubordinateNotifyDeviceUpgradeResultArgs,
+                        Broadcast::kEventSubordinateNotifyDeviceUpgradeResult,
+                        std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), notify);
+                },
+                false);
+            return 200;
+        }
+        default: break;
     }
     return 404;
 }

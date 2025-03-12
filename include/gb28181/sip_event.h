@@ -87,6 +87,10 @@ constexpr const char kEventSubordinateNotifyVideoUploadNotify[] = "kEventSubordi
 constexpr const char kEventSubordinateNotifyDeviceUpgradeResult[] = "kEventSubordinateNotifyDeviceUpgradeResult";
 #define kEventSubordinateNotifyDeviceUpgradeResultArgs const std::shared_ptr<SubordinatePlatform> & platform , const std::shared_ptr<DeviceUpgradeResultNotifyMessage>& message
 
+constexpr const char kEventSubordinatePTZPositionNotify[] = "kEventSubordinatePTZPositionNotify";
+#define kEventSubordinatePTZPositionNotifyArgs const std::shared_ptr<SubordinatePlatform> & platform , const std::shared_ptr<PTZPositionNotifyMessage>& message
+
+
 
 // 收到来自上级平台的 设备状态查询请求
 constexpr const char kEventOnDeviceStatusRequest[] = "kEventOnDeviceStatusRequest";
@@ -267,7 +271,7 @@ constexpr const char kEventOnBroadcastNotifyRequest[] = "kEventOnBroadcastNotify
 
 // 收到订阅通知
 constexpr const char kEventOnSubscribeNotify[] = "kEventOnSubscribeNotify";
-#define kEventOnSubscribeNotifyArgs std::shared_ptr<SubscribeRequest> subscribe, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, const std::string &reason
+#define kEventOnSubscribeNotifyArgs std::shared_ptr<SubscribeRequest> subscribe, const std::shared_ptr<tinyxml2::XMLDocument> &xml_ptr, std::string &reason
 
 constexpr const char kEventOnSubscribeRequest[] = "kEventOnSubscribeRequest";
 #define kEventOnSubscribeRequestArgs const std::shared_ptr<SuperPlatform> & platform, const std::shared_ptr<SubscribeRequest> & subscribe, const std::shared_ptr<MessageBase> &message

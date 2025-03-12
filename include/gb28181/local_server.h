@@ -52,12 +52,19 @@ public:
      * @return
      */
     virtual std::shared_ptr<SubordinatePlatform> get_subordinate_platform(const std::string &platform_id) = 0;
+
+    /**
+     * 获取所有下级平台
+     */
+    virtual std::vector<std::shared_ptr<SubordinatePlatform>> get_all_subordinate_platform() = 0;
     /**
      * 获取指定上级平台
      * @param platform_id
      * @return
      */
     virtual std::shared_ptr<SuperPlatform> get_super_platform(const std::string &platform_id) = 0;
+
+    virtual std::vector<std::shared_ptr<SuperPlatform>> get_all_super_platforms() = 0;
 
     /**
      * 允许自动注册

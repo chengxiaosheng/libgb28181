@@ -14,69 +14,70 @@ DeviceConfigRequestMessage::DeviceConfigRequestMessage(
 bool DeviceConfigRequestMessage::load_detail() {
     auto root = xml_ptr_->RootElement();
     bool has = false;
-    for (auto ele = root->FirstChildElement(); ele; ele = ele->NextSiblingElement()) {
-        if (ele->Name() == "BasicParam") {
+    for (auto ele = root->FirstChildElement(); ele != nullptr; ele = ele->NextSiblingElement()) {
+        const auto name = ele->Name();
+        if (strcasecmp("DeviceID", name) == 0 || strcasecmp("CmdType", name) == 0 || strcasecmp("SN", name) == 0)
+            continue;
+        if (strcasecmp("BasicParam", name) == 0) {
             BasicParamCfgType config;
             from_xml_element(config, root, "BasicParam", has);
             config_
                 = std::make_pair(DeviceConfigType::BasicParam, std::make_shared<BasicParamCfgType>(std::move(config)));
-        } else if (ele->Name() == "VideoParamOpt") {
+        } else if (strcasecmp("VideoParamOpt", name) == 0) {
             VideoParamOptCfgType config;
             from_xml_element(config, root, "VideoParamOpt", has);
             config_ = std::make_pair(
                 DeviceConfigType::VideoParamOpt, std::make_shared<VideoParamOptCfgType>(std::move(config)));
-        } else if (ele->Name() == "SVACEncodeConfig") {
+        } else if (strcasecmp("SVACEncodeConfig", name) == 0) {
             SVACEncodeCfgType config;
             from_xml_element(config, root, "SVACEncodeConfig", has);
             config_ = std::make_pair(
                 DeviceConfigType::SVACEncodeConfig, std::make_shared<SVACEncodeCfgType>(std::move(config)));
-        } else if (ele->Name() == "SVACDecodeConfig") {
+        } else if (strcasecmp("SVACDecodeConfig", name) == 0) {
             SVACDecodeCfgType config;
             from_xml_element(config, root, "SVACDecodeConfig", has);
             config_ = std::make_pair(
                 DeviceConfigType::SVACDecodeConfig, std::make_shared<SVACDecodeCfgType>(std::move(config)));
-        } else if (ele->Name() == "VideoParamAttribute") {
+        } else if (strcasecmp("VideoParamAttribute", name) == 0) {
             VideoParamAttributeCfgType config;
             from_xml_element(config, root, "VideoParamAttribute", has);
             config_ = std::make_pair(
                 DeviceConfigType::VideoParamAttribute, std::make_shared<VideoParamAttributeCfgType>(std::move(config)));
-        } else if (ele->Name() == "VideoRecordPlan") {
+        } else if (strcasecmp("VideoRecordPlan", name) == 0) {
             VideoRecordPlanCfgType config;
             from_xml_element(config, root, "VideoRecordPlan", has);
             config_ = std::make_pair(
                 DeviceConfigType::VideoRecordPlan, std::make_shared<VideoRecordPlanCfgType>(std::move(config)));
-        } else if (ele->Name() == "VideoAlarmRecord") {
+        } else if (strcasecmp("VideoAlarmRecord", name) == 0) {
             VideoAlarmRecordCfgType config;
             from_xml_element(config, root, "VideoAlarmRecord", has);
             config_ = std::make_pair(
                 DeviceConfigType::VideoAlarmRecord, std::make_shared<VideoAlarmRecordCfgType>(std::move(config)));
-        } else if (ele->Name() == "PictureMask") {
+        } else if (strcasecmp("PictureMask", name) == 0) {
             PictureMaskClgType config;
             from_xml_element(config, root, "PictureMask", has);
             config_ = std::make_pair(
                 DeviceConfigType::PictureMask, std::make_shared<PictureMaskClgType>(std::move(config)));
-        } else if (ele->Name() == "FrameMirror") {
+        } else if (strcasecmp("FrameMirror", name) == 0) {
             FrameMirrorCfgType config;
             from_xml_element(config, root, "FrameMirror", has);
             config_ = std::make_pair(
                 DeviceConfigType::FrameMirror, std::make_shared<FrameMirrorCfgType>(std::move(config)));
-        } else if (ele->Name() == "AlarmReport") {
+        } else if (strcasecmp("AlarmReport", name) == 0) {
             AlarmReportCfgType config;
             from_xml_element(config, root, "AlarmReport", has);
             config_ = std::make_pair(
                 DeviceConfigType::AlarmReport, std::make_shared<AlarmReportCfgType>(std::move(config)));
-        } else if (ele->Name() == "OSDConfig") {
+        } else if (strcasecmp("OSDConfig", name) == 0) {
             OSDCfgType config;
             from_xml_element(config, root, "OSDConfig", has);
             config_ = std::make_pair(DeviceConfigType::OSDConfig, std::make_shared<OSDCfgType>(std::move(config)));
-        } else if (ele->Name() == "SnapShotConfig") {
+        } else if (strcasecmp("SnapShotConfig", name) == 0) {
             SnapShotCfgType config;
             from_xml_element(config, root, "SnapShotConfig", has);
             config_ = std::make_pair(
                 DeviceConfigType::SnapShotConfig, std::make_shared<SnapShotCfgType>(std::move(config)));
         }
-        if (config_.first != DeviceConfigType::invalid)
-            break;
     }
     if (config_.first == DeviceConfigType::invalid) {
         error_message_ = "Invalid device config";

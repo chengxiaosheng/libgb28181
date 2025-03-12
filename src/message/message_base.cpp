@@ -6,7 +6,18 @@
 using namespace gb28181;
 
 MessageBase::MessageBase(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
-    : xml_ptr_(xml) {
+    : xml_ptr_(xml) {}
+MessageBase::MessageBase(MessageBase &&other) noexcept
+    : root_(std::move(other.root_))
+    , cmd_(std::move(other.cmd_))
+    , is_valid_(std::move(other.is_valid_))
+    , encoding_(std::move(other.encoding_))
+    , sn_(std::move(other.sn_))
+    , reason_(std::move(other.reason_))
+    , device_id_(std::move(other.device_id_))
+    , xml_ptr_(std::move(other.xml_ptr_))
+    , extend_data_(std::move(other.extend_data_))
+    , error_message_(std::move(other.error_message_)) {
 }
 
 bool MessageBase::load_from_xml() {
@@ -36,12 +47,14 @@ bool MessageBase::load_from_xml() {
         }
     }
     is_valid_ = load_detail();
-    return  is_valid_;
+    return is_valid_;
 }
 
 bool MessageBase::parse_to_xml(bool coercion) {
-    if (coercion) xml_ptr_.reset();
-    if (xml_ptr_) return true;
+    if (coercion)
+        xml_ptr_.reset();
+    if (xml_ptr_)
+        return true;
     if (root_ == MessageRootType::invalid) {
         WarnL << "message root type is invalid";
         return false;
@@ -52,8 +65,12 @@ bool MessageBase::parse_to_xml(bool coercion) {
     }
     xml_ptr_ = std::make_shared<tinyxml2::XMLDocument>();
     switch (encoding_) {
-        case CharEncodingType::gb2312: xml_ptr_->InsertFirstChild(xml_ptr_->NewDeclaration(R"(xml version="1.0" encoding="GB2312")")); break;
-        case CharEncodingType::gbk: xml_ptr_->InsertFirstChild(xml_ptr_->NewDeclaration(R"(xml version="1.0" encoding="GBK")")); break;
+        case CharEncodingType::gb2312:
+            xml_ptr_->InsertFirstChild(xml_ptr_->NewDeclaration(R"(xml version="1.0" encoding="GB2312")"));
+            break;
+        case CharEncodingType::gbk:
+            xml_ptr_->InsertFirstChild(xml_ptr_->NewDeclaration(R"(xml version="1.0" encoding="GBK")"));
+            break;
         default: xml_ptr_->InsertFirstChild(xml_ptr_->NewDeclaration(R"(xml version="1.0" encoding="UTF-8")")); break;
     }
     auto root = xml_ptr_->NewElement(getRootTypeString(root_));
@@ -79,7 +96,8 @@ bool MessageBase::parse_to_xml(bool coercion) {
 }
 
 std::string MessageBase::str() const {
-    if (!xml_ptr_) return "";
+    if (!xml_ptr_)
+        return "";
     tinyxml2::XMLPrinter xml_printer;
     xml_ptr_->Print(&xml_printer);
     std::string str;
@@ -87,14 +105,14 @@ std::string MessageBase::str() const {
         str = utf8_to_gb2312(xml_printer.CStr());
     } else if (encoding_ == CharEncodingType::gbk) {
         str = utf8_to_gbk(xml_printer.CStr());
-    } else str = xml_printer.CStr();
+    } else
+        str = xml_printer.CStr();
     // 我觉得此函数只会执行一次， 没有存储到本地的必要~
-    if (str.size() > 8*1024 - 500) {
+    if (str.size() > 8 * 1024 - 500) {
         payload_too_big();
     }
     return str;
 }
-
 
 void MessageBase::extend(std::vector<ExtendData> &&data) {
     for (auto &&it : data) {
@@ -138,7 +156,7 @@ void MessageBase::load_extend_data() {
     }
 }
 std::ostream &gb28181::operator<<(std::ostream &os, const MessageBase &msg) {
-    os << "[" <<  msg.root_ << "->" << msg.cmd_ << ":" << msg.sn_ << "] " ;
+    os << "[" << msg.root_ << "->" << msg.cmd_ << ":" << msg.sn_ << "] ";
     return os;
 }
 

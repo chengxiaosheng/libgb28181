@@ -79,7 +79,7 @@ std::vector<std::shared_ptr<SubordinatePlatform>> SipServer::get_all_subordinate
     std::vector<std::shared_ptr<SubordinatePlatform>> platforms;
     {
         std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
-        for(auto &it : sub_platforms_) {
+        for (auto &it : sub_platforms_) {
             platforms.emplace_back(it.second);
         }
     }
@@ -96,7 +96,7 @@ std::vector<std::shared_ptr<SuperPlatform>> SipServer::get_all_super_platforms()
     std::vector<std::shared_ptr<SuperPlatform>> platforms;
     {
         std::shared_lock<decltype(platform_mutex_)> lock(platform_mutex_);
-        for(auto &it : super_platforms_) {
+        for (auto &it : super_platforms_) {
             platforms.emplace_back(it.second);
         }
     }
@@ -210,10 +210,10 @@ void SipServer::shutdown() {
             super_platforms_.swap(super_platforms);
             sub_platforms_.swap(sub_platforms);
         }
-        for (const auto& it : super_platforms) {
+        for (const auto &it : super_platforms) {
             it.second->shutdown();
         }
-        for (const auto& it : sub_platforms) {
+        for (const auto &it : sub_platforms) {
             it.second->shutdown();
         }
         udp_server_.reset();
@@ -264,11 +264,14 @@ void SipServer::get_client(
                     [cb, host]() { cb(toolkit::SockException(Err_dns, "dns resolution failed" + host), nullptr); });
                 return;
             }
-            if (auto this_ptr = weak_this.lock()) {
-                this_ptr->get_client_l(is_udp, addr, cb);
-            } else {
-                cb(toolkit::SockException(Err_other, "server destruction"), nullptr);
-            }
+            // 切回原始线程继续处理
+            poller->async([weak_this, is_udp, addr, cb]() {
+                if (auto this_ptr = weak_this.lock()) {
+                    this_ptr->get_client_l(is_udp, addr, cb);
+                } else {
+                    cb(toolkit::SockException(Err_other, "server destruction"), nullptr);
+                }
+            });
         });
     } else {
         auto addr = toolkit::SockUtil::make_sockaddr(host.c_str(), port);

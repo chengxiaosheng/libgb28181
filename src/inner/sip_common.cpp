@@ -9,6 +9,7 @@
 
 #include "tinyxml2.h"
 
+#include <Util/logger.h>
 #include <algorithm>
 #include <sip-uac.h>
 #include <sip-uas.h>
@@ -325,13 +326,12 @@ bool verify_authorization(struct sip_message_t *msg, const std::string &user, co
     auto &&fields = parseAuthorizationHeader(std::string(auth_str->p, auth_str->n));
     if (fields.empty())
         return false;
+    std::string algorithm = fields.count("algorithm") ? fields["algorithm"] : "MD5";
+    auto H = (algorithm == "MD5") ? md5 : sha256;
 
-    auto H = fields["algorithm"] == "MD5" ? md5 : sha256;
-
-    auto A1 = user + ":" + fields["realm"] + ":" + password;
-
+    std::string A1 = user + ":" + fields["realm"] + ":" + password;
     std::string A2 = std::string(msg->u.c.method.p, msg->u.c.method.n) + ":" + fields["uri"];
-    auto qop = fields["qop"];
+    std::string qop = fields.count("qop") ? fields["qop"] : "";
     if (qop == "auth-int") {
         if (msg->payload && msg->size) {
             A2 += ":" + H(std::string((char *)msg->payload, msg->size));
@@ -343,8 +343,7 @@ bool verify_authorization(struct sip_message_t *msg, const std::string &user, co
     if (qop.empty()) {
         response = H(H(A1) + ":" + fields["nonce"] + ":" + H(A2));
     } else {
-        response
-            = H(H(A1) + ":" + fields["nonce"] + ":" + fields["nc"] + ":" + fields["cnonce"] + ":" + qop + ":" + H(A2));
+        response = H(H(A1) + ":" + fields["nonce"] + ":" + fields["nc"] + ":" + fields["cnonce"] + ":" + qop + ":" + H(A2));
     }
     return response == fields["response"];
 }
@@ -352,9 +351,9 @@ std::string generate_www_authentication_(const std::string &realm) {
     std::string nonce = toolkit::makeRandStr(16);
     std::ostringstream oss;
     oss << "Digest realm=\"" << realm << "\", ";
-    oss << "qop=\"auth\", ";
+    oss << "qop=auth, ";
     oss << "nonce=\"" << nonce << "\", ";
-    oss << "algorithm=\"MD5\"";
+    oss << "algorithm=MD5";
     return oss.str();
 }
 void set_message_www_authenticate(struct sip_uas_transaction_t *transaction, const std::string &realm) {
@@ -411,8 +410,11 @@ std::string generate_authorization(
     // 计算H(A2)
     std::string A2 = "REGISTER:" + uri;
     if (qop == "auth-int") {
-        // 若需要消息体校验，需额外传入entity_body参数
-        A2 += ":" + H(""); // 示例中假设无消息体
+        if (msg->payload && msg->size) {
+            A2 += ":" + H(std::string((char *)msg->payload, msg->size));
+        } else {
+            A2 += ":";
+        }
     }
     std::string HA2 = H(A2);
     // 生成响应值
@@ -430,10 +432,10 @@ std::string generate_authorization(
         << "nonce=\"" << nonce << "\", "
         << "uri=\"" << uri << "\", "
         << "response=\"" << response << "\", "
-        << "algorithm=\"" << algorithm << "\"";
+        << "algorithm=" << algorithm;
     if (!qop.empty()) {
-        oss << ", qop=\"" << qop << "\", "
-            << "nc=\"" << nc_str << "\", "
+        oss << ", qop=" << qop << ", "
+            << "nc=" << nc_str << ", "
             << "cnonce=\"" << cnonce << "\"";
     }
     return oss.str();

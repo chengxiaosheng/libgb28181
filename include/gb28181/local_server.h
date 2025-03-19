@@ -15,8 +15,8 @@ class SuperPlatform;
 class LocalServer {
 public:
     using subordinate_account_callback = std::function<void(
-        std::shared_ptr<LocalServer> server, std::shared_ptr<subordinate_account> account,
-        std::function<void(bool)> allow_cb)>;
+        const std::shared_ptr<LocalServer> &server, const std::shared_ptr<subordinate_account> &account,
+        const std::function<void(bool)> &allow_cb)>;
     virtual ~LocalServer() = default;
 
     /**

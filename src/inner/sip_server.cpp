@@ -135,7 +135,7 @@ void SipServer::reload_account(sip_account account) {}
 
 void SipServer::new_subordinate_account(
     const std::shared_ptr<subordinate_account> &account,
-    std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb) {
+    const std::function<void(std::shared_ptr<SubordinatePlatformImpl>)>& allow_cb) {
     if (new_subordinate_account_callback_) {
         auto weak_this = weak_from_this();
         new_subordinate_account_callback_(shared_from_this(), account, [weak_this, account, allow_cb](bool allow) {

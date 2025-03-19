@@ -79,6 +79,9 @@ void SipSession::onSockConnect(const toolkit::SockException &ex) {
         _timer.reset();
         return;
     }
+    if (local_ip_.empty()) {
+        local_ip_ = SockUtil::get_local_ip(getSock()->rawFD());
+    }
 
     auto sock_ptr = getSock().get();
     std::weak_ptr<SipSession> weak_self = std::dynamic_pointer_cast<SipSession>(shared_from_this());
@@ -116,11 +119,20 @@ void SipSession::onSockConnect(const toolkit::SockException &ex) {
 
 int SipSession::sip_via(void *transport, const char *destination, char protocol[16], char local[128], char dns[128]) {
     if (transport == nullptr) return -1;
-    auto session = static_cast<SipSession *>(transport);
+    auto session = std::dynamic_pointer_cast<SipSession>(static_cast<SipSession *>(transport)->shared_from_this());
+    if (!session) {
+        WarnL << "SipSession::sip_via: transport is not SipSession";
+        return -1;
+    }
     snprintf(protocol, 16, "%s", session->is_udp() ? "UDP" : "TCP");
     if (session->local_ip_.empty())
     {
-        session->local_ip_ = toolkit::SockUtil::get_local_ip();
+        if (session->getSock() && session->getSock()->rawFD()) {
+            session->local_ip_ = SockUtil::get_local_ip(session->getSock()->rawFD());
+        }
+    }
+    if (session->local_ip_.empty()){
+        session->local_ip_ = SockUtil::get_local_ip();
     }
     snprintf(local, 128, "%s:%d", session->local_ip_.c_str(), session->get_local_port());
     return 0;
@@ -130,7 +142,11 @@ int SipSession::sip_via(void *transport, const char *destination, char protocol[
 int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
     if (transport == nullptr)
         return -1;
-    auto session = static_cast<SipSession *>(transport);
+    auto session = std::dynamic_pointer_cast<SipSession>(static_cast<SipSession *>(transport)->shared_from_this());
+    if (!session) {
+        WarnL << "SipSession::sip_send: transport is not SipSession";
+        return sip_unknown_host;
+    }
     session->ticker_->resetTime(); // 重置保活
     auto buffer = toolkit::BufferRaw::create();
     buffer->assign((const char *)data, bytes);

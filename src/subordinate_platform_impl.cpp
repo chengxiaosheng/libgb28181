@@ -91,6 +91,14 @@ int SubordinatePlatformImpl::on_recv_register(
             account.password = server_account.password;
             account.auth_type = server_account.auth_type;
             account.transport_type = session->is_udp() ? TransportType::udp : TransportType::tcp;
+            account.local_port = session->get_local_port();
+            account.local_host = SockUtil::get_local_ip(session->getSock()->rawFD());
+            if(account.local_host.empty()) {
+                account.local_host = SockUtil::get_local_ip();
+            }
+            account.plat_status.register_time = getCurrentMicrosecond(true);
+            account.plat_status.status = PlatformStatusType::registering;
+
             auto account_ptr = std::make_shared<subordinate_account>(std::move(account));
             sip_server->new_subordinate_account(
                 account_ptr, [session, transaction, expires](std::shared_ptr<SubordinatePlatformImpl> platform) {

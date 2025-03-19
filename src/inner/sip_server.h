@@ -75,7 +75,7 @@ public:
     void remove_super_platform(const std::string &platform_id) override;
 
     void set_new_subordinate_account_callback(subordinate_account_callback cb) override { new_subordinate_account_callback_ = std::move(cb); }
-    void new_subordinate_account(const std::shared_ptr<subordinate_account> &account, std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> allow_cb);
+    void new_subordinate_account(const std::shared_ptr<subordinate_account> &account, const std::function<void(std::shared_ptr<SubordinatePlatformImpl>)>& allow_cb);
 
     uint32_t make_ssrc(bool is_playback) override;
 

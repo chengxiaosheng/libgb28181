@@ -201,7 +201,7 @@ int SuperPlatformImpl::on_register_reply(
             return 0;
         }
         std::string auth_str = generate_authorization(
-            reply, this_ptr->account_.platform_id, this_ptr->account_.password, this_ptr->get_to_uri(),
+            reply, this_ptr->get_local_server()->get_account().platform_id, this_ptr->account_.password, this_ptr->get_to_uri(),
             this_ptr->nc_pair_);
         if (auth_str.empty()) {
             this_ptr->set_status(PlatformStatusType::auth_failure, "generate authorization failed");

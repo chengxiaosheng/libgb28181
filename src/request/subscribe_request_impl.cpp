@@ -272,7 +272,10 @@ int SubscribeRequestImpl::on_recv_notify(
     if (cstrvalid(sub_state_cstr)) {
         sip_substate_t sub_state {};
         if (0 == sip_header_substate(sub_state_cstr->p, sub_state_cstr->p + sub_state_cstr->n, &sub_state)) {
-            if (0 == cstrcasecmp(&sub_state.state, SIP_SUBSCRIPTION_STATE_ACTIVE)) {
+            if (!cstrvalid(&sub_state.state)) {
+                // 避免 state 无效
+            }
+            else if (0 == cstrcasecmp(&sub_state.state, SIP_SUBSCRIPTION_STATE_ACTIVE)) {
                 // 如果通知中的有效期大于本地有效期+5秒， 认为服务器自动延长了订阅会话
                 if (sub_state.expires && sub_state.expires > time_remain() + 5 && sub_state.expires > 30) {
                     subscribe_time_ = toolkit::getCurrentMicrosecond(true);
@@ -307,7 +310,7 @@ int SubscribeRequestImpl::on_recv_notify(
                 }
                 auto weak_this = weak_from_this();
                 // 异步执行重新订阅
-                toolkit::EventPollerPool::Instance().getPoller()->async(
+                EventPollerPool::Instance().getPoller()->async(
                     [weak_this]() {
                         if (auto this_ptr = weak_this.lock()) {
                             this_ptr->to_subscribe(this_ptr->subscribe_info_.expires);

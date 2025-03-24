@@ -414,6 +414,7 @@ int SipServer::onnotify(
         GetSipSession(param);
         RefTransaction(t);
         RefSipMessage(req);
+        // return sip_uas_reply(t, 200, nullptr, 0, param);
         return subscribe->on_recv_notify(session_ptr, req_ptr, trans_ref);
     }
     // 如果通知负载数据，但无法找到订阅, 将notify消息降级为 message 消息处理

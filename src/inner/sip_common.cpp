@@ -351,9 +351,9 @@ std::string generate_www_authentication_(const std::string &realm) {
     std::string nonce = toolkit::makeRandStr(16);
     std::ostringstream oss;
     oss << "Digest realm=\"" << realm << "\", ";
-    oss << "qop=auth, ";
-    oss << "nonce=\"" << nonce << "\", ";
-    oss << "algorithm=MD5";
+    // oss << "qop=auth, ";
+    oss << "nonce=\"" << nonce << "\"";
+    // oss << "algorithm=MD5";
     return oss.str();
 }
 void set_message_www_authenticate(struct sip_uas_transaction_t *transaction, const std::string &realm) {

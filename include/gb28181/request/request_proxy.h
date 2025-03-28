@@ -1,6 +1,7 @@
 #ifndef gb28181_include_gb28181_message_REQUEST_PROXY_H
 #define gb28181_include_gb28181_message_REQUEST_PROXY_H
 #include <functional>
+#include <gb28181/message/message_base.h>
 #include <memory>
 #include <string>
 
@@ -14,8 +15,7 @@ namespace gb28181 {
 class PlatformBase;
 }
 namespace gb28181 {
-class MessageBase;
-class RequestProxy {
+class GB28181_EXPORT RequestProxy {
 public:
     virtual ~RequestProxy() = default;
     enum Status {
@@ -82,7 +82,7 @@ public:
     /**
      * 获取错误信息
      */
-    virtual const std::string & error() const = 0;
+    virtual const std::string &error() const = 0;
 
     /**
      * 发送请求
@@ -125,14 +125,16 @@ public:
     /**
      * 构建一个请求
      */
-    static std::shared_ptr<RequestProxy>
-    newRequestProxy(const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
-    static std::shared_ptr<RequestProxy> newRequestProxy(const std::shared_ptr<SuperPlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
+    static std::shared_ptr<RequestProxy> newRequestProxy(
+        const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
+    static std::shared_ptr<RequestProxy> newRequestProxy(
+        const std::shared_ptr<SuperPlatform> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0);
 
     explicit operator bool() const { return status() == Succeeded; }
 };
-std::ostream &operator<<(std::ostream &os, const RequestProxy &proxy);
-std::ostream &operator<<(std::ostream &os, const std::shared_ptr<RequestProxy> &proxy);
+
+GB28181_EXPORT std::ostream &operator<<(std::ostream &os, const RequestProxy &proxy);
+GB28181_EXPORT std::ostream &operator<<(std::ostream &os, const std::shared_ptr<RequestProxy> &proxy);
 
 } // namespace gb28181
 

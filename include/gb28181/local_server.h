@@ -12,7 +12,7 @@
 namespace gb28181 {
 class SubordinatePlatform;
 class SuperPlatform;
-class LocalServer {
+class GB28181_EXPORT LocalServer {
 public:
     using subordinate_account_callback = std::function<void(
         const std::shared_ptr<LocalServer> &server, const std::shared_ptr<subordinate_account> &account,

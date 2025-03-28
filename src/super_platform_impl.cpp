@@ -597,7 +597,7 @@ int SuperPlatformImpl::on_control(
         // 源设备向目标设备发送摄像机 云台控制、远程启动、强制关键帧、拉框放大、拉框缩小、PTZ精准控制、 存储卡格式化、
         // 目标跟踪命令后，目标设备不发送应答命令，命令流程见9.3.2.1;
         for (auto ele = xml_root->FirstChildElement(); ele != nullptr; ele = ele->NextSiblingElement()) {
-            const auto name = ele->Name();
+            std::string name = ele->Name();
             if (name == "CmdType" || name == "SN" || name == "DeviceID")
                 continue;
             if (name == "PTZCmd")

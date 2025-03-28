@@ -3,7 +3,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class MobilePositionRequestMessage : public MessageBase {
+class GB28181_EXPORT MobilePositionRequestMessage : public MessageBase {
 public:
     explicit MobilePositionRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include "gb28181/exports.h"
+
 
 #ifndef SIP_AGENT_STR
 #define SIP_AGENT_STR "GB/T 28181-2022"
@@ -384,7 +386,7 @@ struct DeviceStatusAlarmStatus {
     int32_t Num { 0 };
 };
 
-class PTZCommand {
+class GB28181_EXPORT PTZCommand {
 public:
     enum class CommandType : uint8_t { invalid, PTZ, FI, PRESET, CRUISE, SCAN, AUX };
     enum PTZ_MOVE_TYPE : uint8_t {
@@ -683,6 +685,7 @@ public:
         if (get_command_type() == CommandType::FI) {
             return bytes[4];
         }
+        return 0;
     }
     /**
      * 获取预置位编号

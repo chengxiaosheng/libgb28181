@@ -3,7 +3,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class CruiseTrackListRequestMessage final : public MessageBase {
+class GB28181_EXPORT CruiseTrackListRequestMessage final : public MessageBase {
 public:
     explicit CruiseTrackListRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -11,7 +11,7 @@ public:
         : MessageBase(std::move(messageBase)) {}
     explicit CruiseTrackListRequestMessage(const std::string &device_id);
 };
-class CruiseTrackRequestMessage final: public MessageBase {
+class GB28181_EXPORT CruiseTrackRequestMessage final: public MessageBase {
 public:
     explicit CruiseTrackRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -29,7 +29,7 @@ private:
     int32_t number_ { 0 };
 };
 
-class CruiseTrackListResponseMessage final: public ListMessageBase {
+class GB28181_EXPORT CruiseTrackListResponseMessage final: public ListMessageBase {
 public:
     explicit CruiseTrackListResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -54,7 +54,7 @@ private:
     std::vector<CruiseTrackListItemType> cruise_track_list_;
 };
 
-class CruiseTrackResponseMessage : public ListMessageBase {
+class GB28181_EXPORT CruiseTrackResponseMessage : public ListMessageBase {
 public:
     explicit CruiseTrackResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

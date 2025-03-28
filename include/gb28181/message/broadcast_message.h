@@ -3,7 +3,7 @@
 #include "gb28181/message/message_base.h"
 
 namespace gb28181 {
-class BroadcastNotifyRequest : public MessageBase {
+class GB28181_EXPORT BroadcastNotifyRequest : public MessageBase {
 public:
     explicit BroadcastNotifyRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -36,7 +36,7 @@ private:
     std::string target_id_ {};
 };
 
-class BroadcastNotifyResponse : public MessageBase {
+class GB28181_EXPORT BroadcastNotifyResponse : public MessageBase {
 public:
     explicit BroadcastNotifyResponse(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

@@ -4,7 +4,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class PresetRequestMessage final : public MessageBase {
+class GB28181_EXPORT PresetRequestMessage final : public MessageBase {
 public:
     explicit PresetRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -13,7 +13,7 @@ public:
     explicit PresetRequestMessage(const std::string &device_id);
 };
 
-class PresetResponseMessage final : public ListMessageBase {
+class GB28181_EXPORT PresetResponseMessage final : public ListMessageBase {
 public:
     explicit PresetResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

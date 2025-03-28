@@ -46,7 +46,7 @@ struct PlaybackControlResponse {
     std::string reason; // 错误信息
 };
 
-class InviteRequest {
+class GB28181_EXPORT InviteRequest {
 public:
     /**
      * 回放控制的结果回调

@@ -3,7 +3,7 @@
 #include "gb28181/message/message_base.h"
 
 namespace gb28181 {
-class CatalogRequestMessage : public gb28181::MessageBase {
+class GB28181_EXPORT CatalogRequestMessage : public gb28181::MessageBase {
 public:
     explicit CatalogRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -24,7 +24,7 @@ private:
     std::string end_time_;
 };
 
-class CatalogResponseMessage : public gb28181::ListMessageBase {
+class GB28181_EXPORT CatalogResponseMessage : public gb28181::ListMessageBase {
 public:
     explicit CatalogResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -49,7 +49,7 @@ private:
     std::vector<std::string> extra_;
 };
 
-class CatalogNotifyMessage final: public CatalogResponseMessage {
+class GB28181_EXPORT CatalogNotifyMessage final: public CatalogResponseMessage {
 public:
     explicit CatalogNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml)

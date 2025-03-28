@@ -2,6 +2,7 @@
 #define gb28181_include_gb28181_TYPE_DEFINE_EXT_H
 
 #include "gb28181/type_define.h"
+#include "exports.h"
 
 namespace tinyxml2 {
 class XMLElement;
@@ -11,19 +12,19 @@ class XMLElement;
 
 namespace gb28181 {
 
-std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type);
-std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type);
+GB28181_EXPORT std::ostream& operator<<(std::ostream& os, const gb28181::MessageCmdType& type);
+GB28181_EXPORT std::ostream& operator<<(std::ostream& os, const gb28181::MessageRootType& type);
 
-DeviceConfigType operator|(const DeviceConfigType& lhs, const DeviceConfigType& rhs);
-DeviceConfigType operator&(const DeviceConfigType& lhs, const DeviceConfigType& rhs);
-DeviceConfigType& operator|=(DeviceConfigType& lhs, const DeviceConfigType& rhs);
-DeviceConfigType& operator&=(DeviceConfigType& lhs, const DeviceConfigType& rhs);
+GB28181_EXPORT DeviceConfigType operator|(const DeviceConfigType& lhs, const DeviceConfigType& rhs);
+GB28181_EXPORT DeviceConfigType operator&(const DeviceConfigType& lhs, const DeviceConfigType& rhs);
+GB28181_EXPORT DeviceConfigType& operator|=(DeviceConfigType& lhs, const DeviceConfigType& rhs);
+GB28181_EXPORT DeviceConfigType& operator&=(DeviceConfigType& lhs, const DeviceConfigType& rhs);
 
-CharEncodingType getCharEncodingType(const char *decl);
-MessageRootType getRootType(const char *val);
-const char *getRootTypeString(MessageRootType type);
-MessageCmdType getCmdType(const char *val);
-const char *getCmdTypeString(MessageCmdType type);
+GB28181_EXPORT CharEncodingType getCharEncodingType(const char *decl);
+GB28181_EXPORT MessageRootType getRootType(const char *val);
+GB28181_EXPORT const char *getRootTypeString(MessageRootType type);
+GB28181_EXPORT MessageCmdType getCmdType(const char *val);
+GB28181_EXPORT const char *getCmdTypeString(MessageCmdType type);
 
 std::string utf8_to_gb2312(const char *data);
 std::string gb2312_to_utf8(const char *data);

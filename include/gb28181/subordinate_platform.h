@@ -15,7 +15,7 @@ class DeviceControlRequestMessage_HomePosition;
 class RecordInfoRequestMessage;
 class DeviceInfoMessageRequest;
 class LocalServer;
-class SubordinatePlatform {
+class GB28181_EXPORT SubordinatePlatform {
 public:
     virtual ~SubordinatePlatform() = default;
     /**

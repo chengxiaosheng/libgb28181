@@ -156,7 +156,7 @@ void MessageBase::load_extend_data() {
     }
 }
 std::ostream &gb28181::operator<<(std::ostream &os, const MessageBase &msg) {
-    os << "[" << msg.root_ << "->" << msg.cmd_ << ":" << msg.sn_ << "] ";
+    os << "[" << msg.root() << "->" << msg.command() << ":" << msg.sn() << "] ";
     return os;
 }
 

@@ -20,7 +20,7 @@ enum class DeviceControlType : uint8_t {
 
 };
 
-class DeviceControlRequestMessage : public virtual MessageBase {
+class GB28181_EXPORT DeviceControlRequestMessage : public virtual MessageBase {
 public:
     explicit DeviceControlRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -40,7 +40,7 @@ private:
     std::vector<std::string> extra_info_;
 };
 
-class DeviceControlRequestMessage_PTZCmd final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_PTZCmd final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_PTZCmd(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -64,7 +64,7 @@ private:
     std::optional<gb28181::PtzCmdParams> ptz_cmd_params_;
 };
 
-class DeviceControlRequestMessage_TeleBoot : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_TeleBoot : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_TeleBoot(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -81,7 +81,7 @@ private:
     std::string tele_boot_ { "Boot" };
 };
 
-class DeviceControlRequestMessage_RecordCmd final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_RecordCmd final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_RecordCmd(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -103,7 +103,7 @@ private:
     int8_t stream_number_ { 0 };
 };
 
-class DeviceControlRequestMessage_GuardCmd final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_GuardCmd final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_GuardCmd(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -122,7 +122,7 @@ private:
     gb28181::GuardType guard_type_ { GuardType::invalid };
 };
 
-class DeviceControlRequestMessage_AlarmCmd final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_AlarmCmd final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_AlarmCmd(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -143,7 +143,7 @@ private:
     std::optional<AlarmCmdInfoType> info_;
 };
 
-class DeviceControlRequestMessage_IFrameCmd final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_IFrameCmd final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_IFrameCmd(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -160,7 +160,7 @@ private:
     std::string iframe_cmd_ { "Send" };
 };
 
-class DeviceControlRequestMessage_DragZoomIn : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_DragZoomIn : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_DragZoomIn(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -179,7 +179,7 @@ protected:
     DragZoomType drag_zoom_ {};
 };
 
-class DeviceControlRequestMessage_DragZoomOut final : public DeviceControlRequestMessage_DragZoomIn {
+class GB28181_EXPORT DeviceControlRequestMessage_DragZoomOut final : public DeviceControlRequestMessage_DragZoomIn {
 public:
     explicit DeviceControlRequestMessage_DragZoomOut(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage_DragZoomIn(xml) {}
@@ -194,7 +194,7 @@ protected:
     bool parse_detail() override;
 };
 
-class DeviceControlRequestMessage_HomePosition final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_HomePosition final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_HomePosition(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -219,7 +219,7 @@ private:
     std::optional<int32_t> reset_time_ {};
 };
 
-class DeviceControlRequestMessage_PtzPreciseCtrl final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_PtzPreciseCtrl final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_PtzPreciseCtrl(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -239,7 +239,7 @@ private:
     PTZPreciseCtrlType ptz_precise_ctrl_;
 };
 
-class DeviceControlRequestMessage_DeviceUpgrade final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_DeviceUpgrade final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_DeviceUpgrade(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -259,7 +259,7 @@ private:
     DeviceUpgradeType device_upgrade_ {};
 };
 
-class DeviceControlRequestMessage_FormatSDCard final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_FormatSDCard final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_FormatSDCard(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -278,7 +278,7 @@ private:
     uint8_t index_ { 0 };
 };
 
-class DeviceControlRequestMessage_TargetTrack final : public DeviceControlRequestMessage {
+class GB28181_EXPORT DeviceControlRequestMessage_TargetTrack final : public DeviceControlRequestMessage {
 public:
     explicit DeviceControlRequestMessage_TargetTrack(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : DeviceControlRequestMessage(xml) {}
@@ -302,7 +302,7 @@ private:
     std::optional<DragZoomType> target_area_ {};
 };
 
-class DeviceControlResponseMessage final : public MessageBase {
+class GB28181_EXPORT DeviceControlResponseMessage final : public MessageBase {
 public:
     explicit DeviceControlResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

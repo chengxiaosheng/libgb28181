@@ -2,7 +2,7 @@
 #define gb28181_include_gb28181_message_HOME_POSITION_MESSAGE_H
 #include <gb28181/message/message_base.h>
 namespace gb28181 {
-class HomePositionRequestMessage : public MessageBase {
+class GB28181_EXPORT HomePositionRequestMessage : public MessageBase {
 public:
     explicit HomePositionRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -11,7 +11,7 @@ public:
     explicit HomePositionRequestMessage(const std::string &device_id);
 };
 
-class HomePositionResponseMessage : public MessageBase {
+class GB28181_EXPORT HomePositionResponseMessage : public MessageBase {
 public:
     explicit HomePositionResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

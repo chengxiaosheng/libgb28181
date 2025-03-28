@@ -1,0 +1,24 @@
+#[[
+# - Config file for the onvif_client package
+# It defines the following variables
+#  onvif_client_INCLUDE_DIRS - include directories for onvif_client
+#  onvif_client_LIBRARIES    - libraries to link against
+#  onvif_client_FOUND        - set to TRUE if onvif_client is found
+# This module defines the following IMPORTED target:
+# onvif_client::onvif_client
+#]]
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
+
+find_dependency(ZLToolKit REQUIRED)
+find_dependency(tinyxml2 REQUIRED)
+
+# Load the IMPORTED targets
+get_filename_component(onvif_client_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+if(NOT TARGET onvif_client::onvif_client)
+  include("${onvif_client_CMAKE_DIR}/onvif_clientTargets.cmake")
+endif()
+# Set variables for backward compatibility
+get_target_property(onvif_client_INCLUDE_DIRS onvif_client::onvif_client INTERFACE_INCLUDE_DIRECTORIES)
+set(onvif_client_LIBRARIES onvif_client::onvif_client)

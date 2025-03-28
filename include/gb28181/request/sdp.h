@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "gb28181/exports.h"
 
 namespace gb28181 {
 
@@ -109,7 +110,7 @@ struct MediaDescription {
     bool empty() const { return payloads.empty(); }
 };
 
-class SdpDescription {
+class GB28181_EXPORT SdpDescription {
 public:
     bool parse(const std::string &sdp);
     std::string generate() const;

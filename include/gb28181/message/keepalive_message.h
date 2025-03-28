@@ -4,7 +4,7 @@
 #include "gb28181/message/message_base.h"
 
 namespace gb28181 {
-class KeepaliveMessageRequest final : public MessageBase {
+class GB28181_EXPORT KeepaliveMessageRequest final : public MessageBase {
 public:
   explicit KeepaliveMessageRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml) : MessageBase(xml) {}
   explicit KeepaliveMessageRequest(MessageBase &&messageBase) : MessageBase(std::move(messageBase)) {}
@@ -25,7 +25,7 @@ private:
   ResultType status_{ResultType::invalid};
   std::vector<std::string> info_;
 };
-class KeepaliveMessageResponse : public MessageBase {};
+class GB28181_EXPORT KeepaliveMessageResponse : public MessageBase {};
 } // namespace gb28181
 
 #endif // gb28181_include_gb28181_message_KEEPALIVE_MESSAGE_H

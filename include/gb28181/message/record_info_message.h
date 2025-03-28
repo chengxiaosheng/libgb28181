@@ -3,7 +3,7 @@
 
 #include <gb28181/message/message_base.h>
 namespace gb28181 {
-class RecordInfoRequestMessage final : public MessageBase {
+class GB28181_EXPORT RecordInfoRequestMessage final : public MessageBase {
 public:
     explicit RecordInfoRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -146,7 +146,7 @@ private:
     std::optional<int8_t> stream_number_;
 };
 
-class RecordInfoResponseMessage final : public ListMessageBase {
+class GB28181_EXPORT RecordInfoResponseMessage final : public ListMessageBase {
 public:
     explicit RecordInfoResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

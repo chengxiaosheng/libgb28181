@@ -7,7 +7,7 @@
 
 namespace gb28181 {
 
-class MessageBase {
+class GB28181_EXPORT MessageBase {
 public:
     virtual ~MessageBase() = default;
     explicit MessageBase(const std::shared_ptr<tinyxml2::XMLDocument> &xml);
@@ -65,7 +65,6 @@ public:
 
     explicit operator bool() const { return is_valid_; }
 
-    friend std::ostream &operator<<(std::ostream &os, const MessageBase &msg);
 
     /**
      * 解析xml 文档
@@ -105,7 +104,9 @@ protected:
     std::string error_message_;
 };
 
-class ListMessageBase : public virtual MessageBase {
+GB28181_EXPORT std::ostream &operator<<(std::ostream &os, const MessageBase &msg);
+
+class GB28181_EXPORT ListMessageBase : public virtual MessageBase {
 public:
     virtual int32_t num() = 0;
     int32_t &sum_num() { return sum_num_; }

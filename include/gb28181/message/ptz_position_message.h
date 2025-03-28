@@ -4,7 +4,7 @@
 
 namespace gb28181 {
 
-class PTZPositionRequestMessage final : public MessageBase {
+class GB28181_EXPORT PTZPositionRequestMessage final : public MessageBase {
 public:
     explicit PTZPositionRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -13,7 +13,7 @@ public:
     explicit PTZPositionRequestMessage(const std::string &device_id);
 };
 
-class PTZPositionResponseMessage final : public MessageBase {
+class GB28181_EXPORT PTZPositionResponseMessage final : public MessageBase {
 public:
     explicit PTZPositionResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -44,7 +44,7 @@ private:
     std::optional<double> max_view_distance_;
 };
 
-class PTZPositionNotifyMessage final : public MessageBase {
+class GB28181_EXPORT PTZPositionNotifyMessage final : public MessageBase {
 public:
     explicit PTZPositionNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

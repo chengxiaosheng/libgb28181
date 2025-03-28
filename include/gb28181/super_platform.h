@@ -13,7 +13,7 @@ class SuperPlatform;
 
 
 
-class SuperPlatform {
+class GB28181_EXPORT SuperPlatform {
 public:
     using DeviceStatusQueryCallback = std::function<void(std::shared_ptr<SuperPlatform>, std::shared_ptr<DeviceStatusMessageRequest>, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)>)>;
     using DeviceInfoQueryCallback = std::function<void(std::shared_ptr<SuperPlatform>, std::shared_ptr<DeviceInfoMessageRequest>, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)>)>;

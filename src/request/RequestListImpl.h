@@ -1,8 +1,8 @@
 #ifndef gb28181_src_request_REQUESTLISTIMPL_H
 #define gb28181_src_request_REQUESTLISTIMPL_H
 #include "RequestProxyImpl.h"
-
 #include <Util/TimeTicker.h>
+
 namespace toolkit {
 class Ticker;
 }

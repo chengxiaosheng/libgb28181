@@ -3,7 +3,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class DeviceConfigRequestMessage : public MessageBase {
+class GB28181_EXPORT DeviceConfigRequestMessage : public MessageBase {
 public:
     explicit DeviceConfigRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -22,7 +22,7 @@ private:
     std::pair<DeviceConfigType, std::shared_ptr<DeviceConfigBase>> config_;
 };
 
-class DeviceConfigResponseMessage final : public MessageBase {
+class GB28181_EXPORT DeviceConfigResponseMessage final : public MessageBase {
 public:
     explicit DeviceConfigResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

@@ -4,7 +4,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class AlarmRequestMessage : public MessageBase {
+class GB28181_EXPORT AlarmRequestMessage : public MessageBase {
 public:
     explicit AlarmRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -121,7 +121,7 @@ private:
 /**
  * 告警通知
  */
-class AlarmNotifyMessage final : public MessageBase {
+class GB28181_EXPORT AlarmNotifyMessage final : public MessageBase {
 public:
     struct alarm_info_type {
         int alarm_type { 0 };
@@ -159,7 +159,7 @@ private:
     std::vector<std::string> extra_info_;
 };
 
-class AlarmNotifyResponseMessage : public MessageBase {
+class GB28181_EXPORT AlarmNotifyResponseMessage : public MessageBase {
 public:
     explicit AlarmNotifyResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

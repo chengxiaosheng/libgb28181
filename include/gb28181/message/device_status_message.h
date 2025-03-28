@@ -3,7 +3,7 @@
 #include "gb28181/message/message_base.h"
 
 namespace gb28181 {
-class DeviceStatusMessageRequest final : public MessageBase {
+class GB28181_EXPORT DeviceStatusMessageRequest final : public MessageBase {
 public:
     explicit DeviceStatusMessageRequest(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -12,7 +12,7 @@ public:
     explicit DeviceStatusMessageRequest(const std::string &device_id);
 };
 
-class DeviceStatusMessageResponse final : public MessageBase {
+class GB28181_EXPORT DeviceStatusMessageResponse final : public MessageBase {
 public:
     explicit DeviceStatusMessageResponse(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

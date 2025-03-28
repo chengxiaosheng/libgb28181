@@ -1,4 +1,8 @@
+#ifdef WIN32
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#endif
 #include "gb28181/type_define.h"
 #include <iomanip>
 #include <sstream>
@@ -10,7 +14,6 @@
 #include "tinyxml2.h"
 
 #include <Util/logger.h>
-#include <algorithm>
 #include <sip-uac.h>
 #include <sip-uas.h>
 

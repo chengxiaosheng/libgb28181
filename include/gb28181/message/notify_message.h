@@ -7,7 +7,7 @@ namespace gb28181 {
 /**
  * 图像抓拍传输完成通知
  */
-class UploadSnapShotFinishedNotifyMessage final : public MessageBase {
+class GB28181_EXPORT UploadSnapShotFinishedNotifyMessage final : public MessageBase {
 public:
     explicit UploadSnapShotFinishedNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -27,7 +27,7 @@ private:
     std::vector<std::string> snap_shot_lists_ {};
 };
 
-class MobilePositionNotifyMessage : public MessageBase {
+class GB28181_EXPORT MobilePositionNotifyMessage : public MessageBase {
 public:
     explicit MobilePositionNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -50,7 +50,7 @@ private:
     std::vector<ItemMobilePositionType> device_list_;
 };
 
-class MediaStatusNotifyMessage final : public MessageBase {
+class GB28181_EXPORT MediaStatusNotifyMessage final : public MessageBase {
 public:
     explicit MediaStatusNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -70,7 +70,7 @@ private:
 /**
  * 设备实时视音频回传通知
  */
-class VideoUploadNotifyMessage final : public MessageBase {
+class GB28181_EXPORT VideoUploadNotifyMessage final : public MessageBase {
 public:
     explicit VideoUploadNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -94,7 +94,7 @@ private:
     std::optional<double> latitude_;
 };
 
-class DeviceUpgradeResultNotifyMessage final : public MessageBase {
+class GB28181_EXPORT DeviceUpgradeResultNotifyMessage final : public MessageBase {
 public:
     explicit DeviceUpgradeResultNotifyMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

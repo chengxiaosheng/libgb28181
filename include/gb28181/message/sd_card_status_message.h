@@ -3,7 +3,7 @@
 #include <gb28181/message/message_base.h>
 
 namespace gb28181 {
-class SdCardRequestMessage final : public MessageBase {
+class GB28181_EXPORT SdCardRequestMessage final : public MessageBase {
 public:
     explicit SdCardRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -12,7 +12,7 @@ public:
     explicit SdCardRequestMessage(const std::string &device_id);
 };
 
-class SdCardResponseMessage final : public MessageBase {
+class GB28181_EXPORT SdCardResponseMessage final : public MessageBase {
 public:
     explicit SdCardResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

@@ -1,3 +1,4 @@
+#include "Util/util.h"
 #include <gb28181/message/device_config_message.h>
 #include <gb28181/type_define_ext.h>
 

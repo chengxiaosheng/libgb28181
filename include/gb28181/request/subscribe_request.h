@@ -10,9 +10,9 @@ namespace gb28181 {
 class SubordinatePlatform;
 class MessageBase;
 class SuperPlatform;
-class SubscribeRequest {
+class GB28181_EXPORT SubscribeRequest {
 public:
-    enum TERMINATED_TYPE_E : uint8_t {
+    enum GB28181_EXPORT TERMINATED_TYPE_E : uint8_t {
         invalid = 0, // 无效
         deactivated, // 订阅已被服务器手动停用。
         timeout, // 订阅因有效期超时而终止。
@@ -23,13 +23,13 @@ public:
         expired, // 订阅的资源已过期。
         invariant, // 订阅因违反协议或服务端的约束条件而被终止。
     };
-    enum SUBSCRIBER_STATUS_TYPE_E : uint8_t {
+    enum GB28181_EXPORT SUBSCRIBER_STATUS_TYPE_E : uint8_t {
         unknown = 0,
         active, // 表示订阅有效。
         pending, // 表示订阅已被服务器接收，但尚未完成相关处理。
         terminated, // 表示订阅已终止，订阅者不会再接收任何事件通知。
     };
-    struct subscribe_info {
+    struct GB28181_EXPORT subscribe_info {
         std::string event; // 事件名称
         uint64_t subscribe_id { 0 }; // 订阅唯一标识
         uint32_t expires { 3600 }; // 订阅有效期
@@ -124,8 +124,6 @@ public:
     static std::shared_ptr<SubscribeRequest> new_subscribe(
         const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &message,
         subscribe_info &&info);
-
-private:
 };
 } // namespace gb28181
 

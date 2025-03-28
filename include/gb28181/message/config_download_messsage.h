@@ -6,7 +6,7 @@
 #include <utility>
 
 namespace gb28181 {
-class ConfigDownloadRequestMessage final : public MessageBase {
+class GB28181_EXPORT ConfigDownloadRequestMessage final : public MessageBase {
 public:
     explicit ConfigDownloadRequestMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}
@@ -24,7 +24,7 @@ private:
     DeviceConfigType config_type_ { DeviceConfigType::invalid };
 };
 
-class ConfigDownloadResponseMessage : public MessageBase {
+class GB28181_EXPORT ConfigDownloadResponseMessage : public MessageBase {
 public:
     explicit ConfigDownloadResponseMessage(const std::shared_ptr<tinyxml2::XMLDocument> &xml)
         : MessageBase(xml) {}

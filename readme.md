@@ -1,7 +1,9 @@
 ## 一个简单的GB/T 28181协议库
-基本实现GB/T 28181 交互协议
+完整实现GB/T 28181-2022 交互协议
++ 支持级联交互
++ 支持ice-扩展
 
-未经完整测试，未经内存检测
+已在生成项目中多层级联验证
 
 ## 项目依赖
 > - [ireader/media-server/libsip](https://github.com/ireader/media-server/tree/master/libsip): 作为sip栈, 感谢[老陈](https://github.com/ireader) 。

@@ -681,8 +681,14 @@ int SuperPlatformImpl::on_notify(
 }
 void SuperPlatformImpl::set_status(PlatformStatusType status, const std::string &error) {
     account_.plat_status.error = error;
+    if (status == PlatformStatusType::online) {
+        account_.plat_status.register_time = toolkit::getCurrentMicrosecond(true);
+    }
     if (status == account_.plat_status.status)
         return;
+    if (status == PlatformStatusType::offline) {
+        account_.plat_status.offline_time = toolkit::getCurrentMicrosecond(true);
+    }
     account_.plat_status.status = status;
     toolkit::EventPollerPool::Instance().getExecutor()->async(
         [this_ptr = shared_from_this(), status, error]() {

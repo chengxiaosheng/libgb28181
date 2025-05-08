@@ -59,6 +59,8 @@ public:
     virtual std::string get_from_uri();
     virtual std::string get_to_uri();
 
+    virtual std::string get_contact_uri();
+
     void add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy);
     void remove_request_proxy(int32_t sn);
     int on_response(MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request);
@@ -95,6 +97,8 @@ protected:
     // 存储等待应答的请求
     std::unordered_map<int32_t, std::shared_ptr<RequestProxyImpl>> request_map_;
     std::shared_mutex request_map_mutex_;
+    // 联系地址
+    std::string contact_uri_;
 };
 } // namespace gb28181
 

@@ -58,14 +58,19 @@ SuperPlatformImpl::SuperPlatformImpl(super_account account, const std::shared_pt
     , keepalive_ticker_(std::make_shared<toolkit::Ticker>()) {
     local_server_weak_ = server;
 
+    const auto & server_account = server->get_account();
     if (account_.local_host.empty()) {
-        account_.local_host = toolkit::SockUtil::get_local_ip();
+        account_.local_host = server_account.local_host;
     }
-    if (account_.local_port == 0) {
-        account_.local_port = server->get_account().port;
+    if (!account_.local_port) {
+        account_.local_port = server_account.local_port;
     }
-    from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":"
+    from_uri_ = "sip:" + server_account.platform_id + "@" + server_account.local_host + ":"
+        + std::to_string(server_account.local_port);
+    contact_uri_ = "sip:" + server_account.platform_id + "@" + account_.local_host + ":"
         + std::to_string(account_.local_port);
+    to_uri_ = "sip:" + account_.platform_id + "@" + account_.host + ":"
+        + std::to_string(account_.port);
 }
 
 SuperPlatformImpl::~SuperPlatformImpl() {

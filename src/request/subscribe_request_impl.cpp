@@ -269,7 +269,7 @@ int SubscribeRequestImpl::on_recv_notify(
     const std::shared_ptr<sip_uas_transaction_t> &transaction) {
 
     auto sub_state_cstr = sip_message_get_header_by_name(notify.get(), SIP_HEADER_SUBSCRIBE_STATE);
-    if (cstrvalid(sub_state_cstr)) {
+    if (sub_state_cstr && cstrvalid(sub_state_cstr)) {
         sip_substate_t sub_state {};
         if (0 == sip_header_substate(sub_state_cstr->p, sub_state_cstr->p + sub_state_cstr->n, &sub_state)) {
             if (!cstrvalid(&sub_state.state)) {

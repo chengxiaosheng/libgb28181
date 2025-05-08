@@ -119,7 +119,6 @@ private:
     static int onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session);
 
 private:
-    std::string local_ip_{"::"};
     local_account account_; // 本地账户信息
     std::atomic_bool running_ { false };
     uint32_t server_ssrc_domain_{0};

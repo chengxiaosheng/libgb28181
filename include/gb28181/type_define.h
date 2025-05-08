@@ -79,6 +79,9 @@ struct sip_account {
     std::string password; // 密码
     uint16_t port { 5060 }; // 平台端口
     SipAuthType auth_type { SipAuthType::none }; // 认证方式
+    bool keep_local_host { false }; // 是否保持本地联系地址, 如果保持则不通过rport处理地址
+    uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
+    std::string local_host; // 本地host, 会根据via头域的值而改变
 };
 
 struct local_account : public sip_account {
@@ -93,8 +96,6 @@ struct platform_account : public sip_account {
     TransportType transport_type { TransportType::udp }; // 网络传输方式
     PlatformManufacturer manufacturer { PlatformManufacturer::unknown }; // 厂商类型
     PlatformVersionType version { PlatformVersionType::unknown }; // 平台版本
-    uint16_t local_port { 0 }; // 本地端口 会根据via头域的值而改变
-    std::string local_host; // 本地host, 会根据via头域的值而改变
     sip_account_status plat_status; // 平台状态
 };
 

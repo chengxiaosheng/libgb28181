@@ -55,6 +55,7 @@ void set_message_agent(struct sip_uac_transaction_t *transaction);
 void set_message_gbt_version(
     struct sip_uac_transaction_t *transaction, PlatformVersionType version = PlatformVersionType::v30);
 void set_message_header(struct sip_uac_transaction_t *transaction);
+void set_message_contact(struct sip_uac_transaction_t *transaction, const char * contact);
 void set_message_content_type(struct sip_uac_transaction_t *transaction, enum SipContentType content_type);
 void set_message_reason(struct sip_uac_transaction_t *transaction, const char *reason);
 void set_x_preferred_path(struct sip_uac_transaction_t *transaction, const char *path);

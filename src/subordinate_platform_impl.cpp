@@ -34,14 +34,18 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
     : SubordinatePlatform()
     , PlatformHelper()
     , account_(std::move(account)) {
-    local_server_weak_ = server;
+
+    const auto & server_account = server->get_account();
     if (account_.local_host.empty()) {
-        account_.local_host = toolkit::SockUtil::get_local_ip();
+        account_.local_host = server_account.local_host;
     }
-    if (account_.local_port == 0) {
-        account_.local_port = server->get_account().port;
+    if (!account_.local_port) {
+        account_.local_port = server_account.local_port;
     }
-    from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + account_.local_host + ":"
+    local_server_weak_ = server;
+    from_uri_ = "sip:" + server_account.platform_id + "@" + server_account.local_host + ":"
+        + std::to_string(server_account.local_port);
+    contact_uri_ = "sip:" + server_account.platform_id + "@" + account_.local_host + ":"
         + std::to_string(account_.local_port);
 }
 
@@ -92,9 +96,12 @@ int SubordinatePlatformImpl::on_recv_register(
             account.auth_type = server_account.auth_type;
             account.transport_type = session->is_udp() ? TransportType::udp : TransportType::tcp;
             account.local_port = session->get_local_port();
-            account.local_host = SockUtil::get_local_ip(session->getSock()->rawFD());
+            account.local_host = session->get_local_ip();// SockUtil::get_local_ip(session->getSock()->rawFD());
             if(account.local_host.empty()) {
-                account.local_host = SockUtil::get_local_ip();
+                account.local_port = server_account.local_port;
+            }
+            if(account.local_port == 0) {
+                account.local_host = server_account.local_host;
             }
             account.plat_status.register_time = getCurrentMicrosecond(true);
             account.plat_status.status = PlatformStatusType::registering;

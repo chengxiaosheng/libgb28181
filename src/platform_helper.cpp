@@ -85,6 +85,9 @@ bool PlatformHelper::update_remote_via(std::pair<std::string, uint32_t> val) {
     std::string &host = val.first;
     uint32_t &port = val.second;
 
+    auto & account = sip_account();
+    if (account.keep_local_host) return false;
+
     bool changed = false;
     if (!host.empty() && sip_account().local_host != host) {
         sip_account().local_host = host;
@@ -95,7 +98,7 @@ bool PlatformHelper::update_remote_via(std::pair<std::string, uint32_t> val) {
         changed = true;
     }
     if (changed) {
-        from_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + sip_account().local_host + ":"
+        contact_uri_ = "sip:" + get_sip_server()->get_account().platform_id + "@" + sip_account().local_host + ":"
             + std::to_string(sip_account().local_port);
         if (tcp_session_) {
             tcp_session_->set_local_ip(host);
@@ -125,6 +128,10 @@ std::string PlatformHelper::get_to_uri() {
     }
     return to_uri_;
 }
+std::string PlatformHelper::get_contact_uri(){
+    return contact_uri_.empty() ? get_from_uri() : contact_uri_;
+}
+
 
 void PlatformHelper::add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy) {
     std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
@@ -138,6 +145,7 @@ void PlatformHelper::remove_request_proxy(int32_t sn) {
 void PlatformHelper::uac_send(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string)> &rcb, bool force_tcp) {
+    set_message_contact(transaction.get(), get_contact_uri().c_str());
     get_session(
         [transaction, payload = std::move(payload),
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
@@ -157,6 +165,7 @@ void PlatformHelper::uac_send(
 void PlatformHelper::uas_send2(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp) {
+    set_message_contact(transaction.get(), get_contact_uri().c_str());
     get_session(
         [transaction, payload = std::move(payload),
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {

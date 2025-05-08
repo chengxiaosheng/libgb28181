@@ -38,9 +38,21 @@ SipServer::SipServer(local_account account)
     , handler_(std::make_shared<sip_uas_handler_t>())
 
 {
-    if (!account_.host.empty()) {
-        local_ip_ = account_.host;
+    if (account_.host.empty()) {
+        account_.host = "::";
     }
+    // 一般来说，建议配置本地IP
+    if (account_.local_host.empty()) {
+        if (!SockUtil::is_loopback_ip(account_.host.c_str())) {
+            account_.local_host = account_.host;
+        } else {
+            account_.local_host = SockUtil::get_local_ip();
+        }
+    }
+    if (account_.local_port == 0) {
+        account_.local_port = account_.port;
+    }
+
     tinyxml2::XMLUtil::ToUnsigned(account_.platform_id.substr(3, 5).data(), &server_ssrc_domain_);
     server_ssrc_sn_.try_emplace(server_ssrc_domain_, 1);
     init_agent();
@@ -135,7 +147,7 @@ void SipServer::reload_account(sip_account account) {}
 
 void SipServer::new_subordinate_account(
     const std::shared_ptr<subordinate_account> &account,
-    const std::function<void(std::shared_ptr<SubordinatePlatformImpl>)>& allow_cb) {
+    const std::function<void(std::shared_ptr<SubordinatePlatformImpl>)> &allow_cb) {
     if (new_subordinate_account_callback_) {
         auto weak_this = weak_from_this();
         new_subordinate_account_callback_(shared_from_this(), account, [weak_this, account, allow_cb](bool allow) {
@@ -187,7 +199,7 @@ void SipServer::run() {
     if (account_.transport_type == TransportType::both || account_.transport_type == TransportType::udp) {
         udp_server_ = std::make_shared<UdpServer>();
         udp_server_->start<SipSession>(
-            account_.port, local_ip_, [weak_this](const std::shared_ptr<SipSession> &session) {
+            account_.port, account_.host, [weak_this](const std::shared_ptr<SipSession> &session) {
                 session->_sip_server = weak_this;
                 session->_sip_agent = weak_this.lock()->sip_.get();
             });
@@ -195,7 +207,7 @@ void SipServer::run() {
     if (account_.transport_type == TransportType::both || account_.transport_type == TransportType::tcp) {
         tcp_server_ = std::make_shared<TcpServer>();
         tcp_server_->start<SipSession>(
-            account_.port, local_ip_, 1024, [weak_this](const std::shared_ptr<SipSession> &session) {
+            account_.port, account_.host, 1024, [weak_this](const std::shared_ptr<SipSession> &session) {
                 session->_sip_server = weak_this;
                 session->_sip_agent = weak_this.lock()->sip_.get();
             });
@@ -242,7 +254,7 @@ void SipServer::get_client_l(
     // tcp 下sipSession 模拟tcpclient 操作, 尝试往对端建立连接
     session->startConnect(
         SockUtil::inet_ntoa((const sockaddr *)&addr), SockUtil::inet_port((const sockaddr *)&addr), account_.port,
-        local_ip_, [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
+        account_.host, [cb, session](const toolkit::SockException &e) { cb(e, !e ? session : nullptr); }, 5);
 }
 
 void SipServer::get_client(
@@ -282,7 +294,9 @@ void SipServer::get_client(
 #define GetSipSession(s)                                                                                               \
     if (s == nullptr)                                                                                                  \
         return sip_unknown_host;                                                                                       \
-    auto session_ptr = std::dynamic_pointer_cast<SipSession>((static_cast<SipSession *>(s))->shared_from_this());      \
+    std::shared_ptr<SipSession> session_ptr;                                                                           \
+    if (auto session_point = static_cast<SipSession *>(s); session_point != nullptr)                                   \
+        session_ptr = std::dynamic_pointer_cast<SipSession>(session_point->shared_from_this());                        \
     if (session_ptr == nullptr)                                                                                        \
         return sip_unknown_host;
 

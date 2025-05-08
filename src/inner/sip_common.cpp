@@ -39,6 +39,9 @@ void set_message_header(struct sip_uac_transaction_t *transaction) {
     set_message_agent(transaction);
     set_message_gbt_version(transaction);
 }
+void set_message_contact(struct sip_uac_transaction_t *transaction, const char *contact) {
+    sip_uac_add_header(transaction, SIP_HEADER_CONTACT, contact);
+}
 void set_message_content_type(struct sip_uac_transaction_t *transaction, enum SipContentType content_type) {
     if (content_type == SipContentType_XML) {
         sip_uac_add_header(transaction, SIP_HEADER_CONTENT_TYPE, SIP_CONTENT_TYPE_XML);

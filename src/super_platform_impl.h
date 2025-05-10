@@ -64,12 +64,15 @@ private:
     TransportType get_transport() const override {
         return account_.transport_type;
     }
+    void start_l();
 private:
     super_account account_;
     std::string moved_uri_;
-    std::pair<std::string, int> nc_pair_;
-    int auth_failed_count_ { 0 };
+    std::string temp_host_;
     std::atomic_bool running_ { false };
+    uint16_t temp_port_ {0};
+    int auth_failed_count_ { 0 };
+    std::pair<std::string, int> nc_pair_;
     std::shared_ptr<toolkit::Timer> keepalive_timer_; // 心跳定时器
     std::shared_ptr<toolkit::EventPoller::DelayTask> register_timer_;
     std::vector<std::string> fault_devices_;

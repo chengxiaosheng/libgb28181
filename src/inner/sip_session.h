@@ -13,11 +13,20 @@ struct cstring_t;
 
 namespace gb28181 {
 class SipServer;
+class SipSession;
 
 class SipSession : public toolkit::Session {
 public:
-    SipSession(const toolkit::Socket::Ptr &sock);
+    /**
+    * @brief SipSession 构造函数
+    * @param sock
+    * @param is_client 是否是客户端
+    */
+    SipSession(const toolkit::Socket::Ptr &sock, bool is_client = false);
     ~SipSession() override;
+
+    void set_peer(const std::string &host, uint16_t port);
+    void set_peer(const struct sockaddr_storage &addr);
 
     void onRecv(const toolkit::Buffer::Ptr &) override;
     void onError(const toolkit::SockException &err) override;
@@ -29,11 +38,10 @@ public:
 
     std::shared_ptr<SipServer> getSipServer() const { return _sip_server.lock(); }
 
-    void set_on_manager(std::function<void()> cb) { _on_manager = std::move(cb); }
     void set_on_error(std::function<void(const toolkit::SockException &ex)> cb) { _on_error = std::move(cb); }
 
     static int sip_send(void *transport, const void *data, size_t bytes);
-    static int sip_send2(void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received, int rport, const void *data, int bytes);
+    static int sip_send_reply(void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received, int rport, const void *data, int bytes);
     static int sip_via(void *transport, const char *destination, char protocol[16], char local[128], char dns[128]);
 
     static sip_transport_t *get_transport();
@@ -45,9 +53,11 @@ public:
 
 private:
     void handle_recv();
+    struct sockaddr_storage make_peer_addr(const struct sockaddr_storage &addr);
 
 private:
     bool _is_udp = false;
+    bool _is_client = false;
     int8_t _wait_type { 0 };
     toolkit::Ticker _ticker;
     struct sockaddr_storage _addr {};
@@ -59,11 +69,10 @@ private:
     uint16_t local_port_ { 0 };
     friend class SipServer;
 
-    std::function<void()> _on_manager;
     std::function<void(const toolkit::SockException &)> _on_error;
     std::shared_ptr<toolkit::Ticker> ticker_; // 计时器
     std::deque<toolkit::Buffer::Ptr> _recv_buffers;
-    std::mutex _recv_buffers_mutex;
+    std::recursive_mutex _recv_buffers_mutex;
 };
 
 } // namespace gb28181

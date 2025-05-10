@@ -20,13 +20,14 @@
 #include "sip-header.h"
 #include "sip-message.h"
 
+#include "super_platform_impl.h"
 #include <Poller/EventPoller.h>
 #include <Util/NoticeCenter.h>
 #include <gb28181/sip_event.h>
 #include <inner/sip_server.h>
 #include <sip-uac.h>
-#include "super_platform_impl.h"
 
+#include <Thread/WorkThreadPool.h>
 
 using namespace gb28181;
 using namespace toolkit;
@@ -58,7 +59,7 @@ SuperPlatformImpl::SuperPlatformImpl(super_account account, const std::shared_pt
     , keepalive_ticker_(std::make_shared<toolkit::Ticker>()) {
     local_server_weak_ = server;
 
-    const auto & server_account = server->get_account();
+    const auto &server_account = server->get_account();
     if (account_.local_host.empty()) {
         account_.local_host = server_account.local_host;
     }
@@ -67,32 +68,59 @@ SuperPlatformImpl::SuperPlatformImpl(super_account account, const std::shared_pt
     }
     from_uri_ = "sip:" + server_account.platform_id + "@" + server_account.local_host + ":"
         + std::to_string(server_account.local_port);
-    contact_uri_ = "sip:" + server_account.platform_id + "@" + account_.local_host + ":"
-        + std::to_string(account_.local_port);
-    to_uri_ = "sip:" + account_.platform_id + "@" + account_.host + ":"
-        + std::to_string(account_.port);
+    contact_uri_
+        = "sip:" + server_account.platform_id + "@" + account_.local_host + ":" + std::to_string(account_.local_port);
+    to_uri_ = "sip:" + account_.platform_id + "@" + account_.host + ":" + std::to_string(account_.port);
 }
 
 SuperPlatformImpl::~SuperPlatformImpl() {
     DebugL << account_.platform_id;
 }
 void SuperPlatformImpl::shutdown() {
-    if (!running_.load()) {
+    if (!running_.exchange(false)) {
         return;
     }
-    NOTICE_EMIT(kEventOnSuperPlatformShutdownArgs, Broadcast::kEventOnSuperPlatformShutdown, std::dynamic_pointer_cast<SuperPlatform>(shared_from_this()));
-    running_.store(false);
+    NOTICE_EMIT(
+        kEventOnSuperPlatformShutdownArgs, Broadcast::kEventOnSuperPlatformShutdown,
+        std::dynamic_pointer_cast<SuperPlatform>(shared_from_this()));
     if (account_.plat_status.status == PlatformStatusType::online) {
         to_register(0);
     }
 }
 void SuperPlatformImpl::start() {
-    if (running_.load()) {
+    if (running_.exchange(true)) {
         return;
     }
-    running_.store(true);
     add_platform_to_map(shared_from_this());
-    to_register(account_.register_expired);
+    start_l();
+}
+
+void SuperPlatformImpl::start_l() {
+    if (SockUtil::is_ipv4(account_.host.c_str()) || SockUtil::is_ipv6(account_.host.c_str())) {
+        on_platform_addr_changed(SockUtil::make_sockaddr(account_.host.c_str(), account_.port));
+        to_register(account_.register_expired);
+    } else {
+        auto poller = toolkit::EventPollerPool::Instance().getPoller();
+        std::weak_ptr<SuperPlatformImpl> this_weak = shared_from_this();
+        WorkThreadPool::Instance().getPoller()->async(
+            [poller, host = account_.host, port = account_.port, this_weak]() {
+                struct sockaddr_storage addr;
+                auto ret = SockUtil::getDomainIP(host.c_str(), port, addr, AF_INET, SOCK_DGRAM, IPPROTO_TCP);
+                if (auto this_ptr = this_weak.lock()) {
+                    if (ret) {
+                        this_ptr->on_platform_addr_changed(addr);
+                        poller->async([this_ptr]() { this_ptr->to_register(this_ptr->account_.register_expired); });
+                        return;
+                    }
+                    poller->doDelayTask(3 * 1000, [this_weak]() {
+                        if (auto this_ptr = this_weak.lock()) {
+                            this_ptr->start_l();
+                        }
+                        return 0;
+                    });
+                }
+            });
+    }
 }
 
 std::shared_ptr<LocalServer> SuperPlatformImpl::get_local_server() const {
@@ -192,10 +220,37 @@ int SuperPlatformImpl::on_register_reply(
     // 注册重定向
     if (SIP_IS_SIP_REDIRECT(code)) {
         this_ptr->moved_uri_ = get_message_contact(reply);
+
         if (!this_ptr->moved_uri_.empty()) {
-            toolkit::EventPollerPool::Instance().getExecutor()->async(
-                [this_ptr]() { this_ptr->to_register(this_ptr->account_.register_expired); }, false);
-            return 0;
+            sip_contact_t contact{};
+            // 获取临时地址
+            if (sip_contact_write(&contact, this_ptr->moved_uri_.data(), this_ptr->moved_uri_.data() + this_ptr->moved_uri_.size()) >= 0 && cstrvalid(&contact.uri.host)) {
+                std::string_view sip_host_str(contact.uri.host.p, contact.uri.host.n);
+                auto pos =  sip_host_str.find('@');
+                if (pos != std::string_view::npos) {
+                    sip_host_str = sip_host_str.substr(pos + 1);
+                }
+                pos = sip_host_str.find(':');
+                this_ptr->temp_port_ = 5060;
+                if (pos != std::string_view::npos) {
+                    try {
+                        this_ptr->temp_port_ = std::strtol(sip_host_str.data() + pos + 1, nullptr, 10);
+                    } catch (const std::exception &e) {
+                        ErrorL << "Exception thrown: " << e.what();
+                    }
+                    sip_host_str = sip_host_str.substr(0, pos);
+                }
+                this_ptr->temp_host_ = sip_host_str;
+                toolkit::EventPollerPool::Instance().getExecutor()->async([this_ptr]() {
+                    this_ptr->start_l();
+                });
+                return 0;
+            } else {
+                this_ptr->moved_uri_ = ""; // 解析重定向失败，清理资源
+            }
+            // toolkit::EventPollerPool::Instance().getExecutor()->async(
+            //     [this_ptr]() { this_ptr->to_register(this_ptr->account_.register_expired); }, false);
+            // return 0;
         }
         do_register();
     } else if (code == 401) {
@@ -206,8 +261,8 @@ int SuperPlatformImpl::on_register_reply(
             return 0;
         }
         std::string auth_str = generate_authorization(
-            reply, this_ptr->get_local_server()->get_account().platform_id, this_ptr->account_.password, this_ptr->get_to_uri(),
-            this_ptr->nc_pair_);
+            reply, this_ptr->get_local_server()->get_account().platform_id, this_ptr->account_.password,
+            this_ptr->get_to_uri(), this_ptr->nc_pair_);
         if (auth_str.empty()) {
             do_register();
             this_ptr->set_status(PlatformStatusType::auth_failure, "generate authorization failed");
@@ -269,18 +324,22 @@ void SuperPlatformImpl::to_keepalive() {
         = std::make_shared<KeepaliveMessageRequest>(local_server_weak_.lock()->get_account().platform_id);
     keepalive_ptr->info() = fault_devices_;
     std::make_shared<RequestProxyImpl>(shared_from_this(), keepalive_ptr, RequestProxy::RequestType::NoResponse)
-        ->send([weak_this = weak_from_this()](const std::shared_ptr<RequestProxy>& proxy) {
+        ->send([weak_this = weak_from_this()](const std::shared_ptr<RequestProxy> &proxy) {
             if (auto this_ptr = weak_this.lock()) {
                 if (proxy->status() == RequestProxy::Status::Succeeded) {
                     this_ptr->account_.plat_status.keepalive_time = getCurrentMicrosecond(true);
                     this_ptr->keepalive_ticker_->resetTime();
                     // 广播心跳事件
-                    NOTICE_EMIT(kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive, std::dynamic_pointer_cast<SuperPlatform>(this_ptr), true, proxy->error());
+                    NOTICE_EMIT(
+                        kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive,
+                        std::dynamic_pointer_cast<SuperPlatform>(this_ptr), true, proxy->error());
                     return;
                 }
                 EventPollerPool::Instance().getPoller()->async([weak_this, proxy]() {
                     if (auto this_ptr = weak_this.lock()) {
-                        NOTICE_EMIT(kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive, std::dynamic_pointer_cast<SuperPlatform>(this_ptr), false, proxy->error());
+                        NOTICE_EMIT(
+                            kEventSuperPlatformKeepaliveArgs, Broadcast::kEventSuperPlatformKeepalive,
+                            std::dynamic_pointer_cast<SuperPlatform>(this_ptr), false, proxy->error());
                     }
                 });
                 // 心跳超时 ? 应该重新注册
@@ -301,7 +360,9 @@ void SuperPlatformImpl::to_keepalive() {
 void SuperPlatformImpl::on_invite(
     const std::shared_ptr<InviteRequest> &invite_request,
     std::function<void(int, std::shared_ptr<SdpDescription>)> &&resp) {
-    NOTICE_EMIT(kEventOnInviteRequestArgs, Broadcast::kEventOnInviteRequest, std::dynamic_pointer_cast<SuperPlatform>(shared_from_this()), invite_request, std::move(resp));
+    NOTICE_EMIT(
+        kEventOnInviteRequestArgs, Broadcast::kEventOnInviteRequest,
+        std::dynamic_pointer_cast<SuperPlatform>(shared_from_this()), invite_request, std::move(resp));
 }
 
 template <typename Response>
@@ -345,22 +406,22 @@ std::shared_ptr<SdCardResponseMessage> create_response(const std::string &device
 template <typename Request, typename Response, const char *EventType, typename T>
 struct OneResponseQueryHandler;
 
-template <typename Request, typename Response, const char *EventType, typename RET, typename ...Args>
-struct OneResponseQueryHandler<Request,Response,EventType, RET(Args...)> {
+template <typename Request, typename Response, const char *EventType, typename RET, typename... Args>
+struct OneResponseQueryHandler<Request, Response, EventType, RET(Args...)> {
 public:
     using RequestPtr = std::shared_ptr<Request>;
     using ResponsePtr = std::shared_ptr<Response>;
     using CallbackFunc = std::function<void(ResponsePtr)>;
     struct Context {
-        std::atomic_flag flag{ATOMIC_FLAG_INIT};
+        std::atomic_flag flag { ATOMIC_FLAG_INIT };
         toolkit::EventPoller::DelayTask::Ptr timeout;
         RequestPtr request;
     };
 
     // 主处理模板方法
     int process(
-        MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> && transaction,
-        std::shared_ptr<SuperPlatformImpl>&& platform) {
+        MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> &&transaction,
+        std::shared_ptr<SuperPlatformImpl> &&platform) {
         auto ctx = std::make_shared<Context>();
         ctx->request = std::make_shared<Request>(std::move(message));
 
@@ -396,7 +457,9 @@ public:
                 return 0;
             });
         // 事件派发
-        if (0 == NOTICE_EMIT(Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), ctx->request, response)) {
+        if (0
+            == NOTICE_EMIT(
+                Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), ctx->request, response)) {
             ctx->timeout->cancel();
             ctx->timeout.reset();
             return 404;
@@ -409,7 +472,7 @@ public:
 template <typename Request, const char *EventType, typename T>
 struct NoResponseQueryHandler;
 
-template <typename Request, const char *EventType, typename RET, typename ...Args>
+template <typename Request, const char *EventType, typename RET, typename... Args>
 struct NoResponseQueryHandler<Request, EventType, RET(Args...)> {
 public:
     using RequestPtr = std::shared_ptr<Request>;
@@ -423,7 +486,7 @@ public:
             return 400;
         }
         // 事件派发
-        if (0 == NOTICE_EMIT(Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), request) ) {
+        if (0 == NOTICE_EMIT(Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), request)) {
             return 404;
         }
         return 200;
@@ -431,24 +494,24 @@ public:
 };
 
 template <typename Request, typename Response, const char *EventType, typename T>
-struct  MultiResponseQueryHandler;
+struct MultiResponseQueryHandler;
 
-template <typename Request, typename Response, const char *EventType, typename RET, typename ...Args>
-struct  MultiResponseQueryHandler<Request,Response,EventType, RET(Args...)> {
+template <typename Request, typename Response, const char *EventType, typename RET, typename... Args>
+struct MultiResponseQueryHandler<Request, Response, EventType, RET(Args...)> {
     using RequestPtr = std::shared_ptr<Request>;
     using ResponsePtr = std::shared_ptr<Response>;
-    using CallbackFunc = std::function<void(std::deque<ResponsePtr>&&, int,bool)>;
+    using CallbackFunc = std::function<void(std::deque<ResponsePtr> &&, int, bool)>;
     struct Context {
-        std::atomic_flag flag{ATOMIC_FLAG_INIT};
+        std::atomic_flag flag { ATOMIC_FLAG_INIT };
         toolkit::EventPoller::DelayTask::Ptr timeout;
-        std::mutex response_mutex{};
+        std::mutex response_mutex {};
         std::deque<ResponsePtr> responses; // 回复数据据队列
         RequestPtr request;
     };
     // 主处理模板方法
     int process(
-        MessageBase &&message,  std::shared_ptr<sip_uas_transaction_t> &&transaction,
-        std::shared_ptr<SuperPlatformImpl>&& platform) {
+        MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> &&transaction,
+        std::shared_ptr<SuperPlatformImpl> &&platform) {
         auto ctx = std::make_shared<Context>();
         ctx->request = std::make_shared<Request>(std::move(message));
 
@@ -460,7 +523,7 @@ struct  MultiResponseQueryHandler<Request,Response,EventType, RET(Args...)> {
 
         // 构建响应处理器
         CallbackFunc response = [ctx, weak_impl = platform->weak_from_this()](
-                            std::deque<ResponsePtr> &&response, int concurrency, bool ignore_4xx) {
+                                    std::deque<ResponsePtr> &&response, int concurrency, bool ignore_4xx) {
             if (ctx->flag.test_and_set())
                 return;
             if (ctx->timeout) {
@@ -515,28 +578,29 @@ struct  MultiResponseQueryHandler<Request,Response,EventType, RET(Args...)> {
         };
         // 设置超时任务
         ctx->timeout = EventPollerPool::Instance().getPoller()->doDelayTask(
-           GB28181_QUERY_TIMEOUT_MS, [device_id = ctx->request->device_id().value_or(""), response]() {
-               auto resp = create_response<Response>(device_id);
-               resp->reason() = "timeout";
-               std::deque<ResponsePtr> responses;
-               responses.push_back(std::move(resp));
-               response(std::move(responses), 1, true);
-               return 0;
-           });
+            GB28181_QUERY_TIMEOUT_MS, [device_id = ctx->request->device_id().value_or(""), response]() {
+                auto resp = create_response<Response>(device_id);
+                resp->reason() = "timeout";
+                std::deque<ResponsePtr> responses;
+                responses.push_back(std::move(resp));
+                response(std::move(responses), 1, true);
+                return 0;
+            });
         // 事件派发
         try {
-            if (0 == NOTICE_EMIT(Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), ctx->request, response)) {
+            if (0
+                == NOTICE_EMIT(
+                    Args..., EventType, std::dynamic_pointer_cast<SuperPlatform>(platform), ctx->request, response)) {
                 ctx->timeout->cancel();
                 ctx->timeout.reset();
                 return 404;
             }
         } catch (std::exception &e) {
-            ErrorL << "notify message " << *ctx->request <<  " failed: " << e.what();
+            ErrorL << "notify message " << *ctx->request << " failed: " << e.what();
         }
         return 200;
     }
 };
-
 
 int SuperPlatformImpl::on_query(
     MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction, std::shared_ptr<sip_message_t> request) {
@@ -545,20 +609,23 @@ int SuperPlatformImpl::on_query(
     switch (type) {
         case MessageCmdType::DeviceStatus:
             return OneResponseQueryHandler<
-                       DeviceStatusMessageRequest, DeviceStatusMessageResponse,
-                       Broadcast::kEventOnDeviceStatusRequest,void(kEventOnDeviceStatusRequestArgs)>()
+                       DeviceStatusMessageRequest, DeviceStatusMessageResponse, Broadcast::kEventOnDeviceStatusRequest,
+                       void(kEventOnDeviceStatusRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::Catalog:
             return MultiResponseQueryHandler<
-                CatalogRequestMessage, CatalogResponseMessage, Broadcast::kEventOnCatalogRequest,void(kEventOnCatalogRequestArgs)>()
+                       CatalogRequestMessage, CatalogResponseMessage, Broadcast::kEventOnCatalogRequest,
+                       void(kEventOnCatalogRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::DeviceInfo:
             return OneResponseQueryHandler<
-                       DeviceInfoMessageRequest, DeviceInfoMessageResponse, Broadcast::kEventOnDeviceInfoRequest,void(kEventOnDeviceInfoRequestArgs)>()
+                       DeviceInfoMessageRequest, DeviceInfoMessageResponse, Broadcast::kEventOnDeviceInfoRequest,
+                       void(kEventOnDeviceInfoRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::RecordInfo:
             return MultiResponseQueryHandler<
-                       RecordInfoRequestMessage, RecordInfoResponseMessage, Broadcast::kEventOnRecordInfoRequest, void(kEventOnRecordInfoRequestArgs)>()
+                       RecordInfoRequestMessage, RecordInfoResponseMessage, Broadcast::kEventOnRecordInfoRequest,
+                       void(kEventOnRecordInfoRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::ConfigDownload:
             return MultiResponseQueryHandler<
@@ -567,12 +634,13 @@ int SuperPlatformImpl::on_query(
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::PresetQuery:
             return MultiResponseQueryHandler<
-                       PresetRequestMessage, PresetResponseMessage, Broadcast::kEventOnPresetListRequest, void(kEventOnPresetListRequestArgs)>()
+                       PresetRequestMessage, PresetResponseMessage, Broadcast::kEventOnPresetListRequest,
+                       void(kEventOnPresetListRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::HomePositionQuery:
             return OneResponseQueryHandler<
-                       HomePositionRequestMessage, HomePositionResponseMessage,
-                       Broadcast::kEventOnHomePositionRequest, void(kEventOnHomePositionRequestArgs)>()
+                       HomePositionRequestMessage, HomePositionResponseMessage, Broadcast::kEventOnHomePositionRequest,
+                       void(kEventOnHomePositionRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::CruiseTrackListQuery:
             return MultiResponseQueryHandler<
@@ -581,15 +649,18 @@ int SuperPlatformImpl::on_query(
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::CruiseTrackQuery:
             return MultiResponseQueryHandler<
-                       CruiseTrackRequestMessage, CruiseTrackResponseMessage, Broadcast::kEventOnCruiseTrackRequest, void(kEventOnCruiseTrackRequestArgs)>()
+                       CruiseTrackRequestMessage, CruiseTrackResponseMessage, Broadcast::kEventOnCruiseTrackRequest,
+                       void(kEventOnCruiseTrackRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::PTZPosition:
             return OneResponseQueryHandler<
-                       PTZPositionRequestMessage, PTZPositionResponseMessage, Broadcast::kEventOnPTZPositionRequest, void(kEventOnPTZPositionRequestArgs)>()
+                       PTZPositionRequestMessage, PTZPositionResponseMessage, Broadcast::kEventOnPTZPositionRequest,
+                       void(kEventOnPTZPositionRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         case MessageCmdType::SDCardStatus:
             return OneResponseQueryHandler<
-                       SdCardRequestMessage, SdCardResponseMessage, Broadcast::kEventOnSdCardStatusRequest, void(kEventOnSdCardStatusRequestArgs)>()
+                       SdCardRequestMessage, SdCardResponseMessage, Broadcast::kEventOnSdCardStatusRequest,
+                       void(kEventOnSdCardStatusRequestArgs)>()
                 .process(std::move(message), std::move(transaction), shared_from_this());
         default: return 404;
     }
@@ -607,69 +678,81 @@ int SuperPlatformImpl::on_control(
                 continue;
             if (name == "PTZCmd")
                 return NoResponseQueryHandler<
-                           DeviceControlRequestMessage_PTZCmd, Broadcast::kEventOnDeviceControlPtzRequest, void(kEventOnDeviceControlPtzRequestArgs)>()
+                           DeviceControlRequestMessage_PTZCmd, Broadcast::kEventOnDeviceControlPtzRequest,
+                           void(kEventOnDeviceControlPtzRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "RecordCmd")
                 return OneResponseQueryHandler<
                            DeviceControlRequestMessage_RecordCmd, DeviceControlResponseMessage,
-                           Broadcast::kEventOnDeviceControlRecordCmdRequest, void(kEventOnDeviceControlRecordCmdRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlRecordCmdRequest,
+                           void(kEventOnDeviceControlRecordCmdRequestArgs)>()
                     .process(std::move(message), std::move(transaction), shared_from_this());
             if (name == "IFrameCmd" || name == "IFameCmd")
                 return NoResponseQueryHandler<
-                           DeviceControlRequestMessage_IFrameCmd, Broadcast::kEventOnDeviceControlIFrameCmdRequest, void(kEventOnDeviceControlIFrameCmdRequestArgs)>()
+                           DeviceControlRequestMessage_IFrameCmd, Broadcast::kEventOnDeviceControlIFrameCmdRequest,
+                           void(kEventOnDeviceControlIFrameCmdRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "DragZoomIn")
                 return NoResponseQueryHandler<
-                           DeviceControlRequestMessage_DragZoomIn, Broadcast::kEventOnDeviceControlDragZoomInRequest, void(kEventOnDeviceControlDragZoomInRequestArgs)>()
+                           DeviceControlRequestMessage_DragZoomIn, Broadcast::kEventOnDeviceControlDragZoomInRequest,
+                           void(kEventOnDeviceControlDragZoomInRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "DragZoomOut")
                 return NoResponseQueryHandler<
-                           DeviceControlRequestMessage_DragZoomOut,
-                           Broadcast::kEventOnDeviceControlDragZoomOutRequest, void(kEventOnDeviceControlDragZoomOutRequestArgs)>()
+                           DeviceControlRequestMessage_DragZoomOut, Broadcast::kEventOnDeviceControlDragZoomOutRequest,
+                           void(kEventOnDeviceControlDragZoomOutRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "TargetTrack")
                 return NoResponseQueryHandler<
-                           DeviceControlRequestMessage_TargetTrack,
-                           Broadcast::kEventOnDeviceControlTargetTrackRequest, void(kEventOnDeviceControlTargetTrackRequestArgs)>()
+                           DeviceControlRequestMessage_TargetTrack, Broadcast::kEventOnDeviceControlTargetTrackRequest,
+                           void(kEventOnDeviceControlTargetTrackRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "PTZPreciseCtrl")
                 return NoResponseQueryHandler<
                            DeviceControlRequestMessage_PtzPreciseCtrl,
-                           Broadcast::kEventOnDeviceControlPTZPreciseCtrlRequest, void(kEventOnDeviceControlPTZPreciseCtrlRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlPTZPreciseCtrlRequest,
+                           void(kEventOnDeviceControlPTZPreciseCtrlRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "HomePosition")
                 return OneResponseQueryHandler<
                            DeviceControlRequestMessage_HomePosition, DeviceControlResponseMessage,
-                           Broadcast::kEventOnDeviceControlHomePositionRequest, void(kEventOnDeviceControlHomePositionRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlHomePositionRequest,
+                           void(kEventOnDeviceControlHomePositionRequestArgs)>()
                     .process(std::move(message), std::move(transaction), shared_from_this());
             if (name == "AlarmCmd")
                 return OneResponseQueryHandler<
                            DeviceControlRequestMessage_AlarmCmd, DeviceControlResponseMessage,
-                           Broadcast::kEventOnDeviceControlAlarmCmdRequest, void(kEventOnDeviceControlAlarmCmdRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlAlarmCmdRequest,
+                           void(kEventOnDeviceControlAlarmCmdRequestArgs)>()
                     .process(std::move(message), std::move(transaction), shared_from_this());
             if (name == "GuardCmd")
                 return OneResponseQueryHandler<
                            DeviceControlRequestMessage_GuardCmd, DeviceControlResponseMessage,
-                           Broadcast::kEventOnDeviceControlGuardCmdRequest, void(kEventOnDeviceControlGuardCmdRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlGuardCmdRequest,
+                           void(kEventOnDeviceControlGuardCmdRequestArgs)>()
                     .process(std::move(message), std::move(transaction), shared_from_this());
             if (name == "TeleBoot")
                 return NoResponseQueryHandler<
-                           DeviceControlRequestMessage_TeleBoot, Broadcast::kEventOnDeviceControlTeleBootRequest, void(kEventOnDeviceControlTeleBootRequestArgs)>()
+                           DeviceControlRequestMessage_TeleBoot, Broadcast::kEventOnDeviceControlTeleBootRequest,
+                           void(kEventOnDeviceControlTeleBootRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "FormatSDCard")
                 return NoResponseQueryHandler<
                            DeviceControlRequestMessage_FormatSDCard,
-                           Broadcast::kEventOnDeviceControlFormatSDCardRequest, void(kEventOnDeviceControlFormatSDCardRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlFormatSDCardRequest,
+                           void(kEventOnDeviceControlFormatSDCardRequestArgs)>()
                     .process(std::move(message), transaction, shared_from_this());
             if (name == "DeviceUpgrade")
                 return OneResponseQueryHandler<
                            DeviceControlRequestMessage_DeviceUpgrade, DeviceControlResponseMessage,
-                           Broadcast::kEventOnDeviceControlDeviceUpgradeRequest, void(kEventOnDeviceControlDeviceUpgradeRequestArgs)>()
+                           Broadcast::kEventOnDeviceControlDeviceUpgradeRequest,
+                           void(kEventOnDeviceControlDeviceUpgradeRequestArgs)>()
                     .process(std::move(message), std::move(transaction), shared_from_this());
         }
     } else if (message.command() == MessageCmdType::DeviceConfig) {
         return OneResponseQueryHandler<
-                   DeviceConfigRequestMessage, DeviceConfigResponseMessage, Broadcast::kEventOnDeviceConfigRequest, void(kEventOnDeviceConfigRequestArgs)>()
+                   DeviceConfigRequestMessage, DeviceConfigResponseMessage, Broadcast::kEventOnDeviceConfigRequest,
+                   void(kEventOnDeviceConfigRequestArgs)>()
             .process(std::move(message), std::move(transaction), shared_from_this());
     }
     return 404;
@@ -679,7 +762,8 @@ int SuperPlatformImpl::on_notify(
     // 从上级平台发来的notify ， 应该只有语音广播
     if (message.command() == MessageCmdType::Broadcast) {
         return OneResponseQueryHandler<
-                   BroadcastNotifyRequest, BroadcastNotifyResponse, Broadcast::kEventOnBroadcastNotifyRequest, void(kEventOnBroadcastNotifyRequestArgs)>()
+                   BroadcastNotifyRequest, BroadcastNotifyResponse, Broadcast::kEventOnBroadcastNotifyRequest,
+                   void(kEventOnBroadcastNotifyRequestArgs)>()
             .process(std::move(message), std::move(transaction), shared_from_this());
     }
     return 404;
@@ -697,7 +781,9 @@ void SuperPlatformImpl::set_status(PlatformStatusType status, const std::string 
     account_.plat_status.status = status;
     toolkit::EventPollerPool::Instance().getExecutor()->async(
         [this_ptr = shared_from_this(), status, error]() {
-            NOTICE_EMIT(kEventSuperPlatformStatusArgs, Broadcast::kEventSuperPlatformStatus, std::dynamic_pointer_cast<SuperPlatform>(this_ptr), status, error);
+            NOTICE_EMIT(
+                kEventSuperPlatformStatusArgs, Broadcast::kEventSuperPlatformStatus,
+                std::dynamic_pointer_cast<SuperPlatform>(this_ptr), status, error);
         },
         false);
 }

@@ -10,18 +10,82 @@
 using namespace toolkit;
 
 namespace gb28181 {
-SipSession::SipSession(const toolkit::Socket::Ptr &sock)
+SipSession::SipSession(const toolkit::Socket::Ptr &sock, bool is_client)
     : Session(sock)
+    , _is_client(is_client)
     , _sip_parse(
           std::shared_ptr<http_parser_t>(
               http_parser_create(HTTP_PARSER_MODE::HTTP_PARSER_REQUEST, nullptr, nullptr),
               [](http_parser_t *parser) { http_parser_destroy(parser); })), ticker_(std::make_shared<toolkit::Ticker>()) {
-    socklen_t addr_len = sizeof(_addr);
-    getpeername(sock->rawFD(), (struct sockaddr *)&_addr, &addr_len);
+
+    if (!is_client) {
+        socklen_t addr_len = sizeof(_addr);
+        getpeername(sock->rawFD(), (struct sockaddr *)&_addr, &addr_len);
+    }
     _is_udp = sock->sockType() == SockNum::Sock_UDP;
+    if(sock)
+     TraceP(this) << "SipSession::SipSession()";
+    else TraceL << "SipSession::SipSession()";
 }
 SipSession::~SipSession() {
     TraceP(this) << "SipSession::~SipSession()";
+}
+
+void SipSession::set_peer(const std::string &host, uint16_t port) {
+    // tcp 模式下，与 udp session 模式下都不需要设置对端地址
+    if(!is_udp() ||  !get_peer_ip().empty()) {
+        return;
+    }
+    set_peer(SockUtil::make_sockaddr(host.c_str(), port));
+}
+
+struct sockaddr_storage SipSession::make_peer_addr(const struct sockaddr_storage &addr) {
+    struct sockaddr_storage peer_addr{};
+    auto &socket = getSock();
+    if (!socket)
+        return peer_addr;
+
+    auto listen_ip = socket->get_local_ip();
+    struct sockaddr_storage local_addr {};
+    if (!SockUtil::get_sock_local_addr(socket->rawFD(), local_addr)) {
+        ErrorL << "SockUtil::get_sock_local_addr() failed";
+    }
+    // 如果类型相同， 则直接复制
+    peer_addr = addr;
+    if (local_addr.ss_family == AF_INET6 && addr.ss_family == AF_INET) {
+        struct sockaddr_in *addr4 = (struct sockaddr_in *)&addr;
+        struct sockaddr_in6 *peer6 = (struct sockaddr_in6 *)&peer_addr;
+        peer6->sin6_family = AF_INET6;
+        peer6->sin6_port = addr4->sin_port;
+        memset(&peer6->sin6_addr, 0, 10); // 前 10 字节置 0
+        peer6->sin6_addr.s6_addr[10] = 0xFF;
+        peer6->sin6_addr.s6_addr[11] = 0xFF;
+        memcpy(&peer6->sin6_addr.s6_addr[12], &addr4->sin_addr, 4);
+    }
+    // 应该不会存在这种情况吧？
+    else if (local_addr.ss_family == AF_INET && addr.ss_family == AF_INET6) {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&addr;
+        if (IN6_IS_ADDR_V4MAPPED(&addr6->sin6_addr)) {
+            struct sockaddr_in *peer4 = (struct sockaddr_in *)&peer_addr;
+            peer4->sin_family = AF_INET;
+            memcpy(&peer4->sin_addr, ((char *)&addr6->sin6_addr) + 12, 4);
+            peer4->sin_port = addr6->sin6_port;
+        } else {
+            ErrorL << "Cannot convert non-mapped IPv6 address to IPv4";
+        }
+    } else {
+        ErrorL << "Unknown peer address family";
+    }
+    return peer_addr;
+
+}
+
+void SipSession::set_peer(const struct sockaddr_storage &addr) {
+    // tcp 模式下，与 udp session 模式下都不需要设置对端地址
+    if(!is_udp() ||  !get_peer_ip().empty()) {
+        return;
+    }
+    _addr = make_peer_addr(addr);
 }
 
 void SipSession::startConnect(
@@ -142,21 +206,30 @@ int SipSession::sip_via(void *transport, const char *destination, char protocol[
 int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
     if (transport == nullptr)
         return -1;
-    auto session = std::dynamic_pointer_cast<SipSession>(static_cast<SipSession *>(transport)->shared_from_this());
-    if (!session) {
+    auto session_ptr = std::dynamic_pointer_cast<SipSession>(static_cast<SipSession *>(transport)->shared_from_this());
+    if (!session_ptr) {
         WarnL << "SipSession::sip_send: transport is not SipSession";
         return sip_unknown_host;
     }
-    session->ticker_->resetTime(); // 重置保活
+    session_ptr->ticker_->resetTime(); // 重置保活
     auto buffer = toolkit::BufferRaw::create();
     buffer->assign((const char *)data, bytes);
     TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
-    session->send(std::move(buffer));
+
+    if(session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty()) {
+        session_ptr->getSock()->send(std::move(buffer), (sockaddr *)&session_ptr->_addr, SockUtil::get_sock_len((sockaddr *)&session_ptr->_addr));
+    } else {
+        session_ptr->send(std::move(buffer));
+    }
     return 0;
 }
-int SipSession::sip_send2(
-    void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received,
-    int rport, const void *data, int bytes) {
+int SipSession::sip_send_reply(
+    void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received, int rport, const void *data, int bytes) {
+    ErrorL << "call sip_send_reply , protocol = " << ( protocol ? std::string_view(protocol->p, protocol->n) : "")
+    << ", peer = " << ( peer ? std::string_view(peer->p, peer->n) : "")
+    << ", received = " << ( received ? std::string_view(received->p, received->n) : "")
+    << ", rport = " << rport;
+
     if (param == nullptr)
         return sip_unknown_host;
     auto session_ptr = std::dynamic_pointer_cast<SipSession>((static_cast<SipSession *>(param))->shared_from_this());
@@ -165,8 +238,30 @@ int SipSession::sip_send2(
     auto buffer = BufferRaw::create();
     buffer->assign((const char *)data, bytes);
     TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
-    session_ptr->ticker_->resetTime();
-    session_ptr->send(std::move(buffer));
+    // 这里的判断应该没有意义， reply 一定来自 server 的 session
+    if(session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty()) {
+        if(received && cstrvalid(received)) {
+            auto peer_storage = session_ptr->make_peer_addr(SockUtil::make_sockaddr(received->p, rport));
+            auto peer_addr = (struct sockaddr *)&peer_storage;
+            session_ptr->ticker_->resetTime();
+            session_ptr->getSock()->send(std::move(buffer), peer_addr, SockUtil::get_sock_len(peer_addr));
+            return 0;
+        }
+        if (peer && cstrvalid(peer)) {
+            uint16_t port = 5060;
+            auto && ip_port_vec = toolkit::split(peer->p, ":");
+            port = std::strtoul(ip_port_vec[1].c_str(), nullptr, 10);
+            auto peer_storage = session_ptr->make_peer_addr(SockUtil::make_sockaddr(ip_port_vec[0].c_str(), rport));
+            auto peer_addr = (struct sockaddr *)&peer_storage;
+            session_ptr->getSock()->send(std::move(buffer), peer_addr, SockUtil::get_sock_len(peer_addr));
+            return 0;
+        }
+        session_ptr->ticker_->resetTime();
+        session_ptr->getSock()->send(std::move(buffer), (sockaddr *)&session_ptr->_addr, SockUtil::get_sock_len((sockaddr *)&session_ptr->_addr));
+    } else {
+        session_ptr->ticker_->resetTime();
+        session_ptr->send(std::move(buffer));
+    }
     return 0;
 }
 sip_transport_t *SipSession::get_transport() {
@@ -217,7 +312,8 @@ void SipSession::handle_recv() {
     std::shared_ptr<Buffer> buffer;
     {
         std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
-        if (_recv_buffers.empty()) return;
+        if (_recv_buffers.empty())
+            return;
         buffer = _recv_buffers.front();
         _recv_buffers.pop_front();
     }
@@ -237,10 +333,12 @@ void SipSession::handle_recv() {
     auto len = buffer->size();
     auto ret = http_parser_input(_sip_parse.get(), buffer->data(), &len);
     if (ret == 0) {
-        struct sip_message_t *request = sip_message_create(_wait_type == HTTP_PARSER_REQUEST ? SIP_MESSAGE_REQUEST : SIP_MESSAGE_REPLY);
+        struct sip_message_t *request
+            = sip_message_create(_wait_type == HTTP_PARSER_REQUEST ? SIP_MESSAGE_REQUEST : SIP_MESSAGE_REPLY);
         ret = sip_message_load(request, _sip_parse.get());
         TraceP(this) << " recv: \n" << print_recv_message(_sip_parse.get(), (HTTP_PARSER_MODE)_wait_type);
         sip_agent_set_rport(request, get_peer_ip().c_str(), get_peer_port());
+
         // 捕获this_ptr 防止当前session 被干掉
         // 异步执行 sip_agent_input 避免消息在网络侧积压
         // 一一般一个平台都在同一个poller中处理， 这里是否有必要将事件分摊到不同的线程？
@@ -286,6 +384,8 @@ void SipSession::onError(const toolkit::SockException &err) {
     if (_on_error) _on_error(err);
 }
 void SipSession::onManager() {
+    // udp client 未纳入udpServer session 管理，所以不会执行次函数
+    // Tcp client 同样未纳入
     if (ticker_->elapsedTime() > 60 * 1000) {
         shutdown(SockException(Err_timeout, "session timeout"));
     }

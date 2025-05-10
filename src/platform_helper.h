@@ -5,6 +5,7 @@
 #include <gb28181/type_define.h>
 #include <mutex>
 #include <shared_mutex>
+#include <Network/sockutil.h>
 
 namespace gb28181 {
 class SdpDescription;
@@ -28,6 +29,7 @@ extern "C" {
 
 
 namespace toolkit {
+class EventPoller;
 class SockException;
 }
 namespace gb28181 {
@@ -58,8 +60,13 @@ public:
     virtual bool update_remote_via(std::pair<std::string, uint32_t> val);
     virtual std::string get_from_uri();
     virtual std::string get_to_uri();
-
     virtual std::string get_contact_uri();
+    /**
+    * @brief 平台地址发生改变
+    * @remark 当本地作为下级，发起注册的时候，对方返回了 301/302， 那么应该使用临时地址访问
+    * 当本地作为上级，对方发来消息的地址与当前不一致（一般出现在移动设备上），也应该更新平台地址
+    */
+    void on_platform_addr_changed(const struct sockaddr_storage& addr);
 
     void add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy);
     void remove_request_proxy(int32_t sn);
@@ -81,9 +88,9 @@ public:
     void set_tcp_session(const std::shared_ptr<SipSession> &session);
 
 private:
-    virtual void get_session(
-    const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,bool force_tcp = false);
-
+    void get_session(
+        const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,
+        bool force_tcp = false);
 
 protected:
     std::shared_ptr<SipSession> tcp_session_;
@@ -97,8 +104,12 @@ protected:
     // 存储等待应答的请求
     std::unordered_map<int32_t, std::shared_ptr<RequestProxyImpl>> request_map_;
     std::shared_mutex request_map_mutex_;
+    // 专门用来发送sip消息的 session, 采用udp server 监听的socket封装，内部不绑定对端地址, 仅仅复用监听sock 发送数据
+    std::unordered_map<toolkit::EventPoller*, std::shared_ptr<SipSession>> udp_sip_session_map_;
+    std::recursive_mutex udp_sip_session_map_mutex_;
     // 联系地址
     std::string contact_uri_;
+    struct sockaddr_storage remote_addr_{};
 };
 } // namespace gb28181
 

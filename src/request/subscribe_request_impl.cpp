@@ -110,14 +110,22 @@ void SubscribeRequestImpl::start() {
                   return 0;
               });
     } else {
+        auto platform = platform_.lock();
+        if (!platform) {
+            del_subscribe();
+            return;
+        }
         // 如果平台在线，直接发起订阅请求
-        if (platform_->sip_account().plat_status.status == PlatformStatusType::online) {
+        if (platform->sip_account().plat_status.status == PlatformStatusType::online) {
             to_subscribe(subscribe_info_.expires);
         }
         // 订阅平台在线状态
         toolkit::NoticeCenter::Instance().addListener(
             this, Broadcast::kEventSubordinatePlatformStatus,
-            [weak_this = weak_from_this()](kEventSubordinatePlatformStatusArgs) {
+            [weak_this = weak_from_this(), platform_ptr = (void *)platform.get()](kEventSubordinatePlatformStatusArgs) {
+                if (platform_ptr != (void *)platform.get()) {
+                    return;
+                }
                 if (auto this_ptr = weak_this.lock()) {
                     // 当平台状态为在线时发起订阅请求
                     if (status == PlatformStatusType::online) {
@@ -155,10 +163,10 @@ void SubscribeRequestImpl::shutdown(std::string reason) {
     }
 }
 std::shared_ptr<SubordinatePlatform> SubscribeRequestImpl::get_sub_platform() {
-    return std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform_);
+    return std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform_.lock());
 }
 std::shared_ptr<SuperPlatform> SubscribeRequestImpl::get_super_platform() {
-    return std::dynamic_pointer_cast<SuperPlatformImpl>(get_sub_platform());
+    return std::dynamic_pointer_cast<SuperPlatformImpl>(platform_.lock());
 }
 
 std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(void *ptr) {
@@ -372,7 +380,7 @@ void SubscribeRequestImpl::send_notify(const std::shared_ptr<MessageBase> &messa
     }
     // 如果订阅不可用，则在message 消息中发送
     else {
-        auto request = std::make_shared<RequestProxyImpl>(platform_, message, RequestProxy::RequestType::NoResponse);
+        auto request = std::make_shared<RequestProxyImpl>(platform_.lock(), message, RequestProxy::RequestType::NoResponse);
         auto callback_ptr = std::make_shared<SubscriberNotifyReplyCallback>(std::move(rcb));
         request->send([callback_ptr](const std::shared_ptr<RequestProxy> &proxy) {
             (*callback_ptr)(proxy->status() == RequestProxy::Status::Succeeded, proxy->error());
@@ -412,14 +420,21 @@ void SubscribeRequestImpl::subscribe_send_notify(
     if (notify_state.empty()) {
         notify_state = get_notify_state_str();
     }
-    sip_agent_t *sip_agent = platform_->get_sip_agent();
+
+    auto platform = platform_.lock();
+    if (!platform) {
+        del_subscribe();
+        return;
+    }
+
+    sip_agent_t *sip_agent = platform->get_sip_agent();
     if (!sip_agent) {
         return rcb(false, "sip_agent is nullptr");
     }
     if (message) {
-        message->sn(platform_->get_new_sn());
-        if (platform_->sip_account().encoding != CharEncodingType::invalid) {
-            message->encoding(platform_->sip_account().encoding);
+        message->sn(platform->get_new_sn());
+        if (platform->sip_account().encoding != CharEncodingType::invalid) {
+            message->encoding(platform->sip_account().encoding);
         }
     }
     std::string payload;
@@ -444,7 +459,7 @@ void SubscribeRequestImpl::subscribe_send_notify(
         std::lock_guard<decltype(send_notify_map_mutex_)> lock(send_notify_map_mutex_);
         send_notify_map_[callback_ptr.get()] = callback_ptr;
     }
-    platform_->uac_send(transaction_ptr, std::move(payload), [callback_ptr](bool ret, std::string err) {
+    platform->uac_send(transaction_ptr, std::move(payload), [callback_ptr](bool ret, std::string err) {
         if (!ret) {
             std::lock_guard<decltype(send_notify_map_mutex_)> lock(send_notify_map_mutex_);
             send_notify_map_.erase(callback_ptr.get());
@@ -475,14 +490,19 @@ void SubscribeRequestImpl::set_status(
 }
 
 void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
-    sip_agent_t *sip_agent = platform_->get_sip_agent();
+    auto platform = platform_.lock();
+    if (!platform) {
+        del_subscribe();
+        return;
+    }
+    sip_agent_t *sip_agent = platform->get_sip_agent();
     if (!sip_agent)
         return;
-    std::string from = platform_->get_from_uri();
-    std::string to = platform_->get_to_uri();
-    CharEncodingType encoding_type = platform_->get_encoding();
+    std::string from = platform->get_from_uri();
+    std::string to = platform->get_to_uri();
+    CharEncodingType encoding_type = platform->get_encoding();
     if (subscribe_message_->sn() == 0) {
-        subscribe_message_->sn(platform_->get_new_sn());
+        subscribe_message_->sn(platform->get_new_sn());
     }
     if (!subscribe_info_.subscribe_id) {
         subscribe_info_.subscribe_id = subscribe_message_->sn();
@@ -527,7 +547,7 @@ void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
     }
 
     auto weak_this = weak_from_this();
-    platform_->uac_send(
+    platform->uac_send(
         uac_subscribe_transaction, subscribe_message_ ? subscribe_message_->str() : std::string(),
         [weak_this](bool ret, std::string err) {
             auto this_ptr = weak_this.lock();
@@ -555,7 +575,7 @@ int SubscribeRequestImpl::on_subscribe_reply(
         return 0;
     auto weak_self = this_ptr->weak_from_this();
     // 忽略 100-199
-    if (SIP_IS_SIP_ERROR(code)) {
+    if (SIP_IS_SIP_INFO(code)) {
         return 0;
     }
     // 是否订阅成功

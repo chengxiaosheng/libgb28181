@@ -93,6 +93,7 @@ std::string generate_www_authentication_(const std::string &realm);
 void set_message_www_authenticate(struct sip_uas_transaction_t *transaction, const std::string &realm);
 std::string get_www_authenticate(const struct sip_message_t *msg);
 std::string generate_authorization(const struct sip_message_t *msg, const std::string &username, const std::string &password, const std::string &uri, std::pair<std::string,int> &nc_pair);
+bool is_loopback_ip(const char *ip);
 
 } // namespace gb28181
 

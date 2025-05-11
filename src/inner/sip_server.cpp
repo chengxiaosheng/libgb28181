@@ -43,7 +43,7 @@ SipServer::SipServer(local_account account)
     }
     // 一般来说，建议配置本地IP
     if (account_.local_host.empty()) {
-        if (!SockUtil::is_loopback_ip(account_.host.c_str())) {
+        if (!is_loopback_ip(account_.host.c_str())) {
             account_.local_host = account_.host;
         } else {
             account_.local_host = SockUtil::get_local_ip();

@@ -2,7 +2,7 @@
 #define gb28181_include_gb28181_TYPE_DEFINE_EXT_H
 
 #include "gb28181/type_define.h"
-#include "exports.h"
+#include "gb28181/exports.h"
 
 namespace tinyxml2 {
 class XMLElement;

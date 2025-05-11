@@ -18,6 +18,8 @@
 #include <sip-uas.h>
 
 #include <Util/util.h>
+#include <Util/MD5.h>
+#include <Network/sockutil.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
 
@@ -445,6 +447,28 @@ std::string generate_authorization(
             << "cnonce=\"" << cnonce << "\"";
     }
     return oss.str();
+}
+
+bool is_loopback_ip(const char *ip){
+    if(strcasecmp(ip, "::") == 0 || strcasecmp(ip, "0.0.0.0") == 0) return true;
+    // 尝试解析为 IPv4 地址
+    struct in_addr ipv4_addr;
+    if (inet_pton(AF_INET, ip, &ipv4_addr) == 1) {
+        // 检查是否为 IPv4 环回地址（127.0.0.0/8）
+        uint32_t ip_addr = ntohl(ipv4_addr.s_addr);
+        return (ip_addr >= 0x7F000001 && ip_addr <= 0x7FFFFFFF);
+    }
+
+    // 尝试解析为 IPv6 地址
+    struct in6_addr ipv6_addr;
+    if (inet_pton(AF_INET6, ip, &ipv6_addr) == 1) {
+        // 检查是否为 IPv6 环回地址（::1）
+        static const uint8_t ipv6_loopback[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+        return memcmp(&ipv6_addr, ipv6_loopback, 16) == 0;
+    }
+
+    // 不是有效的 IPv4 或 IPv6 地址
+    return false;
 }
 
 } // namespace gb28181

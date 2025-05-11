@@ -153,6 +153,8 @@ private:
     bool camouflage_online_ = false; // 伪装在线
     TransportType get_transport() const override { return account_.transport_type; }
 
+
+private:
     subordinate_account account_; // 账户信息
     // 心跳检测
     std::shared_ptr<toolkit::Timer> keepalive_timer_;

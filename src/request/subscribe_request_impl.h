@@ -93,7 +93,7 @@ private:
     std::string get_notify_state_str() const;
 
 private:
-    std::shared_ptr<PlatformHelper> platform_; // 订阅所属平台指针
+    std::weak_ptr<PlatformHelper> platform_; // 订阅所属平台指针
     std::shared_ptr<MessageBase> subscribe_message_; // 订阅请求的
     std::string error_; // 错误信息
     uint64_t subscribe_time_ { 0 }; // 订阅成功时间

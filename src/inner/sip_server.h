@@ -49,7 +49,6 @@ public:
 
     /**
      * 获取一个客户端连接
-     * @param protocol
      * @param host
      * @param port
      * @param cb
@@ -57,11 +56,9 @@ public:
      * 当本地作为上级时，特别是在tcp模式下，应该严格复用下级平台的连接session
      * 在udp下，此处复用了udp监听的sock，理论上是可行的
      */
-    void get_client(
-        TransportType protocol, const std::string &host, uint16_t port,
-        const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
+    void get_tcp_client(const std::string &host, uint16_t port,std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
 
-    void get_client_l(bool is_udp, const struct sockaddr_storage &addr, const std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
+    void get_tcp_client_l(const struct sockaddr_storage &addr, std::function<void(const toolkit::SockException &e, std::shared_ptr<SipSession>)> cb);
 
     inline std::shared_ptr<sip_agent_t> get_sip_agent() const { return sip_; }
 
@@ -78,6 +75,10 @@ public:
     void new_subordinate_account(const std::shared_ptr<subordinate_account> &account, const std::function<void(std::shared_ptr<SubordinatePlatformImpl>)>& allow_cb);
 
     uint32_t make_ssrc(bool is_playback) override;
+
+    const std::unordered_map<toolkit::EventPoller *, std::shared_ptr<toolkit::Socket>> &udp_server_sockets() const {
+        return udp_server_sip_socket_;
+    }
 
 
 
@@ -121,7 +122,8 @@ private:
 private:
     local_account account_; // 本地账户信息
     std::atomic_bool running_ { false };
-    uint32_t server_ssrc_domain_{0};
+    uint32_t server_ssrc_domain_ {0};
+    std::unordered_map<toolkit::EventPoller *, std::shared_ptr<toolkit::Socket>> udp_server_sip_socket_;
     toolkit::UdpServer::Ptr udp_server_ { nullptr };
     toolkit::TcpServer::Ptr tcp_server_ { nullptr };
     std::shared_ptr<sip_uas_handler_t> handler_ { nullptr };

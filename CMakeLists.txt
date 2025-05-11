@@ -79,19 +79,28 @@ find_package(Iconv REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Iconv::Iconv)
 
 if (NOT TARGET ZLToolKit)
-    find_package(ZLToolKit)
-    if (ZLToolKit_NotFound)
+    find_package(ZLToolKit QUIET)
+    if (NOT ZLToolKit_FOUND)
         include(FetchContent)
         FetchContent_Declare(ZLToolKit
-                GIT_REPOSITORY git@gitee.com:cxs1992/ZLToolKit.git
-                GIT_TAG lc_main  # 指定分支
+                GIT_REPOSITORY https://gitee.com/xia-chu/ZLToolKit.git
+                GIT_TAG master  # 指定分支
                 CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/dependencies
                 -DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}
                 -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
                 -DENABLE_MSVC_MT=${ENABLE_MSVC_MT}
                 -DSOCKET_DEFAULT_BUF_SIZE=${SOCKET_DEFAULT_BUF_SIZE}
+                -DENABLE_OPENSSL=ON
         )
         FetchContent_MakeAvailable(ZLToolKit)
+        add_library(ZLToolKit ALIAS ZLToolKit_static)
+        find_package(OpenSSL QUIET)
+        if (OPENSSL_FOUND)
+            target_compile_definitions(${PROJECT_NAME} PUBLIC -DENABLE_OPENSSL)
+        endif ()
+        if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+            target_compile_definitions(${PROJECT_NAME} PUBLIC -DWIN32_LEAN_AND_MEAN)
+        endif ()
     endif ()
 endif ()
 if (NOT TARGET ZLToolKit)
@@ -115,6 +124,7 @@ if(BUILD_SHARED_LIBS AND CMAKE_BUILD_TYPE STREQUAL "Release" AND UNIX AND STRIP_
     )
 endif ()
 
+if (NOT TARGET ZLToolKit_static)
 install(TARGETS ${PROJECT_NAME} ZLToolKit sip ireader_sdk_lib
         EXPORT gb28181Targets
         RUNTIME DESTINATION "${INSTALL_BIN_DIR}" COMPONENT bin
@@ -152,5 +162,5 @@ install(
         NAMESPACE gb28181::
         COMPONENT dev
 )
-
+endif ()
 

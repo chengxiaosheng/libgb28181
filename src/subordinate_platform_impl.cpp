@@ -64,6 +64,9 @@ int SubordinatePlatformImpl::on_recv_register(
         if (!session->is_udp()) {
             platform->set_tcp_session(session);
         }
+        if (struct sockaddr_storage addr {}; SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr)) {
+            platform->on_platform_addr_changed(addr);
+        }
         if (expires == 0) {
             platform->set_status(PlatformStatusType::offline, "logout");
             return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
@@ -112,6 +115,9 @@ int SubordinatePlatformImpl::on_recv_register(
                     if (platform) {
                         if (session->is_udp()) {
                             platform->set_tcp_session(session);
+                        }
+                        if (struct sockaddr_storage addr{};SockUtil::get_sock_peer_addr(session->getSock()->rawFD(),addr)) {
+                            platform->on_platform_addr_changed(addr);
                         }
                         platform->set_status(PlatformStatusType::online, {});
                         set_message_date(transaction.get());
@@ -167,8 +173,14 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
         },
         nullptr);
     // 异步广播平台在线状态
-    toolkit::EventPollerPool::Instance().getPoller()->async(
+        EventPollerPool::Instance().getPoller()->async(
         [this_ptr = shared_from_this(), status, error]() {
+            {
+                std::lock_guard<decltype(status_cbs_mtx_)> lck( this_ptr->status_cbs_mtx_);
+                for(auto &it : this_ptr->status_cbs_) {
+                    it.second(status);
+                }
+            }
             NOTICE_EMIT(
                 kEventSubordinatePlatformStatusArgs, Broadcast::kEventSubordinatePlatformStatus,
                 std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), status, error);
@@ -474,8 +486,8 @@ void SubordinatePlatformImpl::camouflage_online(uint64_t register_time, uint64_t
         5,
         [weak_this = weak_from_this()]() {
             if (auto this_ptr = weak_this.lock()) {
-                auto last_time = ((std::max)(this_ptr->account_.plat_status.register_time,
-                                             this_ptr->account_.plat_status.keepalive_time));
+                auto last_time = ((std::max)(
+                    this_ptr->account_.plat_status.register_time, this_ptr->account_.plat_status.keepalive_time));
                 auto now_time = toolkit::getCurrentMicrosecond(true);
                 if (last_time + 3 * 30 * 1000000L <= now_time) {
                     this_ptr->set_status(PlatformStatusType::offline, "keepalive timeout");

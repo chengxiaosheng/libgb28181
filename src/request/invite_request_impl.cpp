@@ -86,7 +86,6 @@ void InviteRequestImpl::to_teardown(const std::string &reason) {
             if (t)
                 sip_uac_transaction_release(t);
         });
-    set_message_header(transaction.get());
     set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
     platform->uac_send(transaction, ss.str(), [](bool, const std::string &) {});
     // 发送 teardown 后立即发送 bye 防止对方不支持teardown
@@ -157,7 +156,6 @@ void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &r
         std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
         info_request_map_.emplace(rcb_ptr.get(), rcb_ptr);
     }
-    set_message_header(transaction.get());
     set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
 
     // 发送消息
@@ -282,7 +280,6 @@ void InviteRequestImpl::to_seek_scale(
         std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
         info_request_map_.emplace(rcb_ptr.get(), rcb_ptr);
     }
-    set_message_header(transaction.get());
     set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
 
     // 发送消息
@@ -405,7 +402,6 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
                 if (t)
                     sip_uac_transaction_release(t);
             });
-        set_message_header(transaction.get());
         platform->uac_send(transaction, "", [](bool, const std::string &) {});
         set_status(INVITE_STATUS_TYPE::cancel, reason);
     } else if (invite_dialog_) {
@@ -414,7 +410,6 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
                 if (t)
                     sip_uac_transaction_release(t);
             });
-        set_message_header(transaction.get());
         platform->uac_send(transaction, "", [](bool, const std::string &) {});
         set_status(INVITE_STATUS_TYPE::bye, reason);
     } else {
@@ -450,7 +445,6 @@ void InviteRequestImpl::to_invite_request(
                 sip_uac_transaction_release(t);
             }
         });
-    set_message_header(uac_invite_transaction_.get());
     set_x_preferred_path(uac_invite_transaction_.get(), preferred_path_);
     set_message_content_type(uac_invite_transaction_.get(), SipContentType::SipContentType_SDP);
     // 自动生成ssrc

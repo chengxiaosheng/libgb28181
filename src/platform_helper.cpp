@@ -1,5 +1,3 @@
-#include "platform_helper.h"
-
 #include "gb28181/sip_event.h"
 #include "gb28181/type_define_ext.h"
 #include "inner/sip_common.h"
@@ -15,6 +13,9 @@
 #include <inner/sip_session.h>
 #include <request/RequestProxyImpl.h>
 
+#include <Network/sockutil.h>
+#include "platform_helper.h"
+
 using namespace toolkit;
 
 namespace gb28181 {
@@ -23,6 +24,39 @@ class MessageBase;
 using namespace gb28181;
 
 void add_session(const std::shared_ptr<SipSession> &session);
+
+bool areAddressesEqual(const struct sockaddr_storage &addr1, const struct sockaddr_storage &addr2) {
+    // 检查地址族是否相同
+    if (addr1.ss_family != addr2.ss_family) {
+        return false;
+    }
+
+    // 根据地址族分别处理
+    switch (addr1.ss_family) {
+        case AF_INET: {
+            const sockaddr_in* a4 = reinterpret_cast<const sockaddr_in*>(&addr1);
+            const sockaddr_in* b4 = reinterpret_cast<const sockaddr_in*>(&addr2);
+            // 比较IPv4地址和端口（网络字节序直接比较）
+            return (a4->sin_addr.s_addr == b4->sin_addr.s_addr) &&
+                   (a4->sin_port == b4->sin_port);
+        }
+
+        case AF_INET6: {
+            const sockaddr_in6* a6 = reinterpret_cast<const sockaddr_in6*>(&addr1);
+            const sockaddr_in6* b6 = reinterpret_cast<const sockaddr_in6*>(&addr2);
+            // 将IPv6地址视为两个64位整数加速比较
+            const uint64_t* a64 = reinterpret_cast<const uint64_t*>(a6->sin6_addr.s6_addr);
+            const uint64_t* b64 = reinterpret_cast<const uint64_t*>(b6->sin6_addr.s6_addr);
+            return (a64[0] == b64[0]) &&
+                   (a64[1] == b64[1]) &&
+                   (a6->sin6_port == b6->sin6_port) &&
+                   (a6->sin6_scope_id == b6->sin6_scope_id);
+        }
+
+        default:
+            return false;  // 不支持其他地址族
+    }
+}
 
 PlatformHelper::~PlatformHelper() {
     if (tcp_session_) {
@@ -35,10 +69,34 @@ void PlatformHelper::get_session(
     if (!is_udp && tcp_session_) {
         return cb({}, tcp_session_);
     }
+    auto poller = toolkit::EventPollerPool::Instance().getPoller();
     if (auto server = local_server_weak_.lock()) {
-        server->get_client(
-            is_udp ? TransportType::udp : TransportType::tcp, sip_account().host, sip_account().port,
-            [cb, weak_this = weak_from_this()](const toolkit::SockException &e, std::shared_ptr<SipSession> session) {
+        if (is_udp) {
+            std::shared_ptr<SipSession> session_ptr;
+            {
+                std::lock_guard<decltype(udp_sip_session_map_mutex_)> lock(udp_sip_session_map_mutex_);
+                if (auto it = udp_sip_session_map_.find(poller.get()); it != udp_sip_session_map_.end()) {
+                    session_ptr = it->second;
+                } else {
+                    if (server->udp_server_sockets().size() == 1) {
+                        session_ptr = std::make_shared<SipSession>(server->udp_server_sockets().begin()->second);
+                        udp_sip_session_map_[poller.get()] = session_ptr;
+                    } else {
+                        session_ptr = std::make_shared<SipSession>(server->udp_server_sockets().at(poller.get()));
+                        udp_sip_session_map_[poller.get()] = session_ptr;
+                    }
+                    if(session_ptr) {
+                        session_ptr->set_peer(remote_addr_);
+                        session_ptr->set_local_ip(sip_account().local_host);
+                        session_ptr->set_local_port(sip_account().local_port);
+                    }
+                }
+            }
+
+            return cb( session_ptr ? SockException() : SockException(toolkit::Err_other, "not found sip udp socket"), session_ptr);
+        }
+        server->get_tcp_client(sip_account().host, sip_account().port,
+            [cb, weak_this = weak_from_this()](const toolkit::SockException &e, const std::shared_ptr<SipSession>& session) {
                 if (e) {
                     cb(e, session);
                     return;
@@ -128,11 +186,18 @@ std::string PlatformHelper::get_to_uri() {
     }
     return to_uri_;
 }
-std::string PlatformHelper::get_contact_uri(){
+
+
+
+std::string PlatformHelper::get_contact_uri() {
     return contact_uri_.empty() ? get_from_uri() : contact_uri_;
 }
 
 
+void PlatformHelper::on_platform_addr_changed(const struct sockaddr_storage& addr){
+    remote_addr_ = addr;
+    DebugL << "change platform address " << SockUtil::inet_ntoa((sockaddr *)&addr);
+}
 void PlatformHelper::add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy) {
     std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
     request_map_[sn] = proxy;
@@ -146,8 +211,9 @@ void PlatformHelper::uac_send(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string)> &rcb, bool force_tcp) {
     set_message_contact(transaction.get(), get_contact_uri().c_str());
+    set_message_header(transaction.get());
     get_session(
-        [transaction, payload = std::move(payload),
+        [transaction, payload = std::move(payload), weak_this = weak_from_this(),
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
             if (e) {
                 return rcb(false, e.what());
@@ -166,8 +232,9 @@ void PlatformHelper::uas_send2(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp) {
     set_message_contact(transaction.get(), get_contact_uri().c_str());
+    set_message_header(transaction.get());
     get_session(
-        [transaction, payload = std::move(payload),
+        [transaction, payload = std::move(payload),weak_this = weak_from_this(),
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
             if (e) {
                 return rcb(false, e.what(), session);
@@ -194,6 +261,14 @@ void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session)
         }
     });
     tcp_session_ = session;
+}
+void PlatformHelper::set_platform_status_cb(void *user_data, std::function<void(PlatformStatusType)> cb) {
+    std::lock_guard<decltype(status_cbs_mtx_)> lck(status_cbs_mtx_);
+    status_cbs_[user_data] = std::move(cb);
+}
+void PlatformHelper::remove_platform_status_cb(void * user_data){
+    std::lock_guard<decltype(status_cbs_mtx_)> lck(status_cbs_mtx_);
+    status_cbs_.erase(&user_data);
 }
 
 int PlatformHelper::on_response(
@@ -277,6 +352,12 @@ int PlatformHelper::on_recv_message(
     } else {
         platform_
             = std::dynamic_pointer_cast<SubordinatePlatformImpl>(sip_server->get_subordinate_platform(platform_id));
+
+        // 更新来源地址, 方便向下级平台发送消息
+        struct sockaddr_storage addr{};
+        if (SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr) && !areAddressesEqual(platform_->remote_addr_, addr)) {
+            platform_->on_platform_addr_changed(addr);
+        }
     }
     if (!platform_) {
         WarnL << "platform was not found";

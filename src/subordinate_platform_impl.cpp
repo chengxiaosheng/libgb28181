@@ -173,8 +173,14 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
         },
         nullptr);
     // 异步广播平台在线状态
-    toolkit::EventPollerPool::Instance().getPoller()->async(
+        EventPollerPool::Instance().getPoller()->async(
         [this_ptr = shared_from_this(), status, error]() {
+            {
+                std::lock_guard<decltype(status_cbs_mtx_)> lck( this_ptr->status_cbs_mtx_);
+                for(auto &it : this_ptr->status_cbs_) {
+                    it.second(status);
+                }
+            }
             NOTICE_EMIT(
                 kEventSubordinatePlatformStatusArgs, Broadcast::kEventSubordinatePlatformStatus,
                 std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), status, error);

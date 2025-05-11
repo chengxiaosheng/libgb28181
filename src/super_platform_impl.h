@@ -74,7 +74,7 @@ private:
     int auth_failed_count_ { 0 };
     std::pair<std::string, int> nc_pair_;
     std::shared_ptr<toolkit::Timer> keepalive_timer_; // 心跳定时器
-    std::shared_ptr<toolkit::EventPoller::DelayTask> register_timer_;
+    std::shared_ptr<toolkit::EventPoller::DelayTask> refresh_register_timer_;
     std::vector<std::string> fault_devices_;
     std::shared_ptr<toolkit::Ticker> keepalive_ticker_;
 };

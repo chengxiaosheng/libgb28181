@@ -83,6 +83,7 @@ SubscribeRequestImpl::~SubscribeRequestImpl() {
         DebugL << *subscribe_message_ << ", id = " << subscribe_info_.subscribe_id;
     else
         DebugL << "id = " << subscribe_info_.subscribe_id;
+    shutdown("");
 }
 
 void SubscribeRequestImpl::start() {
@@ -119,46 +120,25 @@ void SubscribeRequestImpl::start() {
         if (platform->sip_account().plat_status.status == PlatformStatusType::online) {
             to_subscribe(subscribe_info_.expires);
         }
-        // 订阅平台在线状态
-        toolkit::NoticeCenter::Instance().addListener(
-            this, Broadcast::kEventSubordinatePlatformStatus,
-            [weak_this = weak_from_this(), platform_ptr = (void *)platform.get()](kEventSubordinatePlatformStatusArgs) {
-                if (platform_ptr != (void *)platform.get()) {
-                    return;
-                }
-                if (auto this_ptr = weak_this.lock()) {
-                    // 当平台状态为在线时发起订阅请求
-                    if (status == PlatformStatusType::online) {
+        // 设置平台状态变更回调
+        platform->set_platform_status_cb(this, [weak_this = weak_from_this()](PlatformStatusType status) {
+            if (auto this_ptr = weak_this.lock()) {
+                if (status == PlatformStatusType::online) {
                         this_ptr->to_subscribe(this_ptr->subscribe_info_.expires);
                     } else {
                         this_ptr->delay_task_.reset();
                         this_ptr->set_status(terminated, rejected, "platform offline");
                     }
-                }
-            });
+            }
+        });
     }
 }
 
 void SubscribeRequestImpl::shutdown(std::string reason) {
     if (running_.exchange(false)) {
-
-        // if (incoming_) {
-        //     if (status_ != terminated) {
-        //         subscribe_send_notify(
-        //             nullptr,
-        //             [](bool, const std::string &) {
-        //
-        //             },
-        //             toolkit::str_format(
-        //                 "%s;reason=%s", SIP_SUBSCRIPTION_STATE_TERMINATED, SIP_SUBSCRIPTION_REASON_REJECTED));
-        //         set_status(terminated, rejected, reason);
-        //     }
-        // } else {
-        //     if (status_ != terminated) {
-        //         to_subscribe(0);
-        //         set_status(terminated, deactivated, reason);
-        //     }
-        // }
+        if(auto platform_ptr = platform_.lock()) {
+            platform_ptr->remove_platform_status_cb(this);
+        }
         del_subscribe();
     }
 }
@@ -280,7 +260,7 @@ int SubscribeRequestImpl::on_recv_notify(
     if (sub_state_cstr && cstrvalid(sub_state_cstr)) {
         sip_substate_t sub_state {};
         if (0 == sip_header_substate(sub_state_cstr->p, sub_state_cstr->p + sub_state_cstr->n, &sub_state)) {
-            if (!cstrvalid(&sub_state.state)) {
+            if (0 == cstrvalid(&sub_state.state)) {
                 // 避免 state 无效
             }
             else if (0 == cstrcasecmp(&sub_state.state, SIP_SUBSCRIPTION_STATE_ACTIVE)) {
@@ -534,8 +514,6 @@ void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
     }
     if (!uac_subscribe_transaction)
         return;
-    // 设置通用头信息
-    set_message_header(uac_subscribe_transaction.get());
     if (encoding_type != CharEncodingType::invalid) {
         subscribe_message_->encoding(encoding_type);
     }

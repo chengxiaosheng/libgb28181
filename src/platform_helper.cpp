@@ -211,6 +211,7 @@ void PlatformHelper::uac_send(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string)> &rcb, bool force_tcp) {
     set_message_contact(transaction.get(), get_contact_uri().c_str());
+    set_message_header(transaction.get());
     get_session(
         [transaction, payload = std::move(payload), weak_this = weak_from_this(),
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
@@ -231,6 +232,7 @@ void PlatformHelper::uas_send2(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp) {
     set_message_contact(transaction.get(), get_contact_uri().c_str());
+    set_message_header(transaction.get());
     get_session(
         [transaction, payload = std::move(payload),weak_this = weak_from_this(),
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
@@ -259,6 +261,14 @@ void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session)
         }
     });
     tcp_session_ = session;
+}
+void PlatformHelper::set_platform_status_cb(void *user_data, std::function<void(PlatformStatusType)> cb) {
+    std::lock_guard<decltype(status_cbs_mtx_)> lck(status_cbs_mtx_);
+    status_cbs_[user_data] = std::move(cb);
+}
+void PlatformHelper::remove_platform_status_cb(void * user_data){
+    std::lock_guard<decltype(status_cbs_mtx_)> lck(status_cbs_mtx_);
+    status_cbs_.erase(&user_data);
 }
 
 int PlatformHelper::on_response(

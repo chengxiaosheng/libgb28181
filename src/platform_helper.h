@@ -87,6 +87,9 @@ public:
 
     void set_tcp_session(const std::shared_ptr<SipSession> &session);
 
+    void set_platform_status_cb(void * user_data, std::function<void(PlatformStatusType)> cb);
+    void remove_platform_status_cb(void * user_data);
+
 private:
     void get_session(
         const std::function<void(const toolkit::SockException &, std::shared_ptr<gb28181::SipSession>)> &cb,
@@ -110,6 +113,8 @@ protected:
     // 联系地址
     std::string contact_uri_;
     struct sockaddr_storage remote_addr_{};
+    std::mutex status_cbs_mtx_;
+    std::unordered_map<void*, std::function<void(PlatformStatusType)>> status_cbs_; // 平台在线状态回到
 };
 } // namespace gb28181
 

@@ -239,7 +239,6 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
     request_->sn(request_sn_);
     request_->encoding(encoding_type);
     set_message_content_type(uac_transaction_.get(), SipContentType_XML);
-    set_message_header(uac_transaction_.get());
     if (!request_->parse_to_xml()) {
         error_ = "make request payload failed, error = " + request_->get_error();
         status_ = Failed;

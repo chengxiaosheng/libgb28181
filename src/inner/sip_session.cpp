@@ -217,6 +217,10 @@ int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
     TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
 
     if(session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty()) {
+        if (session_ptr->_addr.ss_family != AF_INET && session_ptr->_addr.ss_family != AF_INET6) {
+            WarnL << "SipSession::sip_send: invalid address family";
+            return sip_unknown_host;
+        }
         session_ptr->getSock()->send(std::move(buffer), (sockaddr *)&session_ptr->_addr, SockUtil::get_sock_len((sockaddr *)&session_ptr->_addr));
     } else {
         session_ptr->send(std::move(buffer));
@@ -225,10 +229,6 @@ int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
 }
 int SipSession::sip_send_reply(
     void *param, const struct cstring_t *protocol, const struct cstring_t *peer, const struct cstring_t *received, int rport, const void *data, int bytes) {
-    ErrorL << "call sip_send_reply , protocol = " << ( protocol ? std::string_view(protocol->p, protocol->n) : "")
-    << ", peer = " << ( peer ? std::string_view(peer->p, peer->n) : "")
-    << ", received = " << ( received ? std::string_view(received->p, received->n) : "")
-    << ", rport = " << rport;
 
     if (param == nullptr)
         return sip_unknown_host;

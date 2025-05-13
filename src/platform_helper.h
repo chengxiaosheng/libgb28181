@@ -1,11 +1,12 @@
 #ifndef gb28181_src_PLATFORM_HELPER_H
 #define gb28181_src_PLATFORM_HELPER_H
 #include <atomic>
-#include <functional>
-#include <gb28181/type_define.h>
 #include <mutex>
 #include <shared_mutex>
+#include <functional>
+#include <gb28181/type_define.h>
 #include <Network/sockutil.h>
+
 
 namespace gb28181 {
 class SdpDescription;
@@ -66,7 +67,7 @@ public:
     * @remark 当本地作为下级，发起注册的时候，对方返回了 301/302， 那么应该使用临时地址访问
     * 当本地作为上级，对方发来消息的地址与当前不一致（一般出现在移动设备上），也应该更新平台地址
     */
-    void on_platform_addr_changed(const struct sockaddr_storage& addr);
+    void on_platform_addr_changed(struct sockaddr_storage& addr);
 
     void add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy);
     void remove_request_proxy(int32_t sn);
@@ -99,7 +100,6 @@ protected:
     std::shared_ptr<SipSession> tcp_session_;
     // local_server
     std::weak_ptr<SipServer> local_server_weak_;
-    std::atomic_int32_t platform_sn_ { 1 };
     // 发送消息时 本地uri
     std::string from_uri_;
     // 发送消息时 目标uri
@@ -115,6 +115,7 @@ protected:
     struct sockaddr_storage remote_addr_{};
     std::mutex status_cbs_mtx_;
     std::unordered_map<void*, std::function<void(PlatformStatusType)>> status_cbs_; // 平台在线状态回到
+    std::atomic_int32_t platform_sn_ { 1 };
 };
 } // namespace gb28181
 

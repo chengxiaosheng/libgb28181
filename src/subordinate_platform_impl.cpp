@@ -35,9 +35,7 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
     , PlatformHelper()
     , account_(std::move(account)) {
 
-    memset(&remote_addr_, 0, sizeof(remote_addr_));
-
-    const auto & server_account = server->get_account();
+    const auto &server_account = server->get_account();
     if (account_.local_host.empty()) {
         account_.local_host = server_account.local_host;
     }
@@ -47,14 +45,16 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
     local_server_weak_ = server;
     from_uri_ = "sip:" + server_account.platform_id + "@" + server_account.local_host + ":"
         + std::to_string(server_account.local_port);
-    contact_uri_ = "sip:" + server_account.platform_id + "@" + account_.local_host + ":"
-        + std::to_string(account_.local_port);
-    to_uri_ = "sip:" + account_.platform_id+ "@" + account_.host + ":" + std::to_string(account_.port);
+    contact_uri_
+        = "sip:" + server_account.platform_id + "@" + account_.local_host + ":" + std::to_string(account_.local_port);
+    to_uri_ = "sip:" + account_.platform_id + "@" + account_.host + ":" + std::to_string(account_.port);
     // 将平台地址写入, 一般来说，下级平台地址应该是IP模式吧， 如果是域名？等注册或者心跳？
     if (SockUtil::is_ipv4(account_.host.c_str()) || SockUtil::is_ipv6(account_.host.c_str())) {
-        remote_addr_ = SockUtil::make_sockaddr(account_.host.c_str(), account_.port);
+        struct sockaddr_storage addr = SockUtil::make_sockaddr(account_.host.c_str(), account_.port);
+        on_platform_addr_changed(addr);
     } else {
-        WarnL << "platform not set remote_addr , platform_id " << account_.platform_id << ", host = " << account_.host << ":" << account_.port;
+        WarnL << "platform not set remote_addr , platform_id " << account_.platform_id << ", host = " << account_.host
+              << ":" << account_.port;
     }
 }
 
@@ -81,7 +81,9 @@ int SubordinatePlatformImpl::on_recv_register(
         if (account.auth_type == SipAuthType::none || verify_authorization(req.get(), user, account.password)) {
             platform->account_.host = session->get_peer_ip();
             platform->account_.port = session->get_peer_port();
-            platform->on_platform_addr_changed(SockUtil::make_sockaddr(platform->account_.host.c_str(), platform->account_.port));
+            if (struct sockaddr_storage addr {}; SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr)) {
+                platform->on_platform_addr_changed(addr);
+            }
             platform->set_status(PlatformStatusType::online, {});
             set_message_date(transaction.get());
             set_message_expires(transaction.get(), expires);
@@ -108,12 +110,12 @@ int SubordinatePlatformImpl::on_recv_register(
             account.auth_type = server_account.auth_type;
             account.transport_type = session->is_udp() ? TransportType::udp : TransportType::tcp;
             account.local_port = session->get_local_port();
-            account.local_host = session->get_local_ip();// SockUtil::get_local_ip(session->getSock()->rawFD());
-            if(account.local_host.empty()) {
-                account.local_port = server_account.local_port;
-            }
-            if(account.local_port == 0) {
+            account.local_host = session->get_local_ip(); // SockUtil::get_local_ip(session->getSock()->rawFD());
+            if (account.local_host.empty()) {
                 account.local_host = server_account.local_host;
+            }
+            if (account.local_port == 0) {
+                account.local_port = server_account.local_port;
             }
             account.plat_status.register_time = getCurrentMicrosecond(true);
             account.plat_status.status = PlatformStatusType::registering;
@@ -125,7 +127,7 @@ int SubordinatePlatformImpl::on_recv_register(
                         if (session->is_udp()) {
                             platform->set_tcp_session(session);
                         }
-                        if (struct sockaddr_storage addr{};SockUtil::get_sock_peer_addr(session->getSock()->rawFD(),addr)) {
+                        if (struct sockaddr_storage addr {}; SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr)) {
                             platform->on_platform_addr_changed(addr);
                         }
                         platform->set_status(PlatformStatusType::online, {});
@@ -170,8 +172,8 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
         5,
         [weak_this = weak_from_this()]() {
             if (auto this_ptr = weak_this.lock()) {
-                auto last_time = ((std::max)(this_ptr->account_.plat_status.register_time,
-                                             this_ptr->account_.plat_status.keepalive_time));
+                auto last_time = ((std::max)(
+                    this_ptr->account_.plat_status.register_time, this_ptr->account_.plat_status.keepalive_time));
                 auto now_time = toolkit::getCurrentMicrosecond(true);
                 if (last_time + 3 * 30 * 1000000L <= now_time) {
                     this_ptr->set_status(PlatformStatusType::offline, "keepalive timeout");
@@ -182,11 +184,11 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
         },
         nullptr);
     // 异步广播平台在线状态
-        EventPollerPool::Instance().getPoller()->async(
+    EventPollerPool::Instance().getPoller()->async(
         [this_ptr = shared_from_this(), status, error]() {
             {
-                std::lock_guard<decltype(status_cbs_mtx_)> lck( this_ptr->status_cbs_mtx_);
-                for(auto &it : this_ptr->status_cbs_) {
+                std::lock_guard<decltype(status_cbs_mtx_)> lck(this_ptr->status_cbs_mtx_);
+                for (auto &it : this_ptr->status_cbs_) {
                     it.second(status);
                 }
             }

@@ -26,7 +26,7 @@ public:
     ~SipSession() override;
 
     void set_peer(const std::string &host, uint16_t port);
-    void set_peer(const struct sockaddr_storage &addr);
+    void set_peer(struct sockaddr_storage &addr);
 
     void onRecv(const toolkit::Buffer::Ptr &) override;
     void onError(const toolkit::SockException &err) override;
@@ -53,7 +53,7 @@ public:
 
 private:
     void handle_recv();
-    struct sockaddr_storage make_peer_addr(const struct sockaddr_storage &addr);
+    bool make_peer_addr(struct sockaddr_storage &addr);
 
 private:
     bool _is_udp = false;

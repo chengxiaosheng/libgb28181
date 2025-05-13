@@ -42,8 +42,6 @@ SuperPlatformImpl::SuperPlatformImpl(super_account account, const std::shared_pt
     , keepalive_ticker_(std::make_shared<toolkit::Ticker>()) {
     local_server_weak_ = server;
 
-    memset(&remote_addr_, 0, sizeof(remote_addr_));
-
     const auto &server_account = server->get_account();
     if (account_.local_host.empty()) {
         account_.local_host = server_account.local_host;
@@ -87,7 +85,8 @@ void SuperPlatformImpl::start_l() {
     DebugL << "platform " << account_.platform_id << ", address = " << host << ":" << port;
 
     if (SockUtil::is_ipv4(host) || SockUtil::is_ipv6(host)) {
-        on_platform_addr_changed(SockUtil::make_sockaddr(host, port));
+        struct sockaddr_storage addr = SockUtil::make_sockaddr(host, port);
+        on_platform_addr_changed(addr);
         to_register(0);
     } else {
         auto poller = toolkit::EventPollerPool::Instance().getPoller();

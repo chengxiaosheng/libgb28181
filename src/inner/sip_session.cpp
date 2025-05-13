@@ -33,60 +33,87 @@ SipSession::~SipSession() {
 
 void SipSession::set_peer(const std::string &host, uint16_t port) {
     // tcp 模式下，与 udp session 模式下都不需要设置对端地址
-    if(!is_udp() ||  !get_peer_ip().empty()) {
+    if (!is_udp() || !get_peer_ip().empty()) {
         return;
     }
-    set_peer(SockUtil::make_sockaddr(host.c_str(), port));
+    struct sockaddr_storage addr = SockUtil::make_sockaddr(host.c_str(), port);
+    set_peer(addr);
 }
 
-struct sockaddr_storage SipSession::make_peer_addr(const struct sockaddr_storage &addr) {
-    struct sockaddr_storage peer_addr{};
+bool SipSession::make_peer_addr(struct sockaddr_storage &addr) {
+    // 获取当前 socket
     auto &socket = getSock();
-    if (!socket)
-        return peer_addr;
+    if (!socket) {
+        return false; // 无效的 socket
+    }
 
-    auto listen_ip = socket->get_local_ip();
-    struct sockaddr_storage local_addr {};
+    // 获取本地地址
+    struct sockaddr_storage local_addr{};
     if (!SockUtil::get_sock_local_addr(socket->rawFD(), local_addr)) {
         ErrorL << "SockUtil::get_sock_local_addr() failed";
+        return false; // 获取本地地址失败
     }
-    // 如果类型相同， 则直接复制
-    peer_addr = addr;
-    if (local_addr.ss_family == AF_INET6 && addr.ss_family == AF_INET) {
-        struct sockaddr_in *addr4 = (struct sockaddr_in *)&addr;
-        struct sockaddr_in6 *peer6 = (struct sockaddr_in6 *)&peer_addr;
-        peer6->sin6_family = AF_INET6;
-        peer6->sin6_port = addr4->sin_port;
-        memset(&peer6->sin6_addr, 0, 10); // 前 10 字节置 0
-        peer6->sin6_addr.s6_addr[10] = 0xFF;
-        peer6->sin6_addr.s6_addr[11] = 0xFF;
-        memcpy(&peer6->sin6_addr.s6_addr[12], &addr4->sin_addr, 4);
-    }
-    // 应该不会存在这种情况吧？
-    else if (local_addr.ss_family == AF_INET && addr.ss_family == AF_INET6) {
-        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&addr;
-        if (IN6_IS_ADDR_V4MAPPED(&addr6->sin6_addr)) {
-            struct sockaddr_in *peer4 = (struct sockaddr_in *)&peer_addr;
-            peer4->sin_family = AF_INET;
-            memcpy(&peer4->sin_addr, ((char *)&addr6->sin6_addr) + 12, 4);
-            peer4->sin_port = addr6->sin6_port;
-        } else {
-            ErrorL << "Cannot convert non-mapped IPv6 address to IPv4";
-        }
-    } else {
-        ErrorL << "Unknown peer address family";
-        throw std::runtime_error("Unknown peer address family");
-    }
-    return peer_addr;
 
+    // 如果本地地址族与传入地址族相同，直接返回 true
+    if (local_addr.ss_family == addr.ss_family) {
+        return true;
+    }
+
+    // 如果本地是 IPv4，传入是 IPv6
+    if (local_addr.ss_family == AF_INET && addr.ss_family == AF_INET6) {
+        // 检查传入的 IPv6 地址是否是 IPv4 映射的地址
+        struct sockaddr_in6 *addr6 = reinterpret_cast<struct sockaddr_in6 *>(&addr);
+        if (IN6_IS_ADDR_V4MAPPED(&addr6->sin6_addr)) {
+            // 如果是 IPv4 映射的地址，将其还原为 IPv4
+            struct sockaddr_in peer4{};
+            peer4.sin_family = AF_INET;
+            peer4.sin_port = addr6->sin6_port;
+            memcpy(&peer4.sin_addr, &addr6->sin6_addr.s6_addr[12], sizeof(peer4.sin_addr));
+
+            // 将还原后的 IPv4 地址赋值给传入的 addr
+            memset(&addr, 0, sizeof(addr)); // 清零防止残留
+            memcpy(&addr, &peer4, sizeof(peer4));
+            return true;
+        } else {
+            // 如果不是 IPv4 映射的地址，返回 false
+            ErrorL << "Cannot handle non-mapped IPv6 address with IPv4 local address";
+            return false;
+        }
+    }
+
+    // 如果本地是 IPv6，传入是 IPv4
+    if (local_addr.ss_family == AF_INET6 && addr.ss_family == AF_INET) {
+        // 将传入的 IPv4 地址转换为 IPv6 映射的地址
+        struct sockaddr_in *addr4 = reinterpret_cast<struct sockaddr_in *>(&addr);
+        struct sockaddr_in6 peer6{};
+        peer6.sin6_family = AF_INET6;
+        peer6.sin6_port = addr4->sin_port;
+        memset(&peer6.sin6_addr, 0, 10); // 前 10 字节置 0
+        peer6.sin6_addr.s6_addr[10] = 0xFF;
+        peer6.sin6_addr.s6_addr[11] = 0xFF;
+        memcpy(&peer6.sin6_addr.s6_addr[12], &addr4->sin_addr, sizeof(addr4->sin_addr));
+
+        // 将转换后的 IPv6 地址赋值给传入的 addr
+        memset(&addr, 0, sizeof(addr)); // 清零防止残留
+        memcpy(&addr, &peer6, sizeof(peer6));
+        return true;
+    }
+
+    // 其他未知情况
+    ErrorL << "Unknown address family combination";
+    return false;
 }
 
-void SipSession::set_peer(const struct sockaddr_storage &addr) {
+void SipSession::set_peer(struct sockaddr_storage &addr) {
     // tcp 模式下，与 udp session 模式下都不需要设置对端地址
     if(!is_udp() ||  !get_peer_ip().empty()) {
         return;
     }
-    _addr = make_peer_addr(addr);
+    if (addr.ss_family == AF_INET6 || addr.ss_family == AF_INET) {
+        if (make_peer_addr(addr)) {
+            memcpy(&_addr, &addr, sizeof(struct sockaddr_storage));
+        }
+    }
 }
 
 void SipSession::startConnect(
@@ -190,6 +217,7 @@ int SipSession::sip_via(void *transport, const char *destination, char protocol[
         return -1;
     }
     snprintf(protocol, 16, "%s", session->is_udp() ? "UDP" : "TCP");
+    // 这里的获取都是不靠谱的, 需要提前设置local_host, 与 local_port
     if (session->local_ip_.empty())
     {
         if (session->getSock() && session->getSock()->rawFD()) {
@@ -242,30 +270,8 @@ int SipSession::sip_send_reply(
     auto buffer = BufferRaw::create();
     buffer->assign((const char *)data, bytes);
     TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
-    // 这里的判断应该没有意义， reply 一定来自 server 的 session
-    if(session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty()) {
-        if(received && cstrvalid(received)) {
-            auto peer_storage = session_ptr->make_peer_addr(SockUtil::make_sockaddr(received->p, rport));
-            auto peer_addr = (struct sockaddr *)&peer_storage;
-            session_ptr->ticker_->resetTime();
-            session_ptr->getSock()->send(std::move(buffer), peer_addr, SockUtil::get_sock_len(peer_addr));
-            return 0;
-        }
-        if (peer && cstrvalid(peer)) {
-            uint16_t port = 5060;
-            auto && ip_port_vec = toolkit::split(peer->p, ":");
-            port = std::strtoul(ip_port_vec[1].c_str(), nullptr, 10);
-            auto peer_storage = session_ptr->make_peer_addr(SockUtil::make_sockaddr(ip_port_vec[0].c_str(), rport));
-            auto peer_addr = (struct sockaddr *)&peer_storage;
-            session_ptr->getSock()->send(std::move(buffer), peer_addr, SockUtil::get_sock_len(peer_addr));
-            return 0;
-        }
-        session_ptr->ticker_->resetTime();
-        session_ptr->getSock()->send(std::move(buffer), (sockaddr *)&session_ptr->_addr, SockUtil::get_sock_len((sockaddr *)&session_ptr->_addr));
-    } else {
-        session_ptr->ticker_->resetTime();
-        session_ptr->send(std::move(buffer));
-    }
+    session_ptr->ticker_->resetTime();
+    session_ptr->send(std::move(buffer));
     return 0;
 }
 sip_transport_t *SipSession::get_transport() {

@@ -75,6 +75,7 @@ struct sockaddr_storage SipSession::make_peer_addr(const struct sockaddr_storage
         }
     } else {
         ErrorL << "Unknown peer address family";
+        throw std::runtime_error("Unknown peer address family");
     }
     return peer_addr;
 
@@ -206,7 +207,10 @@ int SipSession::sip_via(void *transport, const char *destination, char protocol[
 int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
     if (transport == nullptr)
         return -1;
-    auto session_ptr = std::dynamic_pointer_cast<SipSession>(static_cast<SipSession *>(transport)->shared_from_this());
+    std::shared_ptr<SipSession> session_ptr;
+    if (auto p = dynamic_cast<SipSession*>(static_cast<SipSession*>(transport)); p != nullptr) {
+        session_ptr = std::dynamic_pointer_cast<SipSession>(p->shared_from_this());
+    }
     if (!session_ptr) {
         WarnL << "SipSession::sip_send: transport is not SipSession";
         return sip_unknown_host;
@@ -381,6 +385,7 @@ void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
 }
 
 void SipSession::onError(const toolkit::SockException &err) {
+    WarnP(this) << ", " << err;
     if (_on_error) _on_error(err);
 }
 void SipSession::onManager() {

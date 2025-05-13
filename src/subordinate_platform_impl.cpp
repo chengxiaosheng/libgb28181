@@ -35,6 +35,8 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
     , PlatformHelper()
     , account_(std::move(account)) {
 
+    memset(&remote_addr_, 0, sizeof(remote_addr_));
+
     const auto & server_account = server->get_account();
     if (account_.local_host.empty()) {
         account_.local_host = server_account.local_host;
@@ -47,6 +49,13 @@ SubordinatePlatformImpl::SubordinatePlatformImpl(subordinate_account account, co
         + std::to_string(server_account.local_port);
     contact_uri_ = "sip:" + server_account.platform_id + "@" + account_.local_host + ":"
         + std::to_string(account_.local_port);
+    to_uri_ = "sip:" + account_.platform_id+ "@" + account_.host + ":" + std::to_string(account_.port);
+    // 将平台地址写入, 一般来说，下级平台地址应该是IP模式吧， 如果是域名？等注册或者心跳？
+    if (SockUtil::is_ipv4(account_.host.c_str()) || SockUtil::is_ipv6(account_.host.c_str())) {
+        remote_addr_ = SockUtil::make_sockaddr(account_.host.c_str(), account_.port);
+    } else {
+        WarnL << "platform not set remote_addr , platform_id " << account_.platform_id << ", host = " << account_.host << ":" << account_.port;
+    }
 }
 
 SubordinatePlatformImpl::~SubordinatePlatformImpl() {}
@@ -64,15 +73,15 @@ int SubordinatePlatformImpl::on_recv_register(
         if (!session->is_udp()) {
             platform->set_tcp_session(session);
         }
-        if (struct sockaddr_storage addr {}; SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr)) {
-            platform->on_platform_addr_changed(addr);
-        }
         if (expires == 0) {
             platform->set_status(PlatformStatusType::offline, "logout");
             return sip_uas_reply(transaction.get(), 200, nullptr, 0, session.get());
         }
         auto &account = platform->account();
         if (account.auth_type == SipAuthType::none || verify_authorization(req.get(), user, account.password)) {
+            platform->account_.host = session->get_peer_ip();
+            platform->account_.port = session->get_peer_port();
+            platform->on_platform_addr_changed(SockUtil::make_sockaddr(platform->account_.host.c_str(), platform->account_.port));
             platform->set_status(PlatformStatusType::online, {});
             set_message_date(transaction.get());
             set_message_expires(transaction.get(), expires);

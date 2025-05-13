@@ -194,9 +194,15 @@ std::string PlatformHelper::get_contact_uri() {
 }
 
 
-void PlatformHelper::on_platform_addr_changed(const struct sockaddr_storage& addr){
-    remote_addr_ = addr;
-    DebugL << "change platform address " << SockUtil::inet_ntoa((sockaddr *)&addr);
+void PlatformHelper::on_platform_addr_changed(const struct sockaddr_storage& addr) {
+    if((addr.ss_family == AF_INET ||  addr.ss_family == AF_INET6) && !areAddressesEqual(remote_addr_, addr)) {
+        remote_addr_ = addr;
+        DebugL << "change platform address " << SockUtil::inet_ntoa((sockaddr *)&addr);
+        std::lock_guard<decltype(udp_sip_session_map_mutex_)> lock(udp_sip_session_map_mutex_);
+        for(auto &it : udp_sip_session_map_) {
+            it.second->set_peer(addr);
+        }
+    }
 }
 void PlatformHelper::add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy) {
     std::unique_lock<decltype(request_map_mutex_)> lck(request_map_mutex_);
@@ -218,6 +224,9 @@ void PlatformHelper::uac_send(
             if (e) {
                 return rcb(false, e.what());
             }
+            if (!session) {
+                return rcb(false, "got session failed");
+            }
             if (0
                 != sip_uac_send(
                     transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
@@ -238,6 +247,9 @@ void PlatformHelper::uas_send2(
          rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
             if (e) {
                 return rcb(false, e.what(), session);
+            }
+            if (!session) {
+                return rcb(false, "got session failed", nullptr);
             }
             if (0
                 != sip_uac_send(
@@ -355,7 +367,7 @@ int PlatformHelper::on_recv_message(
 
         // 更新来源地址, 方便向下级平台发送消息
         struct sockaddr_storage addr{};
-        if (SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr) && !areAddressesEqual(platform_->remote_addr_, addr)) {
+        if (SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr)) {
             platform_->on_platform_addr_changed(addr);
         }
     }

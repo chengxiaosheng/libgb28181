@@ -42,6 +42,8 @@ SuperPlatformImpl::SuperPlatformImpl(super_account account, const std::shared_pt
     , keepalive_ticker_(std::make_shared<toolkit::Ticker>()) {
     local_server_weak_ = server;
 
+    memset(&remote_addr_, 0, sizeof(remote_addr_));
+
     const auto &server_account = server->get_account();
     if (account_.local_host.empty()) {
         account_.local_host = server_account.local_host;
@@ -82,6 +84,7 @@ void SuperPlatformImpl::start_l() {
 
     const char * host = temp_host_.empty() ? account_.host.c_str() : temp_host_.c_str();
     uint16_t port = temp_host_.empty() ? account_.port : temp_port_ == 0 ? account_.port : temp_port_;
+    DebugL << "platform " << account_.platform_id << ", address = " << host << ":" << port;
 
     if (SockUtil::is_ipv4(host) || SockUtil::is_ipv6(host)) {
         on_platform_addr_changed(SockUtil::make_sockaddr(host, port));
@@ -307,11 +310,7 @@ void SuperPlatformImpl::to_register(int expires, const std::string &authorizatio
     // 构建注册事务
     std::shared_ptr<sip_uac_transaction_t> reg_trans(
         sip_uac_register(
-            get_sip_agent(), from.c_str(), to.c_str(), expires, SuperPlatformImpl::on_register_reply, register_context),
-        [](sip_uac_transaction_t *t) {
-            if (t)
-                sip_uac_transaction_release(t);
-        });
+            get_sip_agent(), from.c_str(), to.c_str(), expires, SuperPlatformImpl::on_register_reply, register_context), sip_uac_transaction_release);
     // 设置认证信息
     if (!authorization.empty()) {
         set_message_authorization(reg_trans.get(), authorization);

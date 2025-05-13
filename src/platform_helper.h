@@ -40,6 +40,9 @@ class SipServer;
 class SipSession;
 class PlatformHelper : public std::enable_shared_from_this<PlatformHelper> {
 public:
+    // 发送sip请求的结果回调
+    using SipReplyCallback = std::function<int(const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code)>;
+
     virtual ~PlatformHelper();
     virtual platform_account &sip_account()  = 0;
     virtual TransportType get_transport() const = 0;
@@ -84,7 +87,12 @@ public:
 
     void uac_send(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool force_tcp = false);
 
-    void uas_send2(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp = false);
+    void uac_send2(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp = false);
+
+    /**
+    * @brief 发送
+    */
+    void uac_send3(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string)> &ecb, SipReplyCallback rcb, bool force_tcp = false);
 
     void set_tcp_session(const std::shared_ptr<SipSession> &session);
 

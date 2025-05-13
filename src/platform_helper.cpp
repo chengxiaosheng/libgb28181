@@ -14,7 +14,11 @@
 #include <request/RequestProxyImpl.h>
 
 #include "platform_helper.h"
+
+#include "../3rdpart/media-server/libsip/src/uac/sip-uac-transaction.h"
+
 #include <Network/sockutil.h>
+#include <algorithm>
 
 using namespace toolkit;
 
@@ -252,7 +256,7 @@ void PlatformHelper::uac_send(
         },
         force_tcp);
 }
-void PlatformHelper::uas_send2(
+void PlatformHelper::uac_send2(
     const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
     const std::function<void(bool, std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp) {
     set_message_contact(transaction.get(), get_contact_uri().c_str());
@@ -276,6 +280,59 @@ void PlatformHelper::uas_send2(
         },
         force_tcp);
 }
+void PlatformHelper::uac_send3(
+    const std::shared_ptr<sip_uac_transaction_t> &transaction, std::string &&payload,
+    const std::function<void(bool, std::string)> &ecb, SipReplyCallback rcb, bool force_tcp) {
+
+    struct uac_context {
+        SipReplyCallback rcb; // 结果回调函数
+        std::shared_ptr<SipSession> session; // 加一层保险， 避免session 中途被释放
+    };
+    static auto adapter = [](void* param, const struct sip_message_t* reply, struct sip_uac_transaction_t* t, int code) -> int {
+        auto context = reinterpret_cast<uac_context*>(param);
+        if (!context) return -1;
+        SipReplyCallback callback = context->rcb;
+        std::shared_ptr<SipSession> session_ptr = context->session;
+
+        std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
+        sip_uac_transaction_addref(t);
+        std::shared_ptr<sip_uac_transaction_t> transaction_ptr(t, sip_uac_transaction_release);
+
+        if (!SIP_IS_SIP_INFO(code)) {
+            delete context;
+        }
+        return callback ? callback(session_ptr, reply_ptr, transaction_ptr, code) : 0;
+    };
+    set_message_contact(transaction.get(), get_contact_uri().c_str());
+    set_message_header(transaction.get());
+
+    get_session(
+    [transaction, payload = std::move(payload), weak_this = weak_from_this(),rcb = std::move(rcb),ecb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+        if (e) {
+            return ecb(false, e.what());
+        }
+        if (!session) {
+            return ecb(false, "got session failed");
+        }
+        auto context = new uac_context();
+        context->rcb = rcb;
+        context->session = session;
+        transaction->onreply = adapter;
+        transaction->param = context;
+
+        // todo: 采用自定义状态码， 来明确处理错误信息
+        int ret = sip_uac_send(
+                transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
+                session.get());
+        if(ret != 0) {
+            delete context; // 发送失败，清理资源
+            ecb(false, "failed to send request, call sip_uac_send failed");
+        }
+    },
+    force_tcp);
+}
+
+
 void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session) {
     if (session->is_udp()) {
         return;

@@ -25,9 +25,6 @@ using namespace toolkit;
 
 static std::unordered_map<void *, std::shared_ptr<SubscribeRequestImpl>> subscribe_request_map_; // 对订阅对象本身的存储
 static std::shared_mutex subscribe_request_map_mutex_;
-static std::unordered_map<void *, std::shared_ptr<SubscribeRequest::SubscriberNotifyReplyCallback>>
-    send_notify_map_; // 存储发送通知消息的结果回调
-static std::mutex send_notify_map_mutex_;
 
 std::shared_ptr<SubscribeRequest> SubscribeRequest::new_subscribe(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<MessageBase> &message,
@@ -36,28 +33,6 @@ std::shared_ptr<SubscribeRequest> SubscribeRequest::new_subscribe(
         std::dynamic_pointer_cast<SubordinatePlatformImpl>(platform), message, std::move(info));
 }
 
-// ReSharper disable once CppDFAConstantFunctionResult
-static int on_notify_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
-    if (param == nullptr)
-        return 0;
-    // 忽略中间信息
-    if (SIP_IS_SIP_INFO(code)) {
-        return 0;
-    }
-    std::shared_ptr<SubscribeRequest::SubscriberNotifyReplyCallback> rcb;
-    {
-        std::lock_guard<decltype(send_notify_map_mutex_)> lock(send_notify_map_mutex_);
-        if (auto it = send_notify_map_.find(param); it != send_notify_map_.end()) {
-            rcb = std::move(it->second);
-            send_notify_map_.erase(it);
-        }
-    }
-    if (rcb) {
-        std::string reason = get_message_reason(reply);
-        (*rcb)(SIP_IS_SIP_SUCCESS(code), toolkit::str_format("recv %d, %s", code, reason.c_str()));
-    }
-    return 0;
-}
 
 SubscribeRequestImpl::SubscribeRequestImpl(
     const std::shared_ptr<SubordinatePlatformImpl> &platform, const std::shared_ptr<MessageBase> &message,
@@ -426,7 +401,7 @@ void SubscribeRequestImpl::subscribe_send_notify(
     }
     auto callback_ptr = std::make_shared<SubscriberNotifyReplyCallback>(std::move(rcb));
     std::shared_ptr<sip_uac_transaction_t> transaction_ptr(
-        sip_uac_notify(sip_agent, sip_subscribe_ptr_.get(), notify_state.c_str(), on_notify_reply, callback_ptr.get()),
+        sip_uac_notify(sip_agent, sip_subscribe_ptr_.get(), notify_state.c_str(), nullptr, nullptr),
         [](sip_uac_transaction_t *t) {
             if (t) {
                 sip_uac_transaction_release(t);
@@ -435,16 +410,17 @@ void SubscribeRequestImpl::subscribe_send_notify(
     if (!transaction_ptr) {
         return (*callback_ptr)(false, "make sip_uac_transaction_t failed");
     }
-    {
-        std::lock_guard<decltype(send_notify_map_mutex_)> lock(send_notify_map_mutex_);
-        send_notify_map_[callback_ptr.get()] = callback_ptr;
-    }
-    platform->uac_send(transaction_ptr, std::move(payload), [callback_ptr](bool ret, std::string err) {
-        if (!ret) {
-            std::lock_guard<decltype(send_notify_map_mutex_)> lock(send_notify_map_mutex_);
-            send_notify_map_.erase(callback_ptr.get());
-            return (*callback_ptr)(ret, std::move(err));
-        }
+    platform->uac_send3(transaction_ptr, std::move(payload), [callback_ptr](bool ret, std::string err) {
+        return (*callback_ptr)(ret, std::move(err));
+    }, [callback_ptr](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+        if (SIP_IS_SIP_INFO(code)) {
+               return 0;
+           }
+           if (callback_ptr && *callback_ptr) {
+               std::string reason = reply ?  get_message_reason(reply.get()) : "timeout" ;
+               (*callback_ptr)(SIP_IS_SIP_SUCCESS(code), toolkit::str_format("recv %d, %s", code, reason.c_str()));
+           }
+           return 0;
     });
 }
 
@@ -546,16 +522,20 @@ void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
 int SubscribeRequestImpl::on_subscribe_reply(
     void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, struct sip_subscribe_t *subscribe,
     int code, void **session) {
+    std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
     if (!param)
         return 0;
+
     auto this_ptr = get_subscribe(param);
     if (!this_ptr)
         return 0;
+
     auto weak_self = this_ptr->weak_from_this();
     // 忽略 100-199
     if (SIP_IS_SIP_INFO(code)) {
         return 0;
     }
+
     // 是否订阅成功
     if (SIP_IS_SIP_SUCCESS(code)) {
         if (*session != this_ptr.get()) {

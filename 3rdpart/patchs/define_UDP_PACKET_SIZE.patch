@@ -1,0 +1,38 @@
+Subject: [PATCH] define UDP_PACKET_SIZE
+---
+Index: libsip/src/uas/sip-uas-transaction.h
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/libsip/src/uas/sip-uas-transaction.h b/libsip/src/uas/sip-uas-transaction.h
+--- a/libsip/src/uas/sip-uas-transaction.h	(revision ea53ac6c80c411d2ab12f2323a7916cd54b97fa3)
++++ b/libsip/src/uas/sip-uas-transaction.h	(date 1747110931611)
+@@ -11,7 +11,9 @@
+ #include "sys/locker.h"
+ #include "list.h"
+ 
++#ifndef UDP_PACKET_SIZE
+ #define UDP_PACKET_SIZE (4*1024) //1440
++#endif
+ 
+ enum
+ {
+Index: libsip/src/uac/sip-uac-transaction.h
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/libsip/src/uac/sip-uac-transaction.h b/libsip/src/uac/sip-uac-transaction.h
+--- a/libsip/src/uac/sip-uac-transaction.h	(revision ea53ac6c80c411d2ab12f2323a7916cd54b97fa3)
++++ b/libsip/src/uac/sip-uac-transaction.h	(date 1747110919107)
+@@ -9,7 +9,9 @@
+ #include "sys/locker.h"
+ #include "list.h"
+ 
++#ifndef UDP_PACKET_SIZE
+ #define UDP_PACKET_SIZE (4*1024) //1440
++#endif
+ 
+ enum
+ {

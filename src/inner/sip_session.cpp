@@ -22,7 +22,7 @@ SipSession::SipSession(const toolkit::Socket::Ptr &sock, bool is_client)
         socklen_t addr_len = sizeof(_addr);
         getpeername(sock->rawFD(), (struct sockaddr *)&_addr, &addr_len);
     }
-    _is_udp = sock->sockType() == SockNum::Sock_UDP;
+    _is_udp = sock->sockType() == SockNum::Sock_UDP || sock->sockType() == SockNum::Sock_Invalid;
     if(sock)
      TraceP(this) << "SipSession::SipSession()";
     else TraceL << "SipSession::SipSession()";

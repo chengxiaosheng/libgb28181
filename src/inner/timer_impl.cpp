@@ -8,6 +8,7 @@ using namespace toolkit;
 
 struct sip_timer_context {
     std::weak_ptr<EventPoller::DelayTask> task; // 任务
+    std::atomic_flag handle_falg{ATOMIC_FLAG_INIT}; // 是否已经执行
 };
 
 void sip_timer_init(void) {
@@ -23,7 +24,10 @@ sip_timer_t sip_timer_start(int timeout, sip_timer_handle handler, void* usrptr)
     auto context = new sip_timer_context();
     context->task = poller->doDelayTask(timeout, [handler, usrptr, context]() {
         TraceL << "handle timer " << context;
-        handler(usrptr);
+        // 自旋控制，避免重复执行
+        if(!context->handle_falg.test_and_set()) {
+            handler(usrptr);
+        }
         return 0;
     });
     TraceL << "add timer " << context << ", timeout=" << timeout << " ms";
@@ -40,12 +44,13 @@ int sip_timer_stop(sip_timer_t* id) {
         *id = nullptr;
         return gb28181::sip_not_found;
     }
+    bool flag = context->handle_falg.test_and_set();
     if (auto task =  context->task.lock()) {
         task->cancel();
     }
     delete context;
     *id = nullptr;
-    return gb28181::sip_ok;
+    return flag ? -1 : 0;
 }
 
 

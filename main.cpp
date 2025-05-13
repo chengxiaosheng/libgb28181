@@ -19,16 +19,12 @@ using namespace gb28181;
 
 // 全局变量，用于检测是否收到退出信号
 std::atomic<bool> is_running{true};
-// 信号处理函数
-void signal_handler(int signal) {
-    if (signal == SIGINT || signal == SIGTERM) {
-        std::cout << "\nSignal received, shutting down...\n";
-        is_running = false; // 设置退出标志
-    }
-}
-static std::shared_ptr<void> tag = nullptr;
 
-int main() {
+static std::shared_ptr<void> tag = nullptr;
+std::shared_ptr<LocalServer> local_server;
+
+void run() {
+
     gb28181::local_account account;
     {
         account.platform_id = "65010100002000100001";
@@ -37,10 +33,12 @@ int main() {
         account.host = "::";
         account.password = "123456";
         account.port = 5060;
+        account.local_host = "10.1.20.38";
+        account.local_port = 5060;
         account.auth_type = gb28181::SipAuthType::digest;
         account.allow_auto_register = true;
     };
-    auto local_server = gb28181::LocalServer::new_local_server(account);
+    local_server = gb28181::LocalServer::new_local_server(account);
     local_server->set_new_subordinate_account_callback([](std::shared_ptr<gb28181::LocalServer> server, std::shared_ptr<gb28181::subordinate_account> account, std::function<void(bool)> allow_cb) {
         allow_cb(true);
     });
@@ -106,25 +104,47 @@ int main() {
         sup_account.platform_id = "65010400002000100005";
         sup_account.domain = "6501040000";
         sup_account.name = "级联测试平台";
-        sup_account.host = "10.1.11.170";
+        sup_account.host = "172.16.11.15";
         sup_account.port = 55060;
         sup_account.password = "123456";
-        sup_account.transport_type = TransportType::tcp;
+        sup_account.transport_type = TransportType::udp;
     };
     local_server->add_super_platform(std::move(sup_account));
 
-    // 捕获 SIGINT 和 SIGTERM 信号
-    std::signal(SIGINT, signal_handler);
-    std::signal(SIGTERM, signal_handler);
-
-    // 主线程保持运行直到收到退出信号
-    std::cout << "Press Ctrl+C to exit..." << std::endl;
-    while (is_running) {
-        std::this_thread::sleep_for(std::chrono::seconds(1)); // 防止忙等
-    }
-
-
 
     std::cout << "Server stopped." << std::endl;
-    return 0;
+}
+
+
+int main() {
+    toolkit::EventPollerPool::setPoolSize(std::thread::hardware_concurrency());
+
+    toolkit::Logger::Instance().add(
+           std::make_shared<toolkit::ConsoleChannel>("ConsoleChannel", toolkit::LogLevel::LTrace));
+    auto fileChannel = std::make_shared<toolkit::FileChannel>("FileChannel", "./logs", toolkit::LogLevel::LTrace);
+    fileChannel->setMaxDay(7);
+    fileChannel->setFileMaxCount(100);
+    fileChannel->setFileMaxSize(1024 * 1024 * 100);
+    toolkit::Logger::Instance().add(fileChannel);
+    toolkit::Logger::Instance().setWriter(std::make_shared<toolkit::AsyncLogWriter>());
+    InfoL << "start ....";
+    TraceL << "start ....";
+
+    toolkit::EventPollerPool::Instance().getPoller()->async(run);
+
+    // 设置退出信号处理函数  [AUTO-TRANSLATED:4f047770]
+    // set exit signal handler
+    static toolkit::semaphore sem;
+    signal(SIGINT, [](int) {
+        InfoL << "SIGINT:exit";
+        signal(SIGINT, SIG_IGN); // 设置退出信号
+        sem.post();
+    }); // 设置退出信号
+
+    signal(SIGTERM, [](int) {
+        WarnL << "SIGTERM:exit";
+        signal(SIGTERM, SIG_IGN);
+        sem.post();
+    });
+    sem.wait();
 }

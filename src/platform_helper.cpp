@@ -15,7 +15,6 @@
 
 #include "platform_helper.h"
 
-#include "../3rdpart/media-server/libsip/src/uac/sip-uac-transaction.h"
 
 #include <Network/sockutil.h>
 #include <algorithm>

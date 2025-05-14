@@ -316,8 +316,7 @@ void PlatformHelper::uac_send3(
         auto context = new uac_context();
         context->rcb = rcb;
         context->session = session;
-        transaction->onreply = adapter;
-        transaction->param = context;
+        sip_uac_transaction_set_onreply(transaction.get(), adapter, context);
 
         // todo: 采用自定义状态码， 来明确处理错误信息
         int ret = sip_uac_send(

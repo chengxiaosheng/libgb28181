@@ -73,8 +73,7 @@ void SipServer::init_agent() {
     handler_->onmessage = onmessage;
     handler_->onrefer = onrefer;
 
-    sip_ = std::shared_ptr<sip_agent_t>(
-        sip_agent_create(handler_.get()), [](sip_agent_t *agent) { sip_agent_destroy(agent); });
+    sip_ = std::shared_ptr<sip_agent_t>(sip_agent_create(handler_.get()), sip_agent_destroy);
 }
 std::shared_ptr<LocalServer> LocalServer::new_local_server(local_account account) {
     return std::make_shared<SipServer>(std::move(account));

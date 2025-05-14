@@ -82,9 +82,11 @@ void SuperPlatformImpl::start_l() {
 
     const char * host = temp_host_.empty() ? account_.host.c_str() : temp_host_.c_str();
     uint16_t port = temp_host_.empty() ? account_.port : temp_port_ == 0 ? account_.port : temp_port_;
+    DebugL << "platform " << account_.platform_id << ", address = " << host << ":" << port;
 
     if (SockUtil::is_ipv4(host) || SockUtil::is_ipv6(host)) {
-        on_platform_addr_changed(SockUtil::make_sockaddr(host, port));
+        struct sockaddr_storage addr = SockUtil::make_sockaddr(host, port);
+        on_platform_addr_changed(addr);
         to_register(0);
     } else {
         auto poller = toolkit::EventPollerPool::Instance().getPoller();
@@ -303,15 +305,12 @@ void SuperPlatformImpl::to_register(int expires, const std::string &authorizatio
     std::string to = get_to_uri();
 
     // 记录平台
-    auto register_context = new RegisterContext{shared_from_this(), expires};
+    auto register_context = new RegisterContext { shared_from_this(), expires };
     // 构建注册事务
     std::shared_ptr<sip_uac_transaction_t> reg_trans(
         sip_uac_register(
             get_sip_agent(), from.c_str(), to.c_str(), expires, SuperPlatformImpl::on_register_reply, register_context),
-        [](sip_uac_transaction_t *t) {
-            if (t)
-                sip_uac_transaction_release(t);
-        });
+        sip_uac_transaction_release);
     // 设置认证信息
     if (!authorization.empty()) {
         set_message_authorization(reg_trans.get(), authorization);
@@ -323,23 +322,27 @@ void SuperPlatformImpl::to_register(int expires, const std::string &authorizatio
 
     TraceL << "to register form " << from << " to " << to;
     // 发起注册请求
-    uac_send(reg_trans, {}, [register_context](bool ret, const std::string& err) {
+    uac_send(reg_trans, {}, [register_context](bool ret, const std::string &err) {
         // 发送失败 ?
         if (!ret) {
             if (register_context->platform.use_count() > 1) {
                 register_context->platform->set_status(PlatformStatusType::network_error, err);
                 std::weak_ptr<SuperPlatformImpl> weak_self = register_context->platform;
-                EventPollerPool::Instance().getPoller()->doDelayTask(3 *1000, [weak_self, authorization = std::move(register_context->authorization), expires = register_context->expires]() {
-                    if (auto strong_self = weak_self.lock()) {
-                        strong_self->to_register(expires, authorization);
-                    }
-                    return 0;
-                });
+                EventPollerPool::Instance().getPoller()->doDelayTask(
+                    3 * 1000,
+                    [weak_self, authorization = std::move(register_context->authorization),
+                     expires = register_context->expires]() {
+                        if (auto strong_self = weak_self.lock()) {
+                            strong_self->to_register(expires, authorization);
+                        }
+                        return 0;
+                    });
             }
             delete register_context;
         }
     });
 }
+
 void SuperPlatformImpl::to_keepalive() {
 
     auto keepalive_ptr

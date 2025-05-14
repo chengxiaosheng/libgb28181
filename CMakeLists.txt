@@ -6,7 +6,7 @@ option(BUILD_SHARED_LIBS "Build gb28181 as a shared lib" OFF)
 option(ENABLE_MSVC_MT "Enable MSVC Mt/Mtd lib" ON)
 option(STRIP_SYMBOL "strip symbol on release build" ON)
 
-
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(GNUInstallDirs)
 include(GenerateExportHeader)
@@ -39,14 +39,16 @@ if (BUILD_SHARED_LIBS)
     endif ()
 endif ()
 
+add_library(${PROJECT_NAME}_interface INTERFACE)
+
 if (WIN32)
     if (MSVC)
-        target_compile_options(${PROJECT_NAME} PRIVATE "/utf-8")
-        target_compile_options(${PROJECT_NAME} PRIVATE "$<$<C_COMPILER_ID:MSVC>:/utf-8>")
-        target_compile_options(${PROJECT_NAME} PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+        target_compile_options(${PROJECT_NAME}_interface INTERFACE "/utf-8")
+        target_compile_options(${PROJECT_NAME}_interface INTERFACE "$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+        target_compile_options(${PROJECT_NAME}_interface INTERFACE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
     endif ()
 else ()
-    target_compile_options(${PROJECT_NAME} PUBLIC
+    target_compile_options(${PROJECT_NAME}_interface INTERFACE
             "-fPIC"
             "-Wall"
             "-Wextra"
@@ -73,7 +75,7 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 add_subdirectory(3rdpart)
-target_link_libraries(${PROJECT_NAME} PRIVATE sip)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_interface)
 
 find_package(Iconv REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Iconv::Iconv)
@@ -101,6 +103,7 @@ if (NOT TARGET ZLToolKit)
         if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
             target_compile_definitions(${PROJECT_NAME} PUBLIC -DWIN32_LEAN_AND_MEAN)
         endif ()
+        target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::Crypto)
     endif ()
 endif ()
 if (NOT TARGET ZLToolKit)
@@ -113,6 +116,7 @@ if (NOT TARGET tinyxml2)
     add_subdirectory(3rdpart/tinyxml2)
 endif ()
 target_link_libraries(${PROJECT_NAME} PUBLIC tinyxml2)
+target_link_libraries(${PROJECT_NAME} PRIVATE ireader_sip )
 
 if(BUILD_SHARED_LIBS AND CMAKE_BUILD_TYPE STREQUAL "Release" AND UNIX AND STRIP_SYMBOL)
     add_custom_command(TARGET ${PROJECT_NAME}
@@ -125,7 +129,7 @@ if(BUILD_SHARED_LIBS AND CMAKE_BUILD_TYPE STREQUAL "Release" AND UNIX AND STRIP_
 endif ()
 
 if (NOT TARGET ZLToolKit_static)
-install(TARGETS ${PROJECT_NAME} ZLToolKit sip ireader_sdk_lib
+install(TARGETS ${PROJECT_NAME} ZLToolKit ireader_sip gb28181_interface
         EXPORT gb28181Targets
         RUNTIME DESTINATION "${INSTALL_BIN_DIR}" COMPONENT bin
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}" COMPONENT lib
@@ -164,3 +168,8 @@ install(
 )
 endif ()
 
+
+if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
+    add_executable(gb28181_exe main.cpp)
+    target_link_libraries(gb28181_exe PUBLIC ${PROJECT_NAME})
+endif ()

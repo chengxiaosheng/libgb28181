@@ -23,12 +23,6 @@ using namespace gb28181;
 static std::unordered_map<void *, std::shared_ptr<InviteRequestImpl>> invite_request_map_;
 static std::shared_mutex invite_request_map_mutex_;
 
-// 针对会话内uac请求的管理, 生命周期应该等同 sip_uac_transaction
-static std::unordered_map<
-    void *, std::shared_ptr<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>>>
-    info_request_map_;
-static std::mutex info_request_map_mutex_;
-
 std::shared_ptr<InviteRequest> InviteRequest::new_invite_request(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp,
     const std::string &device_id) {
@@ -76,48 +70,25 @@ void InviteRequestImpl::to_teardown(const std::string &reason) {
         return to_bye("teardown");
     }
     std::stringstream ss;
-    ss << "TEARDOWN RTSP/1.0" << "\r\n";
+    ss << "TEARDOWN RTSP/1.0"
+       << "\r\n";
     ss << "CSeq:" << platform->get_new_sn() << "\r\n";
 
     // teardown 消息应该不需要关注返回值
     std::shared_ptr<sip_uac_transaction_t> transaction(
-        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, on_bye_reply, this),
+        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, nullptr, nullptr),
         [](sip_uac_transaction_t *t) {
             if (t)
                 sip_uac_transaction_release(t);
         });
     set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
-    platform->uac_send(transaction, ss.str(), [](bool, const std::string &) {});
+    platform->uac_send3(transaction, ss.str(), [](bool, const std::string &) {},[](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+        return 0;
+    });
     // 发送 teardown 后立即发送 bye 防止对方不支持teardown
     return to_bye(reason);
 }
 
-// 专门接收会话内请求消息回复
-static int info_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
-    if (SIP_IS_SIP_INFO(code))
-        return 0;
-
-    std::shared_ptr<sip_message_t> reply_msg(const_cast<sip_message_t *>(reply), [](sip_message_t *p) {
-        if (p)
-            sip_message_destroy(p);
-    });
-
-    std::shared_ptr<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>> rcb_ptr;
-    {
-        std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
-        if (auto it = info_request_map_.find(param); it != info_request_map_.end()) {
-            rcb_ptr = it->second;
-            info_request_map_.erase(it);
-        }
-    }
-    if (rcb_ptr) {
-        if (SIP_IS_SIP_SUCCESS(code))
-            (*rcb_ptr)(true, "", reply_msg);
-        else
-            (*rcb_ptr)(false, "reply " + std::to_string(code), reply_msg);
-    }
-    return 0;
-}
 void InviteRequestImpl::to_play(const BackPlayControlResponseCallback &rcb) {
     to_seek_scale({}, {}, std::forward<decltype(rcb)>(rcb));
 }
@@ -135,36 +106,27 @@ void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &r
         return rcb(false, "illegal operation! this operation is not supported by the session.");
     }
     std::stringstream ss;
-    ss << "PAUSE RTSP/1.0" << "\r\n";
+    ss << "PAUSE RTSP/1.0"
+       << "\r\n";
     ss << "CSeq: " << platform->get_new_sn() << "\r\n";
-    ss << "PauseTime: now" << "\r\n";
+    ss << "PauseTime: now"
+       << "\r\n";
 
-    auto rcb_ptr = std::make_shared<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>>(
-        [rcb, weak_this = weak_from_this()](bool ret, const std::string &err, const std::shared_ptr<sip_message_t> &) {
-            if (!ret) {
-                return rcb(false, err);
-            }
-            rcb(ret, err);
-        });
     std::shared_ptr<sip_uac_transaction_t> transaction(
-        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, info_reply, rcb_ptr.get()),
+        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, nullptr, nullptr),
         [](sip_uac_transaction_t *t) {
             if (t)
                 sip_uac_transaction_release(t);
         });
-    {
-        std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
-        info_request_map_.emplace(rcb_ptr.get(), rcb_ptr);
-    }
+
     set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
 
     // 发送消息
-    platform->uac_send(transaction, ss.str(), [rcb_ptr](bool ret, std::string err) {
-        if (!ret) {
-            std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
-            info_request_map_.erase(rcb_ptr.get());
-            (*rcb_ptr)(ret, std::move(err), {});
+    platform->uac_send3(transaction, ss.str(), rcb, [rcb](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+        if (!SIP_IS_SIP_INFO(code)) {
+            rcb(SIP_IS_SIP_SUCCESS(code), "reply code = " + std::to_string(code));
         }
+        return 0;
     });
 }
 
@@ -182,114 +144,128 @@ void InviteRequestImpl::to_seek_scale(
         return rcb(false, "illegal operation! this operation is not supported by the session.", {});
     }
     std::stringstream ss;
-    ss << "PLAY RTSP/1.0" << "\r\n";
+    ss << "PLAY RTSP/1.0"
+       << "\r\n";
     ss << "CSeq: " << platform->get_new_sn() << "\r\n";
     if (ntp) {
-        ss << "Range: ntp=" << ntp.value() << "-" << "\r\n";
+        ss << "Range: ntp=" << ntp.value() << "-"
+           << "\r\n";
     } else {
-        ss << "Range: ntp=now-" << "\r\n";
+        ss << "Range: ntp=now-"
+           << "\r\n";
     }
     if (scale) {
         ss << "Scale: " << scale.value() << "\r\n";
     }
-    auto rcb_ptr = std::make_shared<std::function<void(bool, std::string, std::shared_ptr<sip_message_t>)>>(
-        [rcb,
-         weak_this = weak_from_this()](bool ret, const std::string &err, const std::shared_ptr<sip_message_t> &reply) {
-            if (!ret) {
-                return rcb(false, err, {});
-            }
-            if (!reply) {
-                // 其实一定不会走到这里， reply = nullptr 时ret一定是false, 这里图个安心
-                return rcb(false, "request timeout", {});
-            }
-            PlaybackControlResponse response;
-            try {
-                std::istringstream iss(std::string(static_cast<const char *>(reply->payload), reply->size));
-                std::string line;
-                if (!std::getline(iss, line)) {
-                    return rcb(false, "bad response!", {});
-                }
-                if (!line.empty() && line.back() == '\r') {
-                    line.pop_back();
-                }
 
-                std::regex status_regex(R"(RTSP/(\d\.\d)\s(\d{3})\s(.+?)\r?)");
-                std::smatch matches;
-
-                if (std::regex_match(line, matches, status_regex)) {
-                    tinyxml2::XMLUtil::ToInt(matches[2].str().c_str(), &response.rtsp_code);
-                    response.rtsp_code = std::stoi(matches[2]);
-                    response.reason = matches[3].str();
-                } else {
-                    return rcb(false, "Invalid status line format!", {});
-                }
-                while (std::getline(iss, line)) {
-                    if (!line.empty() && line.back() == '\r') {
-                        line.pop_back();
-                    }
-                    auto pos = line.find(':');
-                    if (pos == std::string::npos) {
-                        continue;
-                    }
-                    std::string_view key(line.data(), pos);
-                    std::string_view value(line.data() + pos + 1, line.size() - pos - 1);
-                    while (!value.empty() && std::isspace(value[0])) {
-                        value = value.substr(1, value.size() - 1);
-                    }
-                    if (key == "Range") {
-                        std::regex npt_regex(R"(npt=([\d\.]+|now)-?([\d\.]*)");
-                        std::smatch match;
-                        std::string value_str(value);
-                        if (std::regex_search(value_str, match, npt_regex)) {
-                            if (match[1] != "now") {
-                                tinyxml2::XMLUtil::ToDouble(match[1].str().c_str(), &response.ntp);
-                            }
-                        }
-                    } else if (key == "RTP-Info") {
-                        std::string value_str(value);
-                        std::istringstream stream1(value_str);
-                        std::string pair;
-                        std::unordered_map<std::string, std::string> params;
-                        while (std::getline(stream1, pair, ';')) {
-                            size_t eq_pos = pair.find('=');
-                            if (eq_pos != std::string::npos) {
-                                params[pair.substr(0, eq_pos)] = pair.substr(eq_pos + 1);
-                            }
-                        }
-                        if (auto it = params.find("seq"); it != params.end()) {
-                            tinyxml2::XMLUtil::ToUnsigned(it->second.c_str(), &response.seq);
-                        }
-                        if (auto it = params.find("rtptime"); it != params.end()) {
-                            tinyxml2::XMLUtil::ToUnsigned(it->second.c_str(), &response.rtptime);
-                        }
-                    }
-                }
-            } catch (const std::exception &e) {
-                ErrorL << "parse invite info response failed, " << e.what()
-                       << ", content = " << std::string_view(static_cast<const char *>(reply->payload), reply->size);
-            }
-            rcb(ret, err, response);
-        });
     std::shared_ptr<sip_uac_transaction_t> transaction(
-        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, info_reply, rcb_ptr.get()),
+        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, nullptr, nullptr),
         [](sip_uac_transaction_t *t) {
             if (t)
                 sip_uac_transaction_release(t);
         });
-    {
-        std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
-        info_request_map_.emplace(rcb_ptr.get(), rcb_ptr);
-    }
+
+    auto callback = [rcb, weak_this = weak_from_this()](
+                        bool ret, const std::string &err, const std::shared_ptr<sip_message_t> &reply) {
+        if (!ret) {
+            return rcb(false, err, {});
+        }
+        if (!reply) {
+            // 其实一定不会走到这里， reply = nullptr 时ret一定是false, 这里图个安心
+            return rcb(false, "request timeout", {});
+        }
+        PlaybackControlResponse response;
+        try {
+            std::istringstream iss(std::string(static_cast<const char *>(reply->payload), reply->size));
+            std::string line;
+            if (!std::getline(iss, line)) {
+                return rcb(false, "bad response!", {});
+            }
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
+            }
+
+            std::regex status_regex(R"(RTSP/(\d\.\d)\s(\d{3})\s(.+?)\r?)");
+            std::smatch matches;
+
+            if (std::regex_match(line, matches, status_regex)) {
+                tinyxml2::XMLUtil::ToInt(matches[2].str().c_str(), &response.rtsp_code);
+                response.rtsp_code = std::stoi(matches[2]);
+                response.reason = matches[3].str();
+            } else {
+                return rcb(false, "Invalid status line format!", {});
+            }
+            while (std::getline(iss, line)) {
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
+                }
+                auto pos = line.find(':');
+                if (pos == std::string::npos) {
+                    continue;
+                }
+                std::string_view key(line.data(), pos);
+                std::string_view value(line.data() + pos + 1, line.size() - pos - 1);
+                while (!value.empty() && std::isspace(value[0])) {
+                    value = value.substr(1, value.size() - 1);
+                }
+                if (key == "Range") {
+                    std::regex npt_regex(R"(npt=([\d\.]+|now)-?([\d\.]*)");
+                    std::smatch match;
+                    std::string value_str(value);
+                    if (std::regex_search(value_str, match, npt_regex)) {
+                        if (match[1] != "now") {
+                            tinyxml2::XMLUtil::ToDouble(match[1].str().c_str(), &response.ntp);
+                        }
+                    }
+                } else if (key == "RTP-Info") {
+                    std::string value_str(value);
+                    std::istringstream stream1(value_str);
+                    std::string pair;
+                    std::unordered_map<std::string, std::string> params;
+                    while (std::getline(stream1, pair, ';')) {
+                        size_t eq_pos = pair.find('=');
+                        if (eq_pos != std::string::npos) {
+                            params[pair.substr(0, eq_pos)] = pair.substr(eq_pos + 1);
+                        }
+                    }
+                    if (auto it = params.find("seq"); it != params.end()) {
+                        tinyxml2::XMLUtil::ToUnsigned(it->second.c_str(), &response.seq);
+                    }
+                    if (auto it = params.find("rtptime"); it != params.end()) {
+                        tinyxml2::XMLUtil::ToUnsigned(it->second.c_str(), &response.rtptime);
+                    }
+                }
+            }
+        } catch (const std::exception &e) {
+            ErrorL << "parse invite info response failed, " << e.what()
+                   << ", content = " << std::string_view(static_cast<const char *>(reply->payload), reply->size);
+        }
+        rcb(ret, err, response);
+    };
+
     set_message_content_type(transaction.get(), SipContentType::SipContentType_MANSRTSP);
 
     // 发送消息
-    platform->uac_send(transaction, ss.str(), [rcb_ptr](bool ret, std::string err) {
-        if (!ret) {
-            std::lock_guard<decltype(info_request_map_mutex_)> lock(info_request_map_mutex_);
-            info_request_map_.erase(rcb_ptr.get());
-            (*rcb_ptr)(ret, std::move(err), {});
-        }
-    });
+    platform->uac_send3(
+        transaction, ss.str(),
+        [callback](bool ret, const std::string& err) {
+            callback(ret, err, {});
+        },
+        [callback](
+            const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply,
+            const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+            if (SIP_IS_SIP_INFO(code)) {
+                return 0;
+            }
+            if (code == 408) {
+               callback(false, "timeout", nullptr);
+            } else if (SIP_IS_SIP_SUCCESS(code)) {
+               callback(true, "", reply);
+            } else {
+                callback(false, "reply code = " + std::to_string(code), reply);
+            }
+            return 0;
+        });
 }
 
 std::shared_ptr<toolkit::Session> InviteRequestImpl::get_connection_session() {
@@ -402,7 +378,9 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
                 if (t)
                     sip_uac_transaction_release(t);
             });
-        platform->uac_send(transaction, "", [](bool, const std::string &) {});
+        platform->uac_send3(transaction, "", [](bool, const std::string &) {}, [](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+            return 0;
+        });
         set_status(INVITE_STATUS_TYPE::cancel, reason);
     } else if (invite_dialog_) {
         std::shared_ptr<sip_uac_transaction_t> transaction(
@@ -410,7 +388,9 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
                 if (t)
                     sip_uac_transaction_release(t);
             });
-        platform->uac_send(transaction, "", [](bool, const std::string &) {});
+        platform->uac_send3(transaction, "", [](bool, const std::string &) {}, [](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+            return 0;
+        });
         set_status(INVITE_STATUS_TYPE::bye, reason);
     } else {
         // 不太可能全部没有
@@ -480,7 +460,7 @@ void InviteRequestImpl::to_invite_request(
     }
     rcb_ = std::move(rcb);
     add_invite();
-    platform->uas_send2(
+    platform->uac_send2(
         uac_invite_transaction_, sdp_str.c_str(),
         [this_ptr = shared_from_this()](bool ret, const std::string &err, const std::shared_ptr<SipSession> &session) {
             if (!ret && this_ptr->rcb_) {

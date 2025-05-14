@@ -1,7 +1,7 @@
 [submodule "media-server"]
 	path = 3rdpart/media-server
-	url = https://gitee.com/cxs1992/media-server_1.git
-	branch = kc_dev
+	url = https://gitee.com/ireader/media-server.git
+	branch = master
 
 [submodule "ireader-sdk"]
 	path = 3rdpart/ireader-sdk

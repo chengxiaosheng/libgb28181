@@ -1,11 +1,12 @@
 #ifndef gb28181_src_PLATFORM_HELPER_H
 #define gb28181_src_PLATFORM_HELPER_H
 #include <atomic>
-#include <functional>
-#include <gb28181/type_define.h>
 #include <mutex>
 #include <shared_mutex>
+#include <functional>
+#include <gb28181/type_define.h>
 #include <Network/sockutil.h>
+
 
 namespace gb28181 {
 class SdpDescription;
@@ -39,6 +40,9 @@ class SipServer;
 class SipSession;
 class PlatformHelper : public std::enable_shared_from_this<PlatformHelper> {
 public:
+    // 发送sip请求的结果回调
+    using SipReplyCallback = std::function<int(const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code)>;
+
     virtual ~PlatformHelper();
     virtual platform_account &sip_account()  = 0;
     virtual TransportType get_transport() const = 0;
@@ -66,7 +70,7 @@ public:
     * @remark 当本地作为下级，发起注册的时候，对方返回了 301/302， 那么应该使用临时地址访问
     * 当本地作为上级，对方发来消息的地址与当前不一致（一般出现在移动设备上），也应该更新平台地址
     */
-    void on_platform_addr_changed(const struct sockaddr_storage& addr);
+    void on_platform_addr_changed(struct sockaddr_storage& addr);
 
     void add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy);
     void remove_request_proxy(int32_t sn);
@@ -83,7 +87,12 @@ public:
 
     void uac_send(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string)> &rcb, bool force_tcp = false);
 
-    void uas_send2(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp = false);
+    void uac_send2(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string, const std::shared_ptr<SipSession> &)> &rcb, bool force_tcp = false);
+
+    /**
+    * @brief 发送
+    */
+    void uac_send3(const std::shared_ptr<sip_uac_transaction_t>& transaction, std::string&& payload, const std::function<void(bool,std::string)> &ecb, SipReplyCallback rcb, bool force_tcp = false);
 
     void set_tcp_session(const std::shared_ptr<SipSession> &session);
 
@@ -99,7 +108,6 @@ protected:
     std::shared_ptr<SipSession> tcp_session_;
     // local_server
     std::weak_ptr<SipServer> local_server_weak_;
-    std::atomic_int32_t platform_sn_ { 1 };
     // 发送消息时 本地uri
     std::string from_uri_;
     // 发送消息时 目标uri
@@ -115,6 +123,7 @@ protected:
     struct sockaddr_storage remote_addr_{};
     std::mutex status_cbs_mtx_;
     std::unordered_map<void*, std::function<void(PlatformStatusType)>> status_cbs_; // 平台在线状态回到
+    std::atomic_int32_t platform_sn_ { 1 };
 };
 } // namespace gb28181
 

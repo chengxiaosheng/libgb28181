@@ -53,14 +53,6 @@ void InviteRequestImpl::remove_invite() {
     invite_request_map_.erase(this);
 }
 
-// 不关注结果的请求使用
-static int on_bye_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
-    if (reply) {
-        sip_message_destroy(const_cast<sip_message_t *>(reply));
-    }
-    return 0;
-}
-
 void InviteRequestImpl::to_teardown(const std::string &reason) {
     auto platform = platform_helper_.lock();
     if (!platform) {
@@ -286,6 +278,10 @@ void InviteRequestImpl::set_status(INVITE_STATUS_TYPE status, const std::string 
 int InviteRequestImpl::on_invite_reply(
     void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, struct sip_dialog_t *dialog,
     int code, void **session) {
+
+    // 确保回复一定会被释放
+    std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
+
     if (param == nullptr)
         return 0;
     auto this_ptr = get_invite(param);
@@ -311,10 +307,7 @@ int InviteRequestImpl::on_invite_reply(
         // 添加dialog 的引用
         sip_dialog_addref(dialog);
         // 智能指针管理dialog
-        this_ptr->invite_dialog_.reset(dialog, [](sip_dialog_t *dialog) {
-            if (dialog)
-                sip_dialog_release(dialog);
-        });
+        this_ptr->invite_dialog_.reset(dialog, sip_dialog_release);
     }
 
     // 回复ok
@@ -374,20 +367,14 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
     // 当 uac_invite_transaction_ 事务不为空时, 说明事务应该还没有建立
     if (uac_invite_transaction_) {
         std::shared_ptr<sip_uac_transaction_t> transaction(
-            sip_uac_cancel(sip_agent, uac_invite_transaction_.get(), on_bye_reply, this), [](sip_uac_transaction_t *t) {
-                if (t)
-                    sip_uac_transaction_release(t);
-            });
+            sip_uac_cancel(sip_agent, uac_invite_transaction_.get(), nullptr, nullptr), sip_uac_transaction_release);
         platform->uac_send3(transaction, "", [](bool, const std::string &) {}, [](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
             return 0;
         });
         set_status(INVITE_STATUS_TYPE::cancel, reason);
     } else if (invite_dialog_) {
         std::shared_ptr<sip_uac_transaction_t> transaction(
-            sip_uac_bye(sip_agent, invite_dialog_.get(), on_bye_reply, this), [](sip_uac_transaction_t *t) {
-                if (t)
-                    sip_uac_transaction_release(t);
-            });
+            sip_uac_bye(sip_agent, invite_dialog_.get(), nullptr, nullptr), sip_uac_transaction_release);
         platform->uac_send3(transaction, "", [](bool, const std::string &) {}, [](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
             return 0;
         });

@@ -69,7 +69,6 @@ protected:
     std::shared_ptr<PlatformHelper> platform_;
     std::shared_ptr<MessageBase> request_;
     std::shared_ptr<SipSession> send_session_;
-    std::shared_ptr<sip_uac_transaction_t> uac_transaction_;
     std::string error_;
     int reply_code_ { 0 };
     int request_sn_ { 0 };
@@ -85,7 +84,6 @@ private:
     int on_response(
         MessageBase &&message, std::shared_ptr<sip_uas_transaction_t> transaction,
         std::shared_ptr<sip_message_t> request);
-    static int on_recv_reply(void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code);
     friend class PlatformHelper;
 };
 std::ostream &operator<<(std::ostream &os, const RequestProxyImpl &proxy);

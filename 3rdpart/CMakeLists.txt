@@ -53,8 +53,8 @@ target_include_directories(ireader_sip
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ireader-sdk/libhttp/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src>
         $<INSTALL_INTERFACE:include>
-
         PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src>

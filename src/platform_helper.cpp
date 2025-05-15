@@ -18,6 +18,7 @@
 
 #include <Network/sockutil.h>
 #include <algorithm>
+#include <uac/sip-uac-transaction.h>
 
 using namespace toolkit;
 
@@ -316,7 +317,9 @@ void PlatformHelper::uac_send3(
         auto context = new uac_context();
         context->rcb = rcb;
         context->session = session;
-        sip_uac_transaction_set_onreply(transaction.get(), adapter, context);
+        transaction->onreply = adapter;
+        transaction->param = context;
+
 
         // todo: 采用自定义状态码， 来明确处理错误信息
         int ret = sip_uac_send(

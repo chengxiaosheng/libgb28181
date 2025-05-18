@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chengxiaosheng/libgb28181)
+
 ## 一个简单的GB/T 28181协议库
 完整实现GB/T 28181-2022 交互协议
 + 支持级联交互

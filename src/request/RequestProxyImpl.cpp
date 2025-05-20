@@ -210,22 +210,17 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
         status_ = Failed;
         return on_completed();
     }
-    platform_->add_request_proxy(request_sn_, shared_from_this());
+    auto this_ptr = shared_from_this();
+    platform_->add_request_proxy(request_sn_, this_ptr);
     send_time_ = toolkit::getCurrentMicrosecond(true);
 
-    auto weak_this = weak_from_this();
-    platform_->uac_send3(uac_transaction, request_->str(), [weak_this](bool ret, std::string err) {
-        if (auto this_ptr = weak_this.lock()) {
-            if (!ret) {
-                this_ptr->status_ = Failed;
-                this_ptr->error_ = std::move(err);
-                return this_ptr->on_completed();
-            }
-        }
-    },[weak_this](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
-        if (auto this_ptr = weak_this.lock()) {
-            this_ptr->on_reply(reply, code);
-        }
+    // 此处直接捕获当前请求代理的智能指针，避免当前代理提前被释放
+    platform_->uac_send3(uac_transaction, request_->str(), [this_ptr](bool ret, std::string err) {
+        this_ptr->status_ = Failed;
+        this_ptr->error_ = std::move(err);
+        return this_ptr->on_completed();
+    },[this_ptr](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
+        this_ptr->on_reply(reply, code);
         return 0;
     });
 }

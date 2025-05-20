@@ -47,7 +47,8 @@ void RequestListImpl::on_reply_l() {
             10,
             [weak_this]() {
                 if (auto this_ptr = weak_this.lock()) {
-                    if (this_ptr->ticker_.elapsedTime() > 1000) {
+                    // 这里调大一点, 遇到数据发得比较慢的
+                    if (this_ptr->ticker_.elapsedTime() > 5000) {
                         this_ptr->status_ = Timeout;
                         this_ptr->error_ = "the wait for a response has timed out";
                         this_ptr->on_completed();

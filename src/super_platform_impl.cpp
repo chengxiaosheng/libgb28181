@@ -597,6 +597,9 @@ struct MultiResponseQueryHandler<Request, Response, EventType, RET(Args...)> {
                     flag->exchange(true);
                 }
             };
+            if (concurrency == 0) {
+                return do_send_response(do_send_response);
+            }
             for (auto i = 0; i < concurrency; ++i) {
                 do_send_response(do_send_response);
             }

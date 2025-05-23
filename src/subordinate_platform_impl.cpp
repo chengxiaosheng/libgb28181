@@ -156,19 +156,15 @@ std::shared_ptr<LocalServer> SubordinatePlatformImpl::get_local_server() const {
 
 void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string error) {
     // 当为伪装在线时， 下次状态变更不论是否在线都需要广播
-    if (status == account_.plat_status.status && !camouflage_online_)
-        return;
-    if (camouflage_online_) {
-        camouflage_online_ = false;
-    }
+
+    bool status_changed = status != account_.plat_status.status;
     account_.plat_status.status = status;
     account_.plat_status.error = std::move(error);
+    camouflage_online_ = false;
     if (status == PlatformStatusType::online) {
-        account_.plat_status.register_time = toolkit::getCurrentMicrosecond(true);
-    } else {
-        keepalive_timer_.reset();
-    }
-    keepalive_timer_ = std::make_shared<toolkit::Timer>(
+        account_.plat_status.register_time = getCurrentMicrosecond(true);
+        // 设置心跳定时器
+        keepalive_timer_ = std::make_shared<toolkit::Timer>(
         5,
         [weak_this = weak_from_this()]() {
             if (auto this_ptr = weak_this.lock()) {
@@ -183,9 +179,15 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
             return false;
         },
         nullptr);
+    } else {
+        // 离线取消心跳定时器
+        account_.plat_status.offline_time = getCurrentMicrosecond(false);
+        keepalive_timer_.reset();
+    }
+
     // 异步广播平台在线状态
     EventPollerPool::Instance().getPoller()->async(
-        [this_ptr = shared_from_this(), status, error]() {
+        [this_ptr = shared_from_this(), status, error, status_changed]() {
             {
                 std::lock_guard<decltype(status_cbs_mtx_)> lck(this_ptr->status_cbs_mtx_);
                 for (auto &it : this_ptr->status_cbs_) {
@@ -194,7 +196,7 @@ void SubordinatePlatformImpl::set_status(PlatformStatusType status, std::string 
             }
             NOTICE_EMIT(
                 kEventSubordinatePlatformStatusArgs, Broadcast::kEventSubordinatePlatformStatus,
-                std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), status, error);
+                std::dynamic_pointer_cast<SubordinatePlatform>(this_ptr), status, error, status_changed);
         },
         false);
 }

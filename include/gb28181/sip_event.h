@@ -33,7 +33,7 @@ constexpr const char kEventSubKeepalive[] = "kEventSubKeepalive";
 
 // 下级平台在线状态变更
 constexpr const char kEventSubordinatePlatformStatus[] = "kEventSubordinatePlatformStatus";
-#define kEventSubordinatePlatformStatusArgs const std::shared_ptr<SubordinatePlatform> & platform , const PlatformStatusType& status, const std::string& message
+#define kEventSubordinatePlatformStatusArgs const std::shared_ptr<SubordinatePlatform> & platform , const PlatformStatusType& status, const std::string& message, const bool& changed
 
 // 上级平台在线状态变更
 constexpr const char kEventSuperPlatformStatus[] = "kEventSuperPlatformStatus";

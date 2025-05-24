@@ -11,8 +11,8 @@ libgb28181是一个完整的GB/T 28181-2022国标协议栈实现，支持视频�
 
 + 消息支持
 - [x] 支持基于GB/T 28181-2022的全部消息
-- [x] [subordinate_platform](include/subordinate_platform.h) 提供了简单的消息查询与发送, 也可以基于 [request_proxy](include/request/request_proxy.h) 自行组装并发送消息
-- [x] 本地作为下级时通过 [request_proxy](include/request/request_proxy.h) 发送消息, 通过订阅 [sip_event](include/sip_event.h) 中的事件监听来自上级的请求
+- [x] [subordinate_platform](include/gb28181/subordinate_platform.h) 提供了简单的消息查询与发送, 也可以基于 [request_proxy](include/gb28181/request/request_proxy.h) 自行组装并发送消息
+- [x] 本地作为下级时通过 [request_proxy](include/gb28181/request/request_proxy.h) 发送消息, 通过订阅 [sip_event](include/gb28181/sip_event.h) 中的事件监听来自上级的请求
 - [x] 订阅采用的通用实现
 
 

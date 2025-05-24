@@ -59,7 +59,6 @@ std::ostream &gb28181::operator<<(std::ostream &os, const std::shared_ptr<Reques
     }
     return os;
 }
-
 std::shared_ptr<RequestProxy> newRequestProxy_(
     const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<MessageBase> &request, int sn = 0) {
     RequestProxy::RequestType type { RequestProxy::RequestType::OneResponse };
@@ -95,11 +94,14 @@ std::shared_ptr<RequestProxy> newRequestProxy_(
                 }
             }
         }
-    } else if (root == MessageRootType::Notify && command != MessageCmdType::Alarm) {
-        type = RequestProxy::NoResponse;
-    } else if (root == MessageRootType::Notify || root == MessageRootType::Response) {
+    } else if (root == MessageRootType::Notify) {
+        if (command != MessageCmdType::Alarm)
+            type = RequestProxy::NoResponse;
+    } else if (root == MessageRootType::Response) {
         type = RequestProxy::NoResponse;
     } else {
+        request->parse_to_xml();
+        WarnL << "ignore unknown request type, " << request->str();
         return nullptr;
     }
     if (type == RequestProxy::MultipleResponses) {

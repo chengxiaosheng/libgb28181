@@ -73,10 +73,10 @@ public:
     bool load_from_xml();
     /**
      * 转换为xml文档
-     * @param coercion 是否强制转换
+     * @param force 是否强制转换 强制
      * @return
      */
-    bool parse_to_xml(bool coercion = false);
+    bool parse_to_xml(bool force = false);
     std::string str() const;
 
     std::string get_error() const { return error_message_; }

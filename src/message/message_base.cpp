@@ -50,8 +50,8 @@ bool MessageBase::load_from_xml() {
     return is_valid_;
 }
 
-bool MessageBase::parse_to_xml(bool coercion) {
-    if (coercion)
+bool MessageBase::parse_to_xml(bool force) {
+    if (force)
         xml_ptr_.reset();
     if (xml_ptr_)
         return true;

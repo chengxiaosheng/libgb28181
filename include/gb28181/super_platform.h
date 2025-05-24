@@ -18,10 +18,6 @@ public:
     using DeviceStatusQueryCallback = std::function<void(std::shared_ptr<SuperPlatform>, std::shared_ptr<DeviceStatusMessageRequest>, std::function<void(std::shared_ptr<DeviceStatusMessageResponse>)>)>;
     using DeviceInfoQueryCallback = std::function<void(std::shared_ptr<SuperPlatform>, std::shared_ptr<DeviceInfoMessageRequest>, std::function<void(std::shared_ptr<DeviceInfoMessageResponse>)>)>;
 
-    struct event_defined {
-        DeviceStatusQueryCallback on_device_status_query;
-        DeviceInfoQueryCallback on_device_info_query;
-    };
     virtual ~SuperPlatform() = default;
     virtual void shutdown() = 0;
     virtual void start() = 0;

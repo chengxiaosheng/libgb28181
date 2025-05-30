@@ -92,10 +92,10 @@ bool RecordInfoResponseMessage::load_detail() {
     auto root = xml_ptr_->RootElement();
     from_xml_element(name_, root, "Name");
     from_xml_element(sum_num_, root, "SumNum"); // 由于海康部分设备在预置点查询中未写入 SumNum， 安全起见此处也不验证
-    if (auto list_ele = root->FirstChildElement("RecordList"); list_ele && !list_ele->NoChildren()) {
+    if (auto list_ele = root->FirstChildElement("RecordList"); list_ele) {
         auto item_ele = list_ele->FirstChildElement("Item");
         while (item_ele) {
-            if (!item_ele->NoChildren()) {
+            if (item_ele->NoChildren()) {
                 item_ele = item_ele->NextSiblingElement("Item");
                 continue;
             }

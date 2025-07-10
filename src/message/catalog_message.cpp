@@ -1,5 +1,5 @@
 #include "gb28181/message/catalog_message.h"
-
+#include <Util/util.h>
 #include <functional>
 #include <gb28181/type_define_ext.h>
 
@@ -111,7 +111,7 @@ bool CatalogResponseMessage::load_detail() {
             ItemTypeInfo item_val;
             auto item_ele = item->FirstChildElement();
             while (item_ele) {
-                if (item_ele->Name() == "Info") {
+                if (strcasecmp(item_ele->Name(), "Info") == 0) {
                     ItemTypeInfoDetail detail;
                     auto detail_ele = item_ele->FirstChildElement();
                     while (detail_ele) {

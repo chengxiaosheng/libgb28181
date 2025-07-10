@@ -286,8 +286,12 @@ int SuperPlatformImpl::on_register_reply(
             platform_ptr->moved_uri_ = "";
             platform_ptr->temp_host_ = "";
             platform_ptr->temp_port_ = 0;
+            // 如果存在重定向信息， 则立即向原发起注册
+            platform_ptr->start_l();
+        } else {
+            // 延迟注册
+            delay_register(expires, "");
         }
-        platform_ptr->start_l();
     }
     return 0;
 }

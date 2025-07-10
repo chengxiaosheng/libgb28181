@@ -71,4 +71,4 @@ endif ()
 # 基于GB/T 28181-2016 附录J 信令消息示范 J.1 注册信令消息示范 中描述 "J.1.1 Registersip:SIP服务器编码@目的域名或IP地址端口SIP/2.0" 注册头包含 SIP服务器编码
 target_compile_definitions(ireader_sip PUBLIC -DSIP_REGISTER_WITH_USERINFO)
 # 控制请求报文最大长度， 需要 补丁 patchs/define_UDP_PACKET_SIZE.patch
-target_compile_definitions(sip PUBLIC -DUDP_PACKET_SIZE=8192)
+target_compile_definitions(ireader_sip PUBLIC -DUDP_PACKET_SIZE=8192)

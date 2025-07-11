@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 option(BUILD_SHARED_LIBS "Build gb28181 as a shared lib" OFF)
 option(ENABLE_MSVC_MT "Enable MSVC Mt/Mtd lib" ON)
 option(STRIP_SYMBOL "strip symbol on release build" ON)
+option(FORCE_USER_AGENT "Force user agent" OFF)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -76,7 +77,9 @@ target_include_directories(${PROJECT_NAME}
 )
 add_subdirectory(3rdpart)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_interface)
-
+if(FORCE_USER_AGENT)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE -DFORCE_USER_AGENT)
+endif ()
 find_package(Iconv REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Iconv::Iconv)
 

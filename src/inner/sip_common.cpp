@@ -1,3 +1,5 @@
+#include "uac/sip-uac-transaction.h"
+#include "uas/sip-uas-transaction.h"
 #ifdef WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -22,11 +24,20 @@
 #include <Network/sockutil.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
+#include <sip-header.h>
 
 namespace gb28181 {
+    static int32_t USER_AGENT_LEN = 10;
+    static cstring_t agent_str{SIP_AGENT_STR, strlen(SIP_AGENT_STR)};
 
 void set_message_agent(struct sip_uac_transaction_t *transaction) {
-    sip_uac_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);
+#if defined(FORCE_USER_AGENT)
+    sip_params_add_or_update(&transaction->req->headers,SIP_HEADER_USER_AGENT_K, USER_AGENT_LEN, &agent_str);
+#else
+    if (nullptr == sip_params_find(&transaction->req->headers, SIP_HEADER_USER_AGENT_K, 10)) {
+        sip_uac_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);
+    }
+#endif
 }
 void set_message_gbt_version(struct sip_uac_transaction_t *transaction, PlatformVersionType version) {
     switch (version) {
@@ -85,7 +96,13 @@ void set_invite_subject(struct sip_uac_transaction_t *transaction, const char *s
 }
 
 void set_message_agent(struct sip_uas_transaction_t *transaction) {
-    sip_uas_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);
+#if defined(FORCE_USER_AGENT)
+    sip_params_add_or_update(&transaction->reply->headers,SIP_HEADER_USER_AGENT_K, USER_AGENT_LEN, &agent_str);
+#else
+    if (nullptr == sip_params_find(&transaction->reply->headers, SIP_HEADER_USER_AGENT_K, 10)) {
+        sip_uas_add_header(transaction, SIP_HEADER_USER_AGENT_K, SIP_AGENT_STR);
+    }
+#endif
 }
 
 void set_message_gbt_version(struct sip_uas_transaction_t *transaction, PlatformVersionType version) {

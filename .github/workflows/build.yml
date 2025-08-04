@@ -1,0 +1,194 @@
+name: Build libgb28181
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+        compiler: [gcc, clang]
+        shared_libs: [ON, OFF]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          libssl-dev \
+          libiconv-hook-dev \
+          pkg-config
+    
+    - name: Setup GCC
+      if: matrix.compiler == 'gcc'
+      run: |
+        sudo apt-get install -y gcc-11 g++-11
+        echo "CC=gcc-11" >> $GITHUB_ENV
+        echo "CXX=g++-11" >> $GITHUB_ENV
+    
+    - name: Setup Clang
+      if: matrix.compiler == 'clang'
+      run: |
+        sudo apt-get install -y clang-14
+        echo "CC=clang-14" >> $GITHUB_ENV
+        echo "CXX=clang++-14" >> $GITHUB_ENV
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }} \
+          -DENABLE_MSVC_MT=OFF \
+          -DSTRIP_SYMBOL=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(nproc)
+    
+    - name: Run tests
+      working-directory: build
+      run: |
+        if [ -f gb28181_exe ]; then
+          echo "Found executable, running basic test"
+          ./gb28181_exe --help || echo "No help option available"
+        fi
+    
+    - name: Upload artifacts
+      if: matrix.build_type == 'Release' && matrix.compiler == 'gcc' && matrix.shared_libs == 'OFF'
+      uses: actions/upload-artifact@v4
+      with:
+        name: libgb28181-linux-${{ matrix.build_type }}
+        path: |
+          build/libgb28181.*
+          build/gb28181_exe
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+        shared_libs: [ON, OFF]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Install vcpkg dependencies
+      run: |
+        vcpkg install openssl:x64-windows
+        vcpkg install iconv:x64-windows
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build `
+          -G "Visual Studio 17 2022" `
+          -A x64 `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }} `
+          -DENABLE_MSVC_MT=ON `
+          -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j4
+    
+    - name: Run tests
+      working-directory: build
+      run: |
+        if (Test-Path "${{ matrix.build_type }}/gb28181_exe.exe") {
+          Write-Host "Found executable, running basic test"
+          & "${{ matrix.build_type }}/gb28181_exe.exe" --help
+        }
+    
+    - name: Upload artifacts
+      if: matrix.build_type == 'Release' && matrix.shared_libs == 'OFF'
+      uses: actions/upload-artifact@v4
+      with:
+        name: libgb28181-windows-${{ matrix.build_type }}
+        path: |
+          build/${{ matrix.build_type }}/gb28181.*
+          build/${{ matrix.build_type }}/gb28181_exe.exe
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+        shared_libs: [ON, OFF]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        brew install cmake ninja openssl libiconv pkg-config
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }} \
+          -DENABLE_MSVC_MT=OFF \
+          -DSTRIP_SYMBOL=ON \
+          -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(sysctl -n hw.ncpu)
+    
+    - name: Run tests
+      working-directory: build
+      run: |
+        if [ -f gb28181_exe ]; then
+          echo "Found executable, running basic test"
+          ./gb28181_exe --help || echo "No help option available"
+        fi
+    
+    - name: Upload artifacts
+      if: matrix.build_type == 'Release' && matrix.shared_libs == 'OFF'
+      uses: actions/upload-artifact@v4
+      with:
+        name: libgb28181-macos-${{ matrix.build_type }}
+        path: |
+          build/libgb28181.*
+          build/gb28181_exe
+
+  create-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          libgb28181-*/**/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

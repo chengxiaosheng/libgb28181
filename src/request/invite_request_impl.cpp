@@ -522,10 +522,10 @@ int InviteRequestImpl::on_recv_invite(
     invite_ptr->invite_session_ = sip_session;
     // 发送 临时回复
     sip_uas_reply(transaction.get(), 100, nullptr, 0, sip_session.get());
-    platform_ptr->on_invite(
-        invite_ptr,
-        [invite_ptr, sip_session, transaction, platform_ptr](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
-            // GB/T 28181-2022 x-route-path
+
+    // 并发下 sip-uas-transaction-invite.c:279 出现死锁， 初步怀疑是由于业务层跨线程处理invite消息引起的，此处添加线程安全模式
+    auto handle_reply = [invite_ptr, sip_session, transaction, platform_ptr](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
+        // GB/T 28181-2022 x-route-path
             if (invite_ptr->route_path_.empty()) {
                 invite_ptr->route_path_.emplace_back(platform_ptr->get_sip_server()->get_account().platform_id);
             }
@@ -563,6 +563,16 @@ int InviteRequestImpl::on_recv_invite(
             } else {
                 sip_uas_reply(transaction.get(), sip_code, nullptr, 0, sip_session.get());
                 invite_ptr->set_status(INVITE_STATUS_TYPE::failed, "rejected");
+            }
+    };
+
+    platform_ptr->on_invite(
+        invite_ptr,
+        [sip_session, handle_reply](int sip_code, const std::shared_ptr<SdpDescription>& sdp_ptr) {
+            if (!sip_session->getPoller()->isCurrentThread()) {
+                sip_session->getPoller()->async(std::bind(handle_reply, sip_code, sdp_ptr));
+            } else {
+                handle_reply(sip_code, sdp_ptr);
             }
         });
     return 0;

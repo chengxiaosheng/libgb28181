@@ -243,20 +243,26 @@ int SipSession::sip_send(void *transport, const void *data, size_t bytes) {
         WarnL << "SipSession::sip_send: transport is not SipSession";
         return sip_unknown_host;
     }
-    session_ptr->ticker_->resetTime(); // 重置保活
+
+    if (session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty() && session_ptr->_addr.ss_family != AF_INET && session_ptr->_addr.ss_family != AF_INET6) {
+        WarnL << "SipSession::sip_send: invalid address family";
+        return sip_unknown_host;
+    }
     auto buffer = toolkit::BufferRaw::create();
     buffer->assign((const char *)data, bytes);
-    TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
-
-    if(session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty()) {
-        if (session_ptr->_addr.ss_family != AF_INET && session_ptr->_addr.ss_family != AF_INET6) {
-            WarnL << "SipSession::sip_send: invalid address family";
-            return sip_unknown_host;
+    static auto sip_send_l = [](const std::shared_ptr<SipSession> &session_ptr,  Buffer::Ptr buffer) {
+        if (!session_ptr) return;
+        session_ptr->ticker_->resetTime(); // 重置保活
+        TraceL << "sip send :\n" << std::string_view(buffer->data(), buffer->size());
+        if(session_ptr->is_udp() && session_ptr->getSock()->get_peer_ip().empty()) {
+            session_ptr->getSock()->send(std::move(buffer), (sockaddr *)&session_ptr->_addr, SockUtil::get_sock_len((sockaddr *)&session_ptr->_addr));
+        } else {
+            session_ptr->send(std::move(buffer));
         }
-        session_ptr->getSock()->send(std::move(buffer), (sockaddr *)&session_ptr->_addr, SockUtil::get_sock_len((sockaddr *)&session_ptr->_addr));
-    } else {
-        session_ptr->send(std::move(buffer));
-    }
+    };
+    session_ptr->getPoller()->async([session_ptr, buffer = std::move(buffer)]() {
+        sip_send_l(session_ptr, std::move(buffer));
+    });
     return 0;
 }
 int SipSession::sip_send_reply(

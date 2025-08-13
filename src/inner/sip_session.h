@@ -2,6 +2,7 @@
 #define gb28181_src_inner_SIP_SESSION_H
 
 #include "Network/Session.h"
+#include "http-parser.h"
 #ifdef __cplusplus
 extern "C" {
 struct http_parser_t;
@@ -55,10 +56,19 @@ private:
     void handle_recv();
     bool make_peer_addr(struct sockaddr_storage &addr);
 
+    enum SIP_MESSAGE_TYPE {
+        SIP_MESSAGE_TYPE_RESPONSE = HTTP_PARSER_RESPONSE,
+        SIP_MESSAGE_TYPE_REQUEST = HTTP_PARSER_REQUEST,
+        SIP_MESSAGE_TYPE_NEED_MORE = 2,
+        HTTP_PARSER_NEED_NORE = 3
+    };
+    std::shared_ptr<toolkit::Buffer> get_sip_message_type(const std::shared_ptr<toolkit::Buffer> &buffer);
+
 private:
     bool _is_udp = false;
     bool _is_client = false;
-    int8_t _wait_type { 0 };
+    std::atomic_bool _handing_recv{false};
+    SIP_MESSAGE_TYPE _wait_type {SIP_MESSAGE_TYPE_NEED_MORE};
     toolkit::Ticker _ticker;
     struct sockaddr_storage _addr {};
     std::shared_ptr<http_parser_t> _sip_parse;
@@ -72,6 +82,7 @@ private:
     std::function<void(const toolkit::SockException &)> _on_error;
     std::shared_ptr<toolkit::Ticker> ticker_; // 计时器
     std::deque<toolkit::Buffer::Ptr> _recv_buffers;
+    std::shared_ptr<toolkit::Buffer> _message_buffer;
     std::recursive_mutex _recv_buffers_mutex;
 };
 

@@ -410,10 +410,7 @@ int SipServer::onsubscribe(
     std::shared_ptr<sip_subscribe_t> subscribe_ptr = nullptr;
     if (subscribe) {
         sip_subscribe_addref(subscribe);
-        subscribe_ptr.reset(subscribe, [](struct sip_subscribe_t *ptr) {
-            if (ptr)
-                sip_subscribe_release(ptr);
-        });
+        subscribe_ptr.reset(subscribe, sip_subscribe_release);
     }
     return SubscribeRequestImpl::recv_subscribe_request(session_ptr, req_ptr, trans_ref, subscribe_ptr, sub);
 }

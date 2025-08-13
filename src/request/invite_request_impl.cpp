@@ -524,7 +524,12 @@ int InviteRequestImpl::on_recv_invite(
     sip_uas_reply(transaction.get(), 100, nullptr, 0, sip_session.get());
 
     // 并发下 sip-uas-transaction-invite.c:279 出现死锁， 初步怀疑是由于业务层跨线程处理invite消息引起的，此处添加线程安全模式
-    auto handle_reply = [invite_ptr, sip_session, transaction, platform_ptr](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
+    auto invite_weak = std::weak_ptr<InviteRequestImpl>(invite_ptr);
+    auto handle_reply = [sip_session, transaction, platform_ptr, invite_weak](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
+            auto invite_ptr = invite_weak.lock();
+        if (!invite_ptr) {
+            return;
+        }
         // GB/T 28181-2022 x-route-path
             if (invite_ptr->route_path_.empty()) {
                 invite_ptr->route_path_.emplace_back(platform_ptr->get_sip_server()->get_account().platform_id);

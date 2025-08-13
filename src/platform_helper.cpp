@@ -287,21 +287,21 @@ void PlatformHelper::uac_send3(
     struct uac_context {
         SipReplyCallback rcb; // 结果回调函数
         std::shared_ptr<SipSession> session; // 加一层保险， 避免session 中途被释放
+        std::shared_ptr<sip_uac_transaction_t> transaction;
     };
     static auto adapter = [](void* param, const struct sip_message_t* reply, struct sip_uac_transaction_t* t, int code) -> int {
         auto context = reinterpret_cast<uac_context*>(param);
         if (!context) return -1;
         SipReplyCallback callback = context->rcb;
         std::shared_ptr<SipSession> session_ptr = context->session;
+        auto transaction = context->transaction;
 
         std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
-        sip_uac_transaction_addref(t);
-        std::shared_ptr<sip_uac_transaction_t> transaction_ptr(t, sip_uac_transaction_release);
 
         if (!SIP_IS_SIP_INFO(code)) {
             delete context;
         }
-        return callback ? callback(session_ptr, reply_ptr, transaction_ptr, code) : 0;
+        return callback ? callback(session_ptr, reply_ptr, transaction, code) : 0;
     };
     set_message_contact(transaction.get(), get_contact_uri().c_str());
     set_message_header(transaction.get());
@@ -317,6 +317,7 @@ void PlatformHelper::uac_send3(
         auto context = new uac_context();
         context->rcb = rcb;
         context->session = session;
+        context->transaction = transaction;
         transaction->onreply = adapter;
         transaction->param = context;
 

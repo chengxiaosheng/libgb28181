@@ -498,6 +498,8 @@ void SipSession::handle_recv() {
                     if (sip_agent_input(this_ptr->_sip_agent, sip_message, this_ptr.get()) != 0) {
                         ErrorP(this_ptr.get()) << "SIP agent input failed";
                     }
+                    // 必须在此处销毁输入的消息，否则 libsip内部自动回复将被泄露
+                    sip_message_destroy(sip_message);
                 } else {
                     // 销毁消息
                     sip_message_destroy(sip_message);

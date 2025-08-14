@@ -306,7 +306,7 @@ void SipServer::get_tcp_client(const std::string &host, uint16_t port,
 
 #define RefSipMessage(m)                                                                                               \
     std::shared_ptr<sip_message_t> req_ptr(                                                                            \
-        const_cast<sip_message_t *>(req), [](sip_message_t *req) { sip_message_destroy(req); });
+        const_cast<sip_message_t *>(req), [](sip_message_t *req) { /*sip_message_destroy(req);*/ });
 
 bool isPeerAddressBound(int sock) {
     struct sockaddr_storage addr;
@@ -366,14 +366,14 @@ int SipServer::onack(
 int SipServer::onprack(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, const void *data, int bytes) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
+    // sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onupdate(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
     struct sip_dialog_t *dialog, const void *data, int bytes) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
+    // sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
@@ -436,7 +436,7 @@ int SipServer::onnotify(
 }
 int SipServer::onpublish(
     void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const struct cstring_t *event) {
-    sip_message_destroy(const_cast<sip_message_t *>(req));
+    // sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
@@ -457,7 +457,7 @@ int SipServer::onmessage(
 }
 int SipServer::onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
     set_message_agent(t);
-    sip_message_destroy(const_cast<sip_message_t *>(req));
+    // sip_message_destroy(const_cast<sip_message_t *>(req));
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 

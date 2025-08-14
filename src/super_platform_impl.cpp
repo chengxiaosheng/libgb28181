@@ -132,7 +132,7 @@ struct RegisterContext {
 // ReSharper disable once CppDFAConstantFunctionResult
 int SuperPlatformImpl::on_register_reply(
     void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, int code) {
-    auto reply_ptr = std::shared_ptr<struct sip_message_t>(const_cast<struct sip_message_t *>(reply), sip_message_destroy);
+    auto reply_ptr = std::shared_ptr<struct sip_message_t>(const_cast<struct sip_message_t *>(reply), [](struct sip_message_t *p){} /*, sip_message_destroy*/);
 
     auto *context = reinterpret_cast<RegisterContext *>(param);
     if (!context)

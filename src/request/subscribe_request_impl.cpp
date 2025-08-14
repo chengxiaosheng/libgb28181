@@ -522,7 +522,7 @@ void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
 int SubscribeRequestImpl::on_subscribe_reply(
     void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, struct sip_subscribe_t *subscribe,
     int code, void **session) {
-    std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
+    std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), [](struct sip_message_t *p){} /*, sip_message_destroy*/);
     if (!param)
         return 0;
 

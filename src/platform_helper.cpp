@@ -296,7 +296,7 @@ void PlatformHelper::uac_send3(
         std::shared_ptr<SipSession> session_ptr = context->session;
         auto transaction = context->transaction;
 
-        std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
+        std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), [](sip_message_t * p){} /*, sip_message_destroy*/);
 
         if (!SIP_IS_SIP_INFO(code)) {
             delete context;

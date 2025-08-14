@@ -280,7 +280,7 @@ int InviteRequestImpl::on_invite_reply(
     int code, void **session) {
 
     // 确保回复一定会被释放
-    std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), sip_message_destroy);
+    std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), [](struct sip_message_t *p){} /*, sip_message_destroy*/);
 
     if (param == nullptr)
         return 0;

@@ -272,7 +272,7 @@ void SdpDescription::parseAttribute(const std::string &attr, MediaDescription *m
                 : (v == "passive")                 ? SetupType::PASSIVE
                                                    : SetupType::ACTPASS;
         } else if (k == "connection") {
-            media->tcpInfo.newConnection = k == "new";
+            media->tcpInfo.newConnection = v == "new";
         } else if (k == "rtpmap") {
             handlePayloadMap(v, media);
         } else if (k == "streamnumber" || k == "streamprofile" || k == "stream") {

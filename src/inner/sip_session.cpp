@@ -13,10 +13,7 @@ namespace gb28181 {
 SipSession::SipSession(const toolkit::Socket::Ptr &sock, bool is_client)
     : Session(sock)
     , _is_client(is_client)
-    , _sip_parse(
-          std::shared_ptr<http_parser_t>(
-              http_parser_create(HTTP_PARSER_MODE::HTTP_PARSER_REQUEST, nullptr, nullptr),
-              [](http_parser_t *parser) { http_parser_destroy(parser); })), ticker_(std::make_shared<toolkit::Ticker>()) {
+    , ticker_(std::make_shared<toolkit::Ticker>()) {
 
     if (!is_client) {
         socklen_t addr_len = sizeof(_addr);
@@ -324,71 +321,204 @@ std::string print_recv_message(const struct http_parser_t* parser, HTTP_PARSER_M
     return ss.str();
 }
 
-void SipSession::handle_recv() {
-    std::shared_ptr<Buffer> buffer;
-    {
-        std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
-        if (_recv_buffers.empty())
-            return;
-        buffer = _recv_buffers.front();
-        _recv_buffers.pop_front();
-    }
-    if (buffer->size() == 0) {
-        return handle_recv();
-    }
+std::shared_ptr<toolkit::Buffer> SipSession::get_sip_message_type(const std::shared_ptr<toolkit::Buffer> &buffer) {
+    if (buffer->size() == 0) return nullptr;
+    static std::array<std::string_view, 14> patterns {
+        SIP_METHOD_INVITE,
+        SIP_METHOD_CANCEL,
+        SIP_METHOD_BYE,
+        SIP_METHOD_ACK,
+        SIP_METHOD_OPTIONS,
+        SIP_METHOD_REGISTER,
+        SIP_METHOD_PRACK,
+        SIP_METHOD_INFO,
+        SIP_METHOD_REFER,
+        SIP_METHOD_MESSAGE,
+        SIP_METHOD_SUBSCRIBE,
+        SIP_METHOD_NOTIFY,
+        SIP_METHOD_PUBLISH,
+        SIP_METHOD_UPDATE,
+    };
+    constexpr std::string_view sip_flag = "SIP/2.0";
 
-    if (_wait_type == 0) {
-        if (strncasecmp("SIP", buffer->data(), 3) == 0) {
-            http_parser_reset(_sip_parse.get(), HTTP_PARSER_RESPONSE);
-            _wait_type = HTTP_PARSER_RESPONSE;
-        } else {
-            http_parser_reset(_sip_parse.get(), HTTP_PARSER_REQUEST);
-            _wait_type = HTTP_PARSER_REQUEST;
+    std::string_view data(buffer->data(), buffer->size());
+    if (_message_buffer) {
+        auto temp_buff = std::dynamic_pointer_cast<toolkit::BufferLikeString>(_message_buffer);
+        temp_buff->append(buffer->data(), buffer->size());
+        data = std::string_view(temp_buff->data(), temp_buff->size());
+    }
+    auto crlf_pos = data.find('\n');
+    // 如果没找到一行，则退出
+    if (crlf_pos == std::string_view::npos) {
+        if (!_message_buffer) {
+            auto temp_buff = std::make_shared<toolkit::BufferLikeString>();
+            temp_buff->append(buffer->data(), buffer->size());
         }
+        // 丢弃无效数据
+        else if (_message_buffer->size() > 8*1024) {
+            auto temp_buff = std::make_shared<toolkit::BufferLikeString>();
+            temp_buff->append(buffer->data() + buffer->size() - 1024, 1024);
+            _message_buffer = std::move(temp_buff);
+        }
+        return nullptr;
     }
-    auto len = buffer->size();
-    auto ret = http_parser_input(_sip_parse.get(), buffer->data(), &len);
-    if (ret == 0) {
-        struct sip_message_t *request
-            = sip_message_create(_wait_type == HTTP_PARSER_REQUEST ? SIP_MESSAGE_REQUEST : SIP_MESSAGE_REPLY);
-        ret = sip_message_load(request, _sip_parse.get());
-        TraceP(this) << " recv: \n" << print_recv_message(_sip_parse.get(), (HTTP_PARSER_MODE)_wait_type);
-        sip_agent_set_rport(request, get_peer_ip().c_str(), get_peer_port());
 
-        // 捕获this_ptr 防止当前session 被干掉
-        // 异步执行 sip_agent_input 避免消息在网络侧积压
-        // 一一般一个平台都在同一个poller中处理， 这里是否有必要将事件分摊到不同的线程？
-        // EventPollerPool::Instance().getPoller(false);
-        getPoller()->async([this_ptr = std::dynamic_pointer_cast<SipSession>(shared_from_this()), request]() {
-            auto ret = sip_agent_input(this_ptr->_sip_agent, request, this_ptr.get());
-            if (ret != 0) {
-                WarnL << "input failed";
+
+
+    auto check_line = [&](const std::string_view &line)-> size_t {
+        // 没有sip 标记， 不是有效的sip行
+        auto sip_pos = line.find(sip_flag);
+        if (sip_pos == std::string_view::npos) {
+            return sip_pos;
+        }
+
+        // SIP/2.0 200 OK\r\n
+        if (sip_pos + sip_flag.size() + 4 <= line.size()) {
+            // 确保SIP标志后是空格+3位数字
+            if (std::isblank(line[sip_pos + sip_flag.size()])) {
+                auto status_start = sip_pos + sip_flag.size() + 1;
+                if (std::isdigit(line[status_start]) &&
+                    std::isdigit(line[status_start+1]) &&
+                    std::isdigit(line[status_start+2])) {
+                    _wait_type = SIP_MESSAGE_TYPE_RESPONSE;
+                    _sip_parse = std::shared_ptr<http_parser_t>(http_parser_create(HTTP_PARSER_RESPONSE, nullptr , nullptr), http_parser_destroy);
+                    return sip_pos;
+                    }
             }
-        });
-
-        _wait_type = 0;
-        // 数据有余量
-        if (len) {
-            auto temp_buffer = BufferRaw::create();
-            temp_buffer->assign(buffer->data() + buffer->size() - len, len);
-            std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
-            _recv_buffers.insert(_recv_buffers.begin(), temp_buffer);
         }
-    } else if (ret < 0) {
-        _wait_type = 0;
-        WarnP(this)  << ", can't parse sip message :" << buffer->data();
+        // METHOD sip:xxxxxxxxx SIP/2.0\r\n
+        for (auto &pattern : patterns) {
+            auto method_start = line.find(pattern);
+            if (method_start != std::string_view::npos && method_start < sip_pos && std::isblank(line[method_start + pattern.size()])) {
+                _wait_type = SIP_MESSAGE_TYPE_REQUEST;
+                _sip_parse = std::shared_ptr<http_parser_t>(http_parser_create(HTTP_PARSER_REQUEST, nullptr , nullptr), http_parser_destroy);
+                return method_start;
+            }
+        }
+        return std::string_view::npos;
+    };
+    size_t pos = 0;
+
+    auto get_buffer = [&](size_t start)-> std::shared_ptr<toolkit::Buffer> {
+        if (pos == 0 && start == 0) {
+            std::shared_ptr<toolkit::Buffer> buff = _message_buffer ? _message_buffer : buffer;
+            _message_buffer.reset();
+            return std::dynamic_pointer_cast<toolkit::Buffer>(buff);
+        }
+
+        if (_message_buffer) {
+            auto temp_buff = std::dynamic_pointer_cast<toolkit::BufferLikeString>(_message_buffer);
+            temp_buff->erase(0, pos + start);
+            _message_buffer.reset();
+            return std::dynamic_pointer_cast<toolkit::Buffer>(temp_buff);
+        }
+
+        auto temp_buff = std::make_shared<toolkit::BufferLikeString>();
+        temp_buff->append(buffer->data() + pos + start, buffer->size());
+        return std::dynamic_pointer_cast<toolkit::Buffer>(temp_buff);
+    };
+
+    do {
+        auto line = data.substr(pos, crlf_pos);
+        // 已经确认消息状态
+        if (auto start = check_line(line); start != std::string_view::npos) {
+            return get_buffer(start);
+        }
+        if (crlf_pos + 1 >= data.size()) {
+            crlf_pos = std::string_view::npos;
+        } else {
+            pos = crlf_pos + 1;
+            crlf_pos = data.find('\n', pos);
+        }
+
+    } while (crlf_pos != std::string_view::npos);
+
+    return nullptr;
+}
+
+void SipSession::handle_recv() {
+    if (_handing_recv.exchange(true)) {
+        return;
     }
-    handle_recv();
+    while (!_recv_buffers.empty()) {
+        // 获取当前缓冲区数据
+        auto buffer = (_wait_type == SIP_MESSAGE_TYPE_NEED_MORE)
+            ? get_sip_message_type(_recv_buffers.front())
+            : std::move(_recv_buffers.front());
+        _recv_buffers.pop_front();
+
+        if (!buffer || buffer->size() == 0 || _wait_type == SIP_MESSAGE_TYPE_NEED_MORE) {
+            continue;  // 继续处理下个缓冲区
+        }
+
+        auto len = buffer->size();
+        auto ret = http_parser_input(_sip_parse.get(), buffer->data(), &len);
+        // 解析器需要更多数据
+        if (ret == 1) {
+            TraceP(this) << "need more data by http parser";
+            continue;
+        }
+        //保存剩余数据
+        if (len > 0 && len < buffer->size()) {
+            TraceP(this) << "has remaining data size = " << len;
+
+            auto remaining = toolkit::BufferRaw::create();
+            remaining->assign(buffer->data() + (buffer->size() - len), len);
+            _recv_buffers.push_front(std::move(remaining));
+        }
+        if (ret < 0) {
+            ErrorP(this) << "SIP message parser failed";
+            _wait_type = SIP_MESSAGE_TYPE_NEED_MORE;
+            continue;
+        }
+        if (ret == 0) {
+            TraceP(this) << "input recv sip message : \n" << std::string_view(buffer->data(), buffer->size() - len);
+
+            // 创建一个sip 消息
+            auto sip_message
+                = sip_message_create(_wait_type == HTTP_PARSER_REQUEST ? SIP_MESSAGE_REQUEST : SIP_MESSAGE_REPLY);
+            if (sip_message == nullptr) {
+                ErrorP(this) << "SIP message parser failed";
+                _wait_type = SIP_MESSAGE_TYPE_NEED_MORE;
+                continue;
+            }
+            if (sip_message_load(sip_message, _sip_parse.get()) != 0) {
+                ErrorP(this) << "SIP message creation/loading failed";
+                sip_message_destroy(sip_message);
+                _wait_type = SIP_MESSAGE_TYPE_NEED_MORE;
+                continue;
+            }
+            // 设置 rport
+            sip_agent_set_rport(sip_message, get_peer_ip().c_str(), get_peer_port());
+
+            auto weak_this = std::weak_ptr<SipSession>(std::dynamic_pointer_cast<SipSession>(shared_from_this()));
+            // 将处理放入线程异步，继续解析剩余的消息, 将 http_parse 捕获， 防止SIP BODY 不可用
+            getPoller()->async([weak_this, sip_message, http_parse = std::move(_sip_parse)]() {
+                if(auto this_ptr = weak_this.lock()) {
+                    if (sip_agent_input(this_ptr->_sip_agent, sip_message, this_ptr.get()) != 0) {
+                        ErrorP(this_ptr.get()) << "SIP agent input failed";
+                    }
+                } else {
+                    // 销毁消息
+                    sip_message_destroy(sip_message);
+                }
+            }, false);
+            _wait_type = SIP_MESSAGE_TYPE_NEED_MORE;
+
+        } else {
+            ErrorP(this) << "unexpected status code " << ret;
+            _wait_type = SIP_MESSAGE_TYPE_NEED_MORE;
+        }
+    }
+    _handing_recv.exchange(false);
 }
 
 
 void SipSession::onRecv(const toolkit::Buffer::Ptr &buffer) {
     TraceL << "recv " << buffer->size() << " bytes" << ", local: " << get_local_ip() << ", remote: " << get_peer_ip();
     ticker_->resetTime();
-    {
-        std::lock_guard<decltype(_recv_buffers_mutex)> lck(_recv_buffers_mutex);
-        _recv_buffers.push_back(buffer);
-    }
+    _recv_buffers.push_back(buffer);
+    // 加入异步队列， 等待数据接收完毕
     getPoller()->async([weak_this = weak_from_this()]() {
         if (auto this_ptr = std::dynamic_pointer_cast<SipSession>(weak_this.lock())) {
             this_ptr->handle_recv();

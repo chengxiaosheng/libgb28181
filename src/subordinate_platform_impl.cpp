@@ -124,7 +124,7 @@ int SubordinatePlatformImpl::on_recv_register(
             sip_server->new_subordinate_account(
                 account_ptr, [session, transaction, expires](std::shared_ptr<SubordinatePlatformImpl> platform) {
                     if (platform) {
-                        if (session->is_udp()) {
+                        if (session->getSock() && session->getSock()->sockType() == SockNum::SockType::Sock_TCP) {
                             platform->set_tcp_session(session);
                         }
                         if (struct sockaddr_storage addr {}; SockUtil::get_sock_peer_addr(session->getSock()->rawFD(), addr)) {

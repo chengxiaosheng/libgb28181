@@ -166,7 +166,7 @@ void RequestProxyImpl::on_reply(const std::shared_ptr<sip_message_t> &sip_messag
             }
             return false;
         },
-        nullptr);
+        toolkit::EventPollerPool::Instance().getPoller());
 }
 void RequestProxyImpl::on_completed() {
     if (!result_flag_.test_and_set()) {
@@ -196,6 +196,7 @@ void RequestProxyImpl::send(std::function<void(std::shared_ptr<RequestProxy>)> r
     struct sip_agent_t *sip_agent = platform_->get_sip_agent();
     std::string from = platform_->get_from_uri(), to = platform_->get_to_uri();
     CharEncodingType encoding_type = platform_->get_encoding();
+
 
     auto uac_transaction = std::shared_ptr<sip_uac_transaction_t>(
         sip_uac_message(sip_agent, from.c_str(), to.c_str(), nullptr, nullptr),

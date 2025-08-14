@@ -1,30 +1,30 @@
-#include "uac/sip-uac-transaction.h"
-#include "uas/sip-uas-transaction.h"
 #ifdef WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #endif
-#include "gb28181/type_define.h"
 #include <iomanip>
 #include <sstream>
 #include <unordered_map>
-
-#include "sip-message.h"
-#include "sip_common.h"
-
 #include "tinyxml2.h"
+#include "gb28181/type_define.h"
 
-#include <Util/logger.h>
+#include <sip-message.h>
 #include <sip-uac.h>
 #include <sip-uas.h>
+#include <sip-header.h>
+#include "uac/sip-uac-transaction.h"
+#include "uas/sip-uas-transaction.h"
 
 #include <Util/util.h>
-#include <Util/MD5.h>
+#include <Util/logger.h>
 #include <Network/sockutil.h>
+#include <Util/MD5.h>
+
 #include <openssl/md5.h>
 #include <openssl/sha.h>
-#include <sip-header.h>
+
+#include "sip_common.h"
 
 namespace gb28181 {
     static int32_t USER_AGENT_LEN = 10;

@@ -398,6 +398,7 @@ void SuperPlatformImpl::on_invite(
 
 template <typename Response>
 std::shared_ptr<Response> create_response(const std::string &device_id) {
+    static_assert(sizeof(Response) == 0, "This response type is not implemented");
     return nullptr;
 }
 template <>
@@ -432,6 +433,34 @@ template <>
 std::shared_ptr<SdCardResponseMessage> create_response(const std::string &device_id) {
     return std::make_shared<SdCardResponseMessage>(
         device_id, 0, std::vector<SdCardInfoType>(), ResultType::Error, "timeout");
+}
+template <>
+std::shared_ptr<RecordInfoResponseMessage> create_response(const std::string &device_id) {
+    return std::make_shared<RecordInfoResponseMessage>(device_id, 0, std::vector<ItemFileType>());
+}
+template <>
+std::shared_ptr<ConfigDownloadResponseMessage> create_response(const std::string &device_id) {
+    return std::make_shared<ConfigDownloadResponseMessage>(device_id, ResultType::Error);
+}
+template <>
+std::shared_ptr<PresetResponseMessage> create_response(const std::string &device_id) {
+    return std::make_shared<PresetResponseMessage>(device_id, 0, std::vector<PresetListItem>());
+}
+template <>
+std::shared_ptr<CruiseTrackResponseMessage> create_response(const std::string &device_id) {
+    return std::make_shared<CruiseTrackResponseMessage>(device_id, 0, std::vector<CruisePointType>());
+}
+template <>
+std::shared_ptr<DeviceControlResponseMessage> create_response(const std::string &device_id) {
+    return std::make_shared<DeviceControlResponseMessage>(device_id, ResultType::Error, "timeout");
+}
+template <>
+std::shared_ptr<BroadcastNotifyResponse> create_response(const std::string &device_id) {
+    return std::make_shared<BroadcastNotifyResponse>(device_id, ResultType::Error);
+}
+template<>
+std::shared_ptr<DeviceConfigResponseMessage> create_response(const std::string &device_id) {
+    return std::make_shared<DeviceConfigResponseMessage>(device_id, ResultType::Error, "timeout");
 }
 
 template <typename Request, typename Response, const char *EventType, typename T>

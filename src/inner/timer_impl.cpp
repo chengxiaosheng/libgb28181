@@ -9,20 +9,13 @@ using namespace toolkit;
 struct sip_timer_context {
     std::weak_ptr<EventPoller::DelayTask> task; // 任务
     std::shared_ptr<toolkit::EventPoller> poller; // 任务所属线程
-    std::atomic_flag handle_flag{ATOMIC_FLAG_INIT}; // 是否已经执行
-    std::mutex mutex;
+    std::atomic_bool handle_flag{false};
 };
 
 
-static std::atomic_bool timer_running{false};
-
 void sip_timer_init(void) {
-    InfoL << "sip_timer_init";
-    timer_running.exchange(true);
 }
 void sip_timer_cleanup(void) {
-    InfoL << "sip_timer_cleanup";
-    timer_running.exchange(false);
 }
 
 sip_timer_t sip_timer_start(int timeout, sip_timer_handle handler, void* usrptr) {
@@ -31,13 +24,9 @@ sip_timer_t sip_timer_start(int timeout, sip_timer_handle handler, void* usrptr)
     auto context = new sip_timer_context();
     context->poller = poller;
     context->task = poller->doDelayTask(timeout, [handler, usrptr, context]() {
-        if (!timer_running.load()) {
-            return 0;
-        }
         TraceL << "handle timer " << context;
-        // 自旋控制，避免重复执行
-        std::unique_lock<std::mutex> lock(context->mutex);
-        if(!context->handle_flag.test_and_set()) {
+        bool expected =  false;
+        if (context->handle_flag.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
             handler(usrptr);
         }
         return 0;
@@ -56,20 +45,16 @@ int sip_timer_stop(sip_timer_t* id) {
         *id = nullptr;
         return -1;
     }
-    bool flag = false;
-    {
-        std::unique_lock<std::mutex> lock(context->mutex);
-        flag = context->handle_flag.test_and_set();
-    }
-    // 切换到延时任务所在线程去取消任务
-    context->poller->async_first([task_weak = context->task]() {
-        if (auto task = task_weak.lock()) {
+    bool expected = false;
+    bool flag = context->handle_flag.compare_exchange_strong(expected, true, std::memory_order_acq_rel);
+    context->poller->async([context]() {
+        if (auto task = context->task.lock()) {
             task->cancel();
         }
+        delete context;
     });
-    delete context;
     *id = nullptr;
-    return flag ? -1 : 0;
+    return flag ? 0 : -1;
 }
 
 

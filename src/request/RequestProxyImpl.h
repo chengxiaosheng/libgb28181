@@ -46,7 +46,6 @@ public:
     void set_response_callback(ResponseCallback cb) override { response_callback_ = std::move(cb); }
     void send(std::function<void(std::shared_ptr<RequestProxy>)> rcb) override;
     const std::vector<std::shared_ptr<MessageBase>> &all_response() const override { return responses_; }
-    void set_sip_session(const std::shared_ptr<SipSession> &session_ptr) { send_session_ = session_ptr; }
     friend std::ostream &operator<<(std::ostream &os, const RequestProxyImpl &proxy);
 
 protected:
@@ -68,7 +67,6 @@ protected:
     std::vector<std::shared_ptr<MessageBase>> responses_;
     std::shared_ptr<PlatformHelper> platform_;
     std::shared_ptr<MessageBase> request_;
-    std::shared_ptr<SipSession> send_session_;
     std::string error_;
     int reply_code_ { 0 };
     int request_sn_ { 0 };

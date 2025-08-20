@@ -265,13 +265,22 @@ std::shared_ptr<toolkit::Session> InviteRequestImpl::get_connection_session() {
 }
 void InviteRequestImpl::set_status(INVITE_STATUS_TYPE status, const std::string &error) {
     error_ = error;
-    bool status_changed = status_ != status;
     status_ = status;
-    if (status_changed && status_cb_) {
+    if (status_cb_) {
         status_cb_(status, error);
     }
+
     if (static_cast<int>(status_) > 2) {
         remove_invite();
+        // 回话已经中止，清理资源，避免业务层持有对象造成内存泄露
+        local_sdp_.reset();
+        remote_sdp_.reset();
+        uac_invite_transaction_.reset();
+        invite_dialog_.reset();
+        invite_session_.reset();
+        rcb_ = {};
+        status_cb_ = {};
+        play_control_callback_ = {};
     }
 }
 
@@ -525,12 +534,16 @@ int InviteRequestImpl::on_recv_invite(
 
     // 并发下 sip-uas-transaction-invite.c:279 出现死锁， 初步怀疑是由于业务层跨线程处理invite消息引起的，此处添加线程安全模式
     auto invite_weak = std::weak_ptr<InviteRequestImpl>(invite_ptr);
-    auto handle_reply = [sip_session, transaction, platform_ptr, invite_weak](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
+    auto flag_ptr = std::make_shared<std::atomic_bool>(false);
+    auto handle_reply = [sip_session, transaction, platform_ptr, invite_weak, flag_ptr](int sip_code, std::shared_ptr<SdpDescription> sdp_ptr) {
+            if (flag_ptr->exchange(true)) {
+                return;
+            }
             auto invite_ptr = invite_weak.lock();
-        if (!invite_ptr) {
-            return;
-        }
-        // GB/T 28181-2022 x-route-path
+            if (!invite_ptr) {
+                return;
+            }
+            // GB/T 28181-2022 x-route-path
             if (invite_ptr->route_path_.empty()) {
                 invite_ptr->route_path_.emplace_back(platform_ptr->get_sip_server()->get_account().platform_id);
             }
@@ -553,10 +566,11 @@ int InviteRequestImpl::on_recv_invite(
                 set_message_content_type(transaction.get(), SipContentType::SipContentType_SDP);
                 invite_ptr->add_invite();
 
-                sip_uas_reply(transaction.get(), sip_code, payload.c_str(), payload.size(), sip_session.get());
+                if (0 != sip_uas_reply(transaction.get(), sip_code, payload.c_str(), payload.size(), sip_session.get())) {
+                    invite_ptr->to_bye("send reply failed");
+                }
 
                 // 添加一个超时定时器， 一段时间内没有收到ack 则关闭会话？
-                std::weak_ptr<InviteRequestImpl> invite_weak = invite_ptr;
                 toolkit::EventPollerPool::Instance().getPoller()->doDelayTask(5 * 1000, [invite_weak]() {
                     if (auto this_ptr = invite_weak.lock()) {
                         if (this_ptr->status_ != INVITE_STATUS_TYPE::ack) {
@@ -571,9 +585,14 @@ int InviteRequestImpl::on_recv_invite(
             }
     };
 
+    auto timeout_task = sip_session->getPoller()->doDelayTask(5 * 1000, [handle_reply]() {
+        handle_reply(408, nullptr);
+        return 0;
+    });
     platform_ptr->on_invite(
         invite_ptr,
-        [sip_session, handle_reply](int sip_code, const std::shared_ptr<SdpDescription>& sdp_ptr) {
+        [sip_session, handle_reply, timeout_task](int sip_code, const std::shared_ptr<SdpDescription>& sdp_ptr) {
+            timeout_task->cancel();
             if (!sip_session->getPoller()->isCurrentThread()) {
                 sip_session->getPoller()->async(std::bind(handle_reply, sip_code, sdp_ptr));
             } else {

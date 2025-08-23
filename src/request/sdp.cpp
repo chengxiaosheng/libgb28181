@@ -290,7 +290,10 @@ void SdpDescription::parseAttribute(const std::string &attr, MediaDescription *m
             handle = tinyxml2::XMLUtil::ToUnsigned64(v.data(), &media->file_size);
         } else if (k == "downloadspeed") {
             handle = tinyxml2::XMLUtil::ToInt(v.data(), &media->download_speed);
-        } else {
+        } else if (k == "rtcp") {
+            if (v == "no") media->rtcp = false;
+        }
+        else {
             media->attributes.emplace(k, v);
         }
         if (!handle) {
@@ -415,6 +418,10 @@ std::string SdpDescription::generate() const {
         for (const auto &p : media.payloads) {
             if (!p.name.empty())
                 oss << "a=rtpmap:" << static_cast<int>(p.payload) << " " << p.name << "/" << p.sample_rate << "\r\n";
+        }
+        // 关闭rtcp
+        if (!media.rtcp) {
+            oss << "a=rtcp:no\r\n";
         }
         // ICE信息
         if (!media.ice.ufrag.empty())

@@ -26,7 +26,7 @@ public:
     SipSession(const toolkit::Socket::Ptr &sock, bool is_client = false);
     ~SipSession() override;
 
-    void set_peer(const std::string &host, uint16_t port);
+    void set_peer(const std::string &host, uint16_t port, const std::function<void(toolkit::SockException)> &cb);
     void set_peer(struct sockaddr_storage &addr);
 
     void onRecv(const toolkit::Buffer::Ptr &) override;

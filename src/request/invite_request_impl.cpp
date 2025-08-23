@@ -21,7 +21,7 @@ using namespace gb28181;
 
 // 针对invite 会话的管理, 得到 sip_dialog_t 后加入到集合中, bye 时从集合中移除， 应该不会有问题
 static std::unordered_map<void *, std::shared_ptr<InviteRequestImpl>> invite_request_map_;
-static std::shared_mutex invite_request_map_mutex_;
+static std::recursive_mutex invite_request_map_mutex_;
 
 std::shared_ptr<InviteRequest> InviteRequest::new_invite_request(
     const std::shared_ptr<SubordinatePlatform> &platform, const std::shared_ptr<SdpDescription> &sdp,
@@ -36,7 +36,7 @@ std::shared_ptr<InviteRequest> InviteRequest::new_invite_request(
 }
 
 std::shared_ptr<InviteRequestImpl> InviteRequestImpl::get_invite(void *p) {
-    std::shared_lock<std::shared_mutex> lock(invite_request_map_mutex_);
+    std::lock_guard<decltype(invite_request_map_mutex_)> lock(invite_request_map_mutex_);
     if (auto it = invite_request_map_.find(p); it != invite_request_map_.end()) {
         return it->second;
     }
@@ -44,16 +44,30 @@ std::shared_ptr<InviteRequestImpl> InviteRequestImpl::get_invite(void *p) {
 }
 
 void InviteRequestImpl::add_invite() {
-    std::unique_lock<std::shared_mutex> lock(invite_request_map_mutex_);
+    TraceL << *this;
+    std::lock_guard<decltype(invite_request_map_mutex_)> lock(invite_request_map_mutex_);
     invite_request_map_[this] = shared_from_this();
 }
 
 void InviteRequestImpl::remove_invite() {
-    std::unique_lock<std::shared_mutex> lock(invite_request_map_mutex_);
+    TraceL << *this;
+    to_bye("remove this invite");
+    std::lock_guard<decltype(invite_request_map_mutex_)> lock(invite_request_map_mutex_);
     invite_request_map_.erase(this);
 }
 
 void InviteRequestImpl::to_teardown(const std::string &reason) {
+    if (!poller_->isCurrentThread()) {
+        auto weak_this = weak_from_this();
+        poller_->async([weak_this, reason]() {
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->to_teardown(reason);
+            }
+        });
+        return;
+    }
+    TraceL << *this << ", reason = " << reason;
+
     auto platform = platform_helper_.lock();
     if (!platform) {
         return;
@@ -68,7 +82,7 @@ void InviteRequestImpl::to_teardown(const std::string &reason) {
 
     // teardown 消息应该不需要关注返回值
     std::shared_ptr<sip_uac_transaction_t> transaction(
-        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, nullptr, nullptr),
+        sip_uac_info(platform->get_sip_agent(), invite_dialog_.load(), nullptr, nullptr, nullptr),
         [](sip_uac_transaction_t *t) {
             if (t)
                 sip_uac_transaction_release(t);
@@ -82,10 +96,24 @@ void InviteRequestImpl::to_teardown(const std::string &reason) {
 }
 
 void InviteRequestImpl::to_play(const BackPlayControlResponseCallback &rcb) {
+    TraceL << *this ;
     to_seek_scale({}, {}, std::forward<decltype(rcb)>(rcb));
 }
 
 void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &rcb) {
+
+    assert(poller_);
+    if (!poller_->isCurrentThread()) {
+        auto weak_this = weak_from_this();
+        poller_->async([weak_this, rcb]() {
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->to_pause(rcb);
+            }
+        });
+        return;
+    }
+    TraceL << *this;
+
     auto platform = platform_helper_.lock();
     if (!platform) {
         return rcb(false, "illegal operation! the session closed .");
@@ -105,7 +133,7 @@ void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &r
        << "\r\n";
 
     std::shared_ptr<sip_uac_transaction_t> transaction(
-        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, nullptr, nullptr),
+        sip_uac_info(platform->get_sip_agent(), invite_dialog_.load(), nullptr, nullptr, nullptr),
         [](sip_uac_transaction_t *t) {
             if (t)
                 sip_uac_transaction_release(t);
@@ -124,6 +152,19 @@ void InviteRequestImpl::to_pause(const std::function<void(bool, std::string)> &r
 
 void InviteRequestImpl::to_seek_scale(
     std::optional<float> scale, std::optional<uint32_t> ntp, const BackPlayControlResponseCallback &rcb) {
+    assert(poller_);
+    if (!poller_->isCurrentThread()) {
+        auto weak_this = weak_from_this();
+        poller_->async([weak_this, scale, ntp, rcb]() {
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->to_seek_scale(scale, ntp, rcb);
+            }
+        });
+        return;
+    }
+
+    TraceL << *this;
+
     auto platform = platform_helper_.lock();
     if (!platform) {
         return rcb(false, "illegal operation! the session closed .", {});
@@ -150,12 +191,12 @@ void InviteRequestImpl::to_seek_scale(
         ss << "Scale: " << scale.value() << "\r\n";
     }
 
-    std::shared_ptr<sip_uac_transaction_t> transaction(
-        sip_uac_info(platform->get_sip_agent(), invite_dialog_.get(), nullptr, nullptr, nullptr),
-        [](sip_uac_transaction_t *t) {
-            if (t)
-                sip_uac_transaction_release(t);
-        });
+    std::shared_ptr<sip_uac_transaction_t> transaction(sip_uac_info(platform->get_sip_agent(),
+                                                               invite_dialog_.load(),
+                                                             nullptr,
+                                                               nullptr,
+                                                               nullptr),
+                                                       sip_uac_transaction_release);
 
     auto callback = [rcb, weak_this = weak_from_this()](
                         bool ret, const std::string &err, const std::shared_ptr<sip_message_t> &reply) {
@@ -260,10 +301,21 @@ void InviteRequestImpl::to_seek_scale(
         });
 }
 
-std::shared_ptr<toolkit::Session> InviteRequestImpl::get_connection_session() {
-    return invite_session_.lock();
-}
+
 void InviteRequestImpl::set_status(INVITE_STATUS_TYPE status, const std::string &error) {
+    assert(poller_);
+    if (poller_ && !poller_->isCurrentThread()) {
+        auto weak_this = weak_from_this();
+        poller_->async([weak_this, error, status]() {
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->set_status(status, error);
+            }
+        });
+        return;
+    }
+
+    TraceL << *this;
+
     error_ = error;
     status_ = status;
     if (status_cb_) {
@@ -276,8 +328,7 @@ void InviteRequestImpl::set_status(INVITE_STATUS_TYPE status, const std::string 
         local_sdp_.reset();
         remote_sdp_.reset();
         uac_invite_transaction_.reset();
-        invite_dialog_.reset();
-        invite_session_.reset();
+        invite_dialog_.exchange(nullptr);
         rcb_ = {};
         status_cb_ = {};
         play_control_callback_ = {};
@@ -295,34 +346,41 @@ int InviteRequestImpl::on_invite_reply(
         return 0;
     auto this_ptr = get_invite(param);
     if (this_ptr == nullptr) {
-        // do cancel
+        if (SIP_IS_SIP_SUCCESS(code)) {
+            // todo: to bye
+        }
         return 0;
     }
+
+    TraceL << *this_ptr << ", code = " << code;
+
+
+
     // 临时回复
     if (SIP_IS_SIP_INFO(code)) {
         this_ptr->set_status(INVITE_STATUS_TYPE::trying, "");
         return 0;
     }
-
     // cancel 已不可用， 销毁uac invite 事务
     this_ptr->uac_invite_transaction_.reset();
 
     // 存储会话指针
-    if (dialog) {
-        // 将自身置入session中, 实现会话内消息的接收处理
-        if (session) {
-            *session = this_ptr.get();
-        }
-        // 添加dialog 的引用
-        sip_dialog_addref(dialog);
+    if (dialog != nullptr) {
+
         // 智能指针管理dialog
-        this_ptr->invite_dialog_.reset(dialog, sip_dialog_release);
+        this_ptr->invite_dialog_.exchange(dialog);
+        dialog->ondestroyparam = this_ptr.get();
+        dialog->ondestroy = on_dialog_destroy;
+        dialog->session = this_ptr.get();
     }
 
     // 回复ok
     bool result = true;
     std::string error;
     if (SIP_IS_SIP_SUCCESS(code)) {
+        // 将自身置入session中, 实现会话内消息的接收处理
+        *session = this_ptr.get();
+
         if (reply->payload == nullptr || reply->size == 0) {
             result = false;
             error = "no reply remote sdp";
@@ -365,6 +423,18 @@ int InviteRequestImpl::on_invite_reply(
 
 // todo: 此函数需要进一步完善
 void InviteRequestImpl::to_bye(const std::string &reason) {
+    assert(poller_);
+    if (!poller_->isCurrentThread()) {
+        auto weak_this = weak_from_this();
+        poller_->async([weak_this, reason]() {
+            if (auto this_ptr = weak_this.lock()) {
+                this_ptr->to_bye(reason);
+            }
+        });
+        return;
+    }
+    TraceL << *this << ", reason = " << reason;
+
     if (status_ > INVITE_STATUS_TYPE::ack)
         return;
     auto platform = platform_helper_.lock();
@@ -373,6 +443,7 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
         return;
     }
     auto sip_agent = platform->get_sip_agent();
+    auto dialog_ptr = invite_dialog_.load();
     // 当 uac_invite_transaction_ 事务不为空时, 说明事务应该还没有建立
     if (uac_invite_transaction_) {
         std::shared_ptr<sip_uac_transaction_t> transaction(
@@ -381,9 +452,9 @@ void InviteRequestImpl::to_bye(const std::string &reason) {
             return 0;
         });
         set_status(INVITE_STATUS_TYPE::cancel, reason);
-    } else if (invite_dialog_) {
+    } else if (dialog_ptr) {
         std::shared_ptr<sip_uac_transaction_t> transaction(
-            sip_uac_bye(sip_agent, invite_dialog_.get(), nullptr, nullptr), sip_uac_transaction_release);
+            sip_uac_bye(sip_agent, dialog_ptr, nullptr, nullptr), sip_uac_transaction_release);
         platform->uac_send3(transaction, "", [](bool, const std::string &) {}, [](const std::shared_ptr<SipSession> &session, const std::shared_ptr<struct sip_message_t> &reply, const std::shared_ptr<struct sip_uac_transaction_t> &transaction, int code) {
             return 0;
         });
@@ -400,16 +471,24 @@ InviteRequestImpl::InviteRequestImpl(
     , local_sdp_(sdp)
     , platform_helper_(platform)
     , device_id_(std::move(device_id)) {
-    TraceL << "InviteRequestImpl::InviteRequestImpl()";
+    TraceL << *this;
 }
 InviteRequestImpl::~InviteRequestImpl() {
-    TraceL << "InviteRequestImpl::~InviteRequestImpl()";
-    if (static_cast<int>(status_) < 3) {
-        InviteRequestImpl::to_bye("destruction");
-    }
+    TraceL << *this;
 }
 void InviteRequestImpl::to_invite_request(
     std::function<void(bool, std::string, const std::shared_ptr<SdpDescription> &)> rcb) {
+
+    poller_ = toolkit::EventPollerPool::Instance().getPoller();
+    if (!poller_->isCurrentThread()) {
+        poller_->async([=]() {
+           to_invite_request(rcb);
+        });
+        return;
+    }
+
+    TraceL << *this;
+
     auto platform = platform_helper_.lock();
     auto from = platform->get_from_uri();
     auto to = platform->get_to_uri();
@@ -460,7 +539,6 @@ void InviteRequestImpl::to_invite_request(
         uac_invite_transaction_, sdp_str.c_str(),
         [this_ptr = shared_from_this()](bool ret, const std::string &err, const std::shared_ptr<SipSession> &session) {
             if (!ret && this_ptr->rcb_) {
-                this_ptr->invite_session_ = session;
                 this_ptr->set_status(INVITE_STATUS_TYPE::failed, err);
                 this_ptr->rcb_(ret, err, nullptr);
                 this_ptr->rcb_ = {};
@@ -475,6 +553,7 @@ int InviteRequestImpl::on_recv_bye(
     if (!this_ptr) {
         return sip_uas_reply(transaction.get(), 481, nullptr, 0, sip_session.get());
     }
+    TraceL << *this_ptr;
     this_ptr->set_status(INVITE_STATUS_TYPE::bye, "they bye");
     return sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());
 }
@@ -486,6 +565,7 @@ int InviteRequestImpl::on_recv_cancel(
     if (!this_ptr) {
         return sip_uas_reply(transaction.get(), 481, nullptr, 0, sip_session.get());
     }
+    TraceL << *this_ptr;
     this_ptr->set_status(INVITE_STATUS_TYPE::cancel, "they cancel");
     return sip_uas_reply(transaction.get(), 200, nullptr, 0, sip_session.get());
 }
@@ -518,17 +598,23 @@ int InviteRequestImpl::on_recv_invite(
     if (!platform_ptr) {
         return sip_uas_reply(transaction.get(), 480, nullptr, 0, sip_session.get());
     }
-    auto invite_ptr = std::make_shared<InviteRequestImpl>();
-    *session = invite_ptr.get();
+    auto invite_ptr = std::make_shared<InviteRequestImpl>(platform_ptr, nullptr, get_invite_device_id(req.get()));
     invite_ptr->remote_sdp_ = sdp_ptr;
-    invite_ptr->platform_helper_ = platform_ptr;
-    invite_ptr->invite_dialog_ = dialog_ptr;
+    invite_ptr->poller_ = sip_session->getPoller();
     invite_ptr->invite_time_ = toolkit::getCurrentMicrosecond(true);
-    invite_ptr->set_status(INVITE_STATUS_TYPE::invite, "");
     invite_ptr->preferred_path_ = get_x_preferred_path(req.get());
-    invite_ptr->device_id_ = get_invite_device_id(req.get());
     invite_ptr->subject_ = get_invite_subject(req.get());
-    invite_ptr->invite_session_ = sip_session;
+    invite_ptr->set_status(INVITE_STATUS_TYPE::invite, "");
+    *session = invite_ptr.get();
+
+    // 此处无效， 当前状态 应该不是 DIALOG_CONFIRMED
+    if (dialog_ptr) {
+        invite_ptr->invite_dialog_.exchange(dialog_ptr.get());
+        dialog_ptr->session = invite_ptr.get();
+        dialog_ptr->ondestroyparam = invite_ptr.get();
+        dialog_ptr->ondestroy = on_dialog_destroy;
+    }
+
     // 发送 临时回复
     sip_uas_reply(transaction.get(), 100, nullptr, 0, sip_session.get());
 
@@ -591,10 +677,10 @@ int InviteRequestImpl::on_recv_invite(
     });
     platform_ptr->on_invite(
         invite_ptr,
-        [sip_session, handle_reply, timeout_task](int sip_code, const std::shared_ptr<SdpDescription>& sdp_ptr) {
+        [poller = invite_ptr->poller_, handle_reply, timeout_task](int sip_code, const std::shared_ptr<SdpDescription>& sdp_ptr) {
             timeout_task->cancel();
-            if (!sip_session->getPoller()->isCurrentThread()) {
-                sip_session->getPoller()->async(std::bind(handle_reply, sip_code, sdp_ptr));
+            if (!poller->isCurrentThread()) {
+                poller->async(std::bind(handle_reply, sip_code, sdp_ptr));
             } else {
                 handle_reply(sip_code, sdp_ptr);
             }
@@ -610,7 +696,14 @@ int InviteRequestImpl::on_recv_ack(
     auto this_ptr = InviteRequestImpl::get_invite(dialog_ptr->session);
     if (this_ptr == nullptr)
         return 0;
-    this_ptr->set_status(INVITE_STATUS_TYPE::ack, "");
+    TraceL << *this_ptr;
+    dialog_ptr->ondestroyparam = this_ptr.get();
+    dialog_ptr->ondestroy = on_dialog_destroy;
+    this_ptr->invite_dialog_ = dialog_ptr.get();
+
+    this_ptr->poller_->async([this_ptr]() {
+        this_ptr->set_status(INVITE_STATUS_TYPE::ack, "");
+    });
     return 0;
 }
 
@@ -664,6 +757,7 @@ int InviteRequestImpl::on_recv_info(
     if (!this_ptr) {
         return sip_uas_reply(transaction.get(), 481, nullptr, 0, sip_session.get());
     }
+    TraceL << *this_ptr;
     // 对消息进行解析
     if (!req->payload || req->size == 0) {
         return sip_uas_reply(transaction.get(), 400, nullptr, 0, sip_session.get());
@@ -782,6 +876,22 @@ int InviteRequestImpl::on_recv_info(
         });
     return 0;
 }
+void InviteRequestImpl::on_dialog_destroy(void *session) {
+    TraceL << "ptr = " << session;
+    if (auto invite_ptr = get_invite(session)) {
+        TraceL << *invite_ptr;
+        // 会话释放
+        invite_ptr->invite_dialog_.exchange(nullptr);
+        invite_ptr->set_status(INVITE_STATUS_TYPE::bye, "dialog destory");
+        invite_ptr->remove_invite();
+    }
+}
+
+std::ostream &gb28181::operator<<(std::ostream &os, const InviteRequestImpl &msg) {
+    os << "(" << msg.platform_helper_.lock()->sip_account().platform_id << ":INVITE:" << msg.device_id_ << "), this = " << &msg << " ";
+    return os;
+}
+
 
 /**********************************************************************************************************
 文件名称:   invite_request_impl.cpp

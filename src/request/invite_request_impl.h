@@ -29,7 +29,6 @@ class InviteRequestImpl
     : public InviteRequest
     , public std::enable_shared_from_this<InviteRequestImpl> {
 public:
-    InviteRequestImpl() = default;
     InviteRequestImpl(const std::shared_ptr<PlatformHelper> &platform, const std::shared_ptr<SdpDescription> &sdp, std::string device_id);
     ~InviteRequestImpl() override;
     void
@@ -59,14 +58,11 @@ public:
 
     const std::string &device_id() const override { return device_id_; }
 
-    std::shared_ptr<toolkit::Session> get_connection_session() override;
-
 private:
     void set_status(INVITE_STATUS_TYPE status, const std::string& error);
 
     void add_invite();
     void remove_invite();
-
     static int on_invite_reply(
         void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, struct sip_dialog_t *dialog,
         int code, void **session);
@@ -90,13 +86,19 @@ private:
         const std::shared_ptr<SipSession> &sip_session, const std ::shared_ptr<sip_uas_transaction_t> &transaction,
         const std ::shared_ptr<sip_message_t> &req, void *dialog_ptr);
 
+    static void on_dialog_destroy(void * param);
+
+    friend std::ostream &operator<<(std::ostream &os, const InviteRequestImpl &msg);
+
+
+
 private:
     std::shared_ptr<SdpDescription> local_sdp_;
     std::shared_ptr<SdpDescription> remote_sdp_;
     std::weak_ptr<PlatformHelper> platform_helper_;
-    std::shared_ptr<sip_dialog_t> invite_dialog_;
+    std::atomic<sip_dialog_t *> invite_dialog_;
     std::shared_ptr<sip_uac_transaction_t> uac_invite_transaction_;
-    std::weak_ptr<SipSession> invite_session_;
+    std::shared_ptr<toolkit::EventPoller> poller_;
     std::string device_id_;
     std::string subject_;
     uint64_t invite_time_ { 0 };

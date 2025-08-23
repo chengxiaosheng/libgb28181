@@ -115,12 +115,15 @@ protected:
     // 存储等待应答的请求
     std::unordered_map<int32_t, std::shared_ptr<RequestProxyImpl>> request_map_;
     std::shared_mutex request_map_mutex_;
+    std::unordered_map<void *, std::weak_ptr<InviteRequest>> invite_map_;
+    std::recursive_mutex invite_map_mutex_;
     // 专门用来发送sip消息的 session, 采用udp server 监听的socket封装，内部不绑定对端地址, 仅仅复用监听sock 发送数据
-    std::unordered_map<toolkit::EventPoller*, std::shared_ptr<SipSession>> udp_sip_session_map_;
-    std::recursive_mutex udp_sip_session_map_mutex_;
+    // std::unordered_map<toolkit::EventPoller*, std::shared_ptr<SipSession>> udp_sip_session_map_;
+    // std::recursive_mutex udp_sip_session_map_mutex_;
     // 联系地址
     std::string contact_uri_;
     struct sockaddr_storage remote_addr_{};
+    std::recursive_mutex remote_addr_mutex_;
     std::mutex status_cbs_mtx_;
     std::unordered_map<void*, std::function<void(PlatformStatusType)>> status_cbs_; // 平台在线状态回到
     std::atomic_int32_t platform_sn_ { 1 };

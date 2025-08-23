@@ -1,4 +1,6 @@
 #include "sip_session.h"
+#include "Thread/WorkThreadPool.h"
+#include "Util/uv_errno.h"
 #include "http-parser.h"
 #include "sip_common.h"
 
@@ -28,13 +30,35 @@ SipSession::~SipSession() {
     TraceP(this) << "SipSession::~SipSession()";
 }
 
-void SipSession::set_peer(const std::string &host, uint16_t port) {
+void SipSession::set_peer(const std::string &host, uint16_t port, const std::function<void(toolkit::SockException)> &cb) {
     // tcp 模式下，与 udp session 模式下都不需要设置对端地址
     if (!is_udp() || !get_peer_ip().empty()) {
-        return;
+        return cb({});
     }
-    struct sockaddr_storage addr = SockUtil::make_sockaddr(host.c_str(), port);
-    set_peer(addr);
+    if (isIP(host.c_str())) {
+        struct sockaddr_storage addr = SockUtil::make_sockaddr(host.c_str(), port);
+        set_peer(addr);
+        return cb({});
+    }
+    auto poller = getSock() ? getPoller() : EventPollerPool::Instance().getPoller();
+    auto weak_self = std::weak_ptr<SipSession>(std::dynamic_pointer_cast<SipSession>(shared_from_this()));
+    WorkThreadPool::Instance().getExecutor()->async([poller, host, port, cb, weak_self]() {
+        struct sockaddr_storage addr;
+        if (!SockUtil::getDomainIP(host.data(), port, addr, AF_INET, SOCK_DGRAM, IPPROTO_TCP)) {
+            poller->async([host, cb]() {
+               cb(SockException(Err_dns, "dns resolution failed " + host));
+            });
+            return;
+        }
+        poller->async([weak_self, addr,cb]() mutable  {
+            if (auto this_ptr = weak_self.lock()) {
+                this_ptr->set_peer(addr);
+                cb({});
+            } else {
+                cb(SockException(Err_other, "sipsession has been destructed "));
+            }
+        });
+    });
 }
 
 bool SipSession::make_peer_addr(struct sockaddr_storage &addr) {

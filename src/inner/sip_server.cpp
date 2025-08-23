@@ -250,7 +250,7 @@ void SipServer::get_tcp_client_l( const struct sockaddr_storage &addr,
     if (!tcp_server_)
         return cb(toolkit::SockException(Err_other, "no tcp server"), nullptr);
 
-    auto sock_ptr = Socket::createSocket(poller, false);
+    auto sock_ptr = Socket::createSocket(poller);
     auto session = std::make_shared<SipSession>(sock_ptr);
 
     session->_sip_server = weak_from_this();

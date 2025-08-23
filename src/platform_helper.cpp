@@ -65,52 +65,51 @@ PlatformHelper::~PlatformHelper() {
     }
 }
 void PlatformHelper::get_session(
-    const std::function<void(const toolkit::SockException &, std::shared_ptr<SipSession>)> &cb, bool force_tcp) {
+    const std::function<void(const SockException &, std::shared_ptr<SipSession>)> &cb, bool force_tcp) {
     bool is_udp = !force_tcp && (get_transport() == TransportType::udp || get_transport() == TransportType::both);
     if (!is_udp && tcp_session_) {
         return cb({}, tcp_session_);
     }
-    auto poller = toolkit::EventPollerPool::Instance().getPoller();
+    auto poller = EventPollerPool::Instance().getPoller();
     if (auto server = local_server_weak_.lock()) {
         if (is_udp) {
-            std::shared_ptr<SipSession> session_ptr;
+            if (server->udp_server_sockets().empty()) {
+                return cb(SockException(Err_other, "udp is not available"), nullptr);
+            }
+            auto sock_it = server->udp_server_sockets().find(poller.get());
+            if (sock_it == server->udp_server_sockets().end()) {
+                sock_it = server->udp_server_sockets().begin();
+            }
+            if (!sock_it->second) {
+                return cb(SockException(Err_other, "udp is not available"), nullptr);
+            }
+            auto session_ptr = std::make_shared<SipSession>(sock_it->second);
+            session_ptr->set_local_ip(sip_account().local_host);
+            session_ptr->set_local_port(sip_account().local_port);
+
             {
-                std::lock_guard<decltype(udp_sip_session_map_mutex_)> lock(udp_sip_session_map_mutex_);
-                if (auto it = udp_sip_session_map_.find(poller.get()); it != udp_sip_session_map_.end()) {
-                    session_ptr = it->second;
-                } else {
-                    if (server->udp_server_sockets().size() == 1) {
-                        session_ptr = std::make_shared<SipSession>(server->udp_server_sockets().begin()->second);
-                        udp_sip_session_map_[poller.get()] = session_ptr;
-                    } else {
-                        session_ptr = std::make_shared<SipSession>(server->udp_server_sockets().at(poller.get()));
-                        udp_sip_session_map_[poller.get()] = session_ptr;
-                    }
-                    if (session_ptr) {
-                        if (remote_addr_.ss_family == AF_INET || remote_addr_.ss_family == AF_INET6) {
-                            session_ptr->set_peer(remote_addr_);
-                        } else {
-                            // 此处只能设置IP地址， 如果是域名 一定会失败
-                            try {
-                                session_ptr->set_peer(sip_account().host, sip_account().port);
-                            } catch (const std::exception &e) {
-                                ErrorL << "Exception in set_peer(" << sip_account().host << ":" << sip_account().port <<  "): " << e.what();
-                            }
-                        }
-                        session_ptr->set_local_ip(sip_account().local_host);
-                        session_ptr->set_local_port(sip_account().local_port);
-                    }
+                std::lock_guard<std::recursive_mutex> lock(remote_addr_mutex_);
+                if (remote_addr_.ss_family == AF_INET || remote_addr_.ss_family == AF_INET6) {
+                    session_ptr->set_peer(remote_addr_);
+                    return cb(
+                    session_ptr ? SockException() : SockException(Err_other, "udp is not available"),
+                    session_ptr);
                 }
             }
-
-            return cb(
-                session_ptr ? SockException() : SockException(toolkit::Err_other, "not found sip udp socket"),
-                session_ptr);
+            return session_ptr->set_peer(sip_account().host, sip_account().port, [cb, session_ptr](const SockException &ex) {
+                       if (ex) {
+                          return cb(ex, nullptr);
+                       }
+                       cb(ex, session_ptr);
+                   });
+        }
+        if (tcp_session_) {
+            return cb({},tcp_session_);
         }
         server->get_tcp_client(
             sip_account().host, sip_account().port,
             [cb, weak_this = weak_from_this()](
-                const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+                const SockException &e, const std::shared_ptr<SipSession> &session) {
                 if (e) {
                     cb(e, session);
                     return;
@@ -125,7 +124,7 @@ void PlatformHelper::get_session(
                 cb(e, session);
             });
     } else {
-        cb(toolkit::SockException(toolkit::Err_other, "server de"), nullptr);
+        cb(SockException(Err_other, "server de"), nullptr);
     }
 }
 
@@ -178,7 +177,7 @@ bool PlatformHelper::update_remote_via(std::pair<std::string, uint32_t> val) {
             tcp_session_->set_local_port(port);
         }
         // 通知上层应用？
-        toolkit::EventPollerPool::Instance().getExecutor()->async(
+        EventPollerPool::Instance().getExecutor()->async(
             [this_ptr = shared_from_this()]() {
                 if (auto platform = std::dynamic_pointer_cast<SuperPlatformImpl>(this_ptr)) {
                     NOTICE_EMIT(
@@ -216,11 +215,8 @@ void PlatformHelper::on_platform_addr_changed(struct sockaddr_storage &addr) {
     bool flag = ((addr.ss_family == AF_INET || addr.ss_family == AF_INET6)) && !areAddressesEqual(remote_addr_, addr);
     if (flag) {
         DebugL << "change platform address " << SockUtil::inet_ntoa((sockaddr *)&addr);
+        std::lock_guard<decltype(remote_addr_mutex_)> lock(remote_addr_mutex_);
         memcpy(&remote_addr_, &addr, sizeof(struct sockaddr_storage));
-        std::lock_guard<decltype(udp_sip_session_map_mutex_)> lock(udp_sip_session_map_mutex_);
-        for (auto &it : udp_sip_session_map_) {
-            it.second->set_peer(addr); // 这个函数会自动纠正ipv4 与 ipv6
-        }
     }
 }
 void PlatformHelper::add_request_proxy(int32_t sn, const std::shared_ptr<RequestProxyImpl> &proxy) {
@@ -239,13 +235,18 @@ void PlatformHelper::uac_send(
     set_message_header(transaction.get());
     get_session(
         [transaction, payload = std::move(payload), weak_this = weak_from_this(),
-         rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+         rcb](const SockException &e, const std::shared_ptr<SipSession> &session) {
             if (e) {
                 return rcb(false, e.what());
             }
             if (!session) {
                 return rcb(false, "got session failed");
             }
+            transaction->ondestroyparam = new std::shared_ptr<SipSession>(session);
+            transaction->ondestroy = [](void * param) {
+                if (!param) return;
+                delete static_cast<std::shared_ptr<SipSession> *>(param);
+            };
             if (0
                 != sip_uac_send(
                     transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
@@ -263,13 +264,18 @@ void PlatformHelper::uac_send2(
     set_message_header(transaction.get());
     get_session(
         [transaction, payload = std::move(payload), weak_this = weak_from_this(),
-         rcb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+         rcb](const SockException &e, const std::shared_ptr<SipSession> &session) {
             if (e) {
                 return rcb(false, e.what(), session);
             }
             if (!session) {
                 return rcb(false, "got session failed", nullptr);
             }
+            transaction->ondestroyparam = new std::shared_ptr<SipSession>(session);
+            transaction->ondestroy = [](void * param) {
+                if (!param) return;
+                delete static_cast<std::shared_ptr<SipSession> *>(param);
+            };
             if (0
                 != sip_uac_send(
                     transaction.get(), payload.data(), static_cast<int>(payload.size()), SipSession::get_transport(),
@@ -307,7 +313,7 @@ void PlatformHelper::uac_send3(
     set_message_header(transaction.get());
 
     get_session(
-    [transaction, payload = std::move(payload), weak_this = weak_from_this(),rcb = std::move(rcb),ecb](const toolkit::SockException &e, const std::shared_ptr<SipSession> &session) {
+    [transaction, payload = std::move(payload), weak_this = weak_from_this(),rcb = std::move(rcb),ecb](const SockException &e, const std::shared_ptr<SipSession> &session) {
         if (e) {
             return ecb(false, e.what());
         }
@@ -339,7 +345,7 @@ void PlatformHelper::set_tcp_session(const std::shared_ptr<SipSession> &session)
     if (session->is_udp()) {
         return;
     }
-    session->set_on_error([session_p = session.get(), weak_this = weak_from_this()](const toolkit::SockException &e) {
+    session->set_on_error([session_p = session.get(), weak_this = weak_from_this()](const SockException &e) {
         if (auto this_ptr = weak_this.lock()) {
             if (this_ptr->tcp_session_.get() == session_p) {
                 this_ptr->tcp_session_.reset();

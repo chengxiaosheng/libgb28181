@@ -92,6 +92,8 @@ struct MediaDescription {
     int32_t download_speed{0};
     uint64_t file_size{0};
     TransportProtocol proto{TransportProtocol::UDP};
+    bool rtcp{true};
+    uint32_t ssrc{0};
     std::vector<PayloadInfo> payloads;
     Direction direction = Direction::SENDRECV;
     Connection connection;
@@ -104,7 +106,6 @@ struct MediaDescription {
         std::string pwd;
         std::vector<ICECandidate> candidates;
     } ice;
-    uint32_t ssrc{0};
     std::string f_param;
     std::unordered_map<std::string, std::string> attributes;
     bool empty() const { return payloads.empty(); }

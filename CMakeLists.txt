@@ -50,6 +50,10 @@ if (WIN32)
     endif ()
 else ()
     target_compile_options(${PROJECT_NAME}_interface INTERFACE
+            "$<$<CONFIG:Release>:-g>"
+            "$<$<CONFIG:Release>:-O2>"
+    )
+    target_compile_options(${PROJECT_NAME}_interface INTERFACE
             "-fPIC"
             "-Wall"
             "-Wextra"

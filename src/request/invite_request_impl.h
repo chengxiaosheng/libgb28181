@@ -96,7 +96,7 @@ private:
     std::shared_ptr<SdpDescription> local_sdp_;
     std::shared_ptr<SdpDescription> remote_sdp_;
     std::weak_ptr<PlatformHelper> platform_helper_;
-    std::atomic<sip_dialog_t *> invite_dialog_;
+    std::atomic<sip_dialog_t *> invite_dialog_{nullptr};
     std::shared_ptr<sip_uac_transaction_t> uac_invite_transaction_;
     std::shared_ptr<toolkit::EventPoller> poller_;
     std::string device_id_;

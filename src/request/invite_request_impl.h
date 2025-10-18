@@ -17,6 +17,7 @@ struct sip_uac_transaction_t;
 struct sip_message_t;
 struct sip_uas_transaction_t;
 struct sip_dialog_t;
+struct cstring_t;
 }
 #endif
 
@@ -36,7 +37,9 @@ public:
 
     void to_bye(const std::string &reason) override;
 
-    static std::shared_ptr<InviteRequestImpl> get_invite(void *);
+    static std::shared_ptr<InviteRequestImpl> get_invite(const struct sip_dialog_t *dialog);
+    static std::shared_ptr<InviteRequestImpl> get_invite(const struct cstring_t * dialog_id);
+    static std::shared_ptr<InviteRequestImpl> get_invite(const std::string& dialog_id);
 
     std::shared_ptr<SdpDescription> local_sdp() const override { return local_sdp_; }
     std::shared_ptr<SdpDescription> remote_sdp() const override { return remote_sdp_; }
@@ -63,30 +66,30 @@ private:
 
     void add_invite();
     void remove_invite();
-    static int on_invite_reply(
-        void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, struct sip_dialog_t *dialog,
-        int code, void **session);
-    static int on_recv_cancel(
-        const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
-        const std::shared_ptr<sip_uas_transaction_t> &transaction, void *session);
-    static int on_recv_bye(
-        const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
-        const std::shared_ptr<sip_uas_transaction_t> &transaction, void *session);
+    static int on_invite_reply(void* param, const struct sip_message_t* reply, struct sip_uac_transaction_t* t, struct sip_dialog_t* dialog, const struct cstring_t* id, int code);
+    // static int on_recv_cancel(
+    //     const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
+    //     const std::shared_ptr<sip_uas_transaction_t> &transaction, void *session);
+    void on_recv_cancel();
+    // static int on_recv_bye(
+    //     const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
+    //     const std::shared_ptr<sip_uas_transaction_t> &transaction, void *session);
+
+    void on_recv_bye();
+
     static int on_recv_invite(
         const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
         const std::shared_ptr<sip_uas_transaction_t> &transaction, const std::shared_ptr<sip_dialog_t> &dialog_ptr,
-        void **session);
-    static int on_recv_ack(
-        const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
-        const std::shared_ptr<sip_uas_transaction_t> &transaction, const std::shared_ptr<sip_dialog_t> &dialog_ptr);
-    static int on_recv_message(
-        const std::shared_ptr<SipSession> &sip_session, const std ::shared_ptr<sip_uas_transaction_t> &transaction,
-        const std ::shared_ptr<sip_message_t> &req, void *dialog_ptr);
-    static int on_recv_info(
-        const std::shared_ptr<SipSession> &sip_session, const std ::shared_ptr<sip_uas_transaction_t> &transaction,
-        const std ::shared_ptr<sip_message_t> &req, void *dialog_ptr);
+        const struct cstring_t* dialog_id);
 
-    static void on_dialog_destroy(void * param);
+    // static int on_recv_ack(
+    //     const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &req,
+    //     const std::shared_ptr<sip_uas_transaction_t> &transaction, const std::shared_ptr<sip_dialog_t> &dialog_ptr);
+    void on_recv_ack();
+
+    int on_recv_info(
+        const std::shared_ptr<SipSession> &sip_session, const std ::shared_ptr<sip_uas_transaction_t> &transaction,
+        const std ::shared_ptr<sip_message_t> &req);
 
     friend std::ostream &operator<<(std::ostream &os, const InviteRequestImpl &msg);
 
@@ -96,7 +99,7 @@ private:
     std::shared_ptr<SdpDescription> local_sdp_;
     std::shared_ptr<SdpDescription> remote_sdp_;
     std::weak_ptr<PlatformHelper> platform_helper_;
-    std::atomic<sip_dialog_t *> invite_dialog_{nullptr};
+    std::shared_ptr<sip_dialog_t> invite_dialog_{nullptr};
     std::shared_ptr<sip_uac_transaction_t> uac_invite_transaction_;
     std::shared_ptr<toolkit::EventPoller> poller_;
     std::string device_id_;

@@ -95,6 +95,12 @@ std::string get_www_authenticate(const struct sip_message_t *msg);
 std::string generate_authorization(const struct sip_message_t *msg, const std::string &username, const std::string &password, const std::string &uri, std::pair<std::string,int> &nc_pair);
 bool is_loopback_ip(const char *ip);
 
+std::string get_dialog_id(const struct sip_dialog_t * dialog);
+std::string get_dialog_id(const struct cstring_t * dialog_id);
+
+std::string get_subscribe_id(const struct sip_subscribe_t *subscribe);
+std::string get_subscribe_id(const struct cstring_t * subscribe_id);
+
 } // namespace gb28181
 
 #endif // gb28181_src_inner_SIP_COMMON_H

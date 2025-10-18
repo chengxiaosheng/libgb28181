@@ -23,7 +23,7 @@
 using namespace gb28181;
 using namespace toolkit;
 
-static std::unordered_map<void *, std::shared_ptr<SubscribeRequestImpl>> subscribe_request_map_; // 对订阅对象本身的存储
+static std::unordered_map<std::string, std::shared_ptr<SubscribeRequestImpl>> subscribe_request_map_; // 对订阅对象本身的存储
 static std::shared_mutex subscribe_request_map_mutex_;
 
 std::shared_ptr<SubscribeRequest> SubscribeRequest::new_subscribe(
@@ -124,11 +124,20 @@ std::shared_ptr<SuperPlatform> SubscribeRequestImpl::get_super_platform() {
     return std::dynamic_pointer_cast<SuperPlatformImpl>(platform_.lock());
 }
 
-std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(void *ptr) {
-    if (ptr == nullptr)
-        return nullptr;
+std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(const struct sip_subscribe_t *subscribe) {
+    if (!subscribe) return nullptr;
+    return get_subscribe(get_subscribe_id(subscribe));
+}
+std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(const struct cstring_t *subscribe_id) {
+    if (subscribe_id && cstrvalid(subscribe_id)) {
+        return get_subscribe(std::string(subscribe_id->p, subscribe_id->n));
+    }
+    return nullptr;
+}
+std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(const std::string &subscribe_id) {
+    if (subscribe_id.empty()) return nullptr;
     std::shared_lock<std::shared_mutex> lock(subscribe_request_map_mutex_);
-    if (auto it = subscribe_request_map_.find(ptr); it != subscribe_request_map_.end()) {
+    if (auto it = subscribe_request_map_.find(subscribe_id); it != subscribe_request_map_.end()) {
         return it->second;
     }
     return nullptr;
@@ -137,10 +146,10 @@ std::shared_ptr<SubscribeRequestImpl> SubscribeRequestImpl::get_subscribe(void *
 int SubscribeRequestImpl::recv_subscribe_request(
     const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &message,
     const std::shared_ptr<sip_uas_transaction_t> &transaction,
-    const std::shared_ptr<struct sip_subscribe_t> &sip_subscribe_ptr, void **sub) {
+    const std::shared_ptr<struct sip_subscribe_t> &sip_subscribe_ptr, const struct cstring_t * subscribe_id) {
 
     // 针对已有订阅的刷新或取消
-    if (auto subscribe = get_subscribe(*sub); subscribe && subscribe->sip_subscribe_ptr_ == sip_subscribe_ptr) {
+    if (auto subscribe = get_subscribe(sip_subscribe_ptr ? sip_subscribe_ptr.get() : nullptr); subscribe && subscribe->sip_subscribe_ptr_ == sip_subscribe_ptr) {
         auto sip_code = subscribe->on_subscribe(message, transaction);
         set_message_expires(transaction.get(), sip_subscribe_ptr->expires);
         return sip_uas_reply(transaction.get(), sip_code, nullptr, 0, sip_session.get());
@@ -198,9 +207,7 @@ int SubscribeRequestImpl::recv_subscribe_request(
     }
     // 回复200 ok
     auto subscribe_ptr = std::make_shared<SubscribeRequestImpl>(platform_ptr, sip_subscribe_ptr);
-    *sub = subscribe_ptr.get();
     subscribe_ptr->subscribe_message_ = subscribe_message_ptr;
-    DebugL << "set subscribe sesstion = " << *sub;
     // 异步广播收到订阅请求
     EventPollerPool::Instance().getPoller()->async(
         [platform_ptr, subscribe_ptr, subscribe_message_ptr]() {
@@ -312,11 +319,11 @@ int SubscribeRequestImpl::on_recv_notify(
 
 void SubscribeRequestImpl::add_subscribe() {
     std::unique_lock<std::shared_mutex> lock(subscribe_request_map_mutex_);
-    subscribe_request_map_[this] = shared_from_this();
+    subscribe_request_map_[get_subscribe_id(sip_subscribe_ptr_.get())] = shared_from_this();
 }
 void SubscribeRequestImpl::del_subscribe() {
     std::unique_lock<std::shared_mutex> lock(subscribe_request_map_mutex_);
-    subscribe_request_map_.erase(this);
+    subscribe_request_map_.erase(get_subscribe_id(sip_subscribe_ptr_.get()));
 }
 
 int SubscribeRequestImpl::time_remain() const {
@@ -342,6 +349,7 @@ void SubscribeRequestImpl::send_notify(const std::shared_ptr<MessageBase> &messa
         });
     }
 }
+
 
 std::string SubscribeRequestImpl::get_notify_state_str() const {
     std::stringstream ss;
@@ -520,13 +528,15 @@ void SubscribeRequestImpl::to_subscribe(uint32_t expires) {
 }
 
 int SubscribeRequestImpl::on_subscribe_reply(
-    void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t, struct sip_subscribe_t *subscribe,
-    int code, void **session) {
+    void* param, const struct sip_message_t* reply, struct sip_uac_transaction_t* t, struct sip_subscribe_t* subscribe, const struct cstring_t* id, int code) {
     std::shared_ptr<sip_message_t> reply_ptr(const_cast<sip_message_t *>(reply), [](struct sip_message_t *p){} /*, sip_message_destroy*/);
     if (!param)
         return 0;
 
-    auto this_ptr = get_subscribe(param);
+    std::shared_ptr<SubscribeRequestImpl> this_ptr;
+    if (auto temp = static_cast<SubscribeRequestImpl *>(param)) {
+        this_ptr = temp->shared_from_this();
+    }
     if (!this_ptr)
         return 0;
 
@@ -538,12 +548,11 @@ int SubscribeRequestImpl::on_subscribe_reply(
 
     // 是否订阅成功
     if (SIP_IS_SIP_SUCCESS(code)) {
-        if (*session != this_ptr.get()) {
-            *session = this_ptr.get();
-            DebugL << "set subscribe session = " << this_ptr.get();
+        this_ptr-> sip_subscribe_ptr_.reset(subscribe, sip_subscribe_release);
+        if (this_ptr-> sip_subscribe_ptr_) {
+            sip_subscribe_addref(subscribe);
         }
-        sip_subscribe_addref(subscribe);
-        this_ptr->sip_subscribe_ptr_.reset(subscribe, [](struct sip_subscribe_t *p) { sip_subscribe_release(p); });
+
         // 取消订阅的操作
         subscribe->expires = this_ptr->expires_;
         if (subscribe->expires) {

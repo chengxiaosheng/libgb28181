@@ -380,7 +380,7 @@ int PlatformHelper::on_response(
 }
 int PlatformHelper::on_recv_message(
     const std::shared_ptr<SipSession> &session, const std::shared_ptr<sip_uas_transaction_t> &transaction,
-    const std::shared_ptr<sip_message_t> &req, void *dialog_ptr) {
+    const std::shared_ptr<sip_message_t> &req) {
     // 验证消息负载
     if (req->payload == nullptr) {
         WarnL << "SIP message payload is null or empty";

@@ -19,6 +19,7 @@ set(LIB_SIP_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/header/sip-header-substate.c
         ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/header/sip-header-uri.c
         ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/header/sip-header-via.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/header/sip-header-event.c
 
         ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/uac/sip-uac.c
         ${CMAKE_CURRENT_SOURCE_DIR}/media-server/libsip/src/uac/sip-uac-ack.c

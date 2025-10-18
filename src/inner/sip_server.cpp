@@ -301,8 +301,7 @@ void SipServer::get_tcp_client(const std::string &host, uint16_t port,
 
 #define RefTransaction(t)                                                                                              \
     sip_uas_transaction_addref(t);                                                                                     \
-    std::shared_ptr<sip_uas_transaction_t> trans_ref(                                                                  \
-        t, [](sip_uas_transaction_t *p) { sip_uas_transaction_release(p); });
+    std::shared_ptr<sip_uas_transaction_t> trans_ref(t, sip_uas_transaction_release);
 
 #define RefSipMessage(m)                                                                                               \
     std::shared_ptr<sip_message_t> req_ptr(                                                                            \
@@ -331,78 +330,71 @@ int SipServer::onregister(
     return SubordinatePlatformImpl::on_recv_register(session_ptr, trans_ref, req_ptr, user_str, location_str, expires);
 }
 int SipServer::oninvite(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_dialog_t *dialog,
-    const void *data, int bytes, void **session) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, struct sip_dialog_t* redialog, const struct cstring_t* id, const void* data, int bytes) {
     set_message_header(t);
     GetSipSession(param);
     RefTransaction(t);
     RefSipMessage(req);
-    std::shared_ptr<sip_dialog_t> dialog_ptr(dialog, [](sip_dialog_t *dialog) {
-        if (dialog != nullptr)
-            sip_dialog_release(dialog);
-    });
-    if (dialog) {
-        sip_dialog_addref(dialog);
+    std::shared_ptr<sip_dialog_t> dialog_ptr(redialog, sip_dialog_release);
+    if (dialog_ptr) {
+        sip_dialog_addref(redialog);
+        // 这是一个 re-invite 请求,
     }
-    return InviteRequestImpl::on_recv_invite(session_ptr, req_ptr, trans_ref, dialog_ptr, session);
+    return InviteRequestImpl::on_recv_invite(session_ptr, req_ptr, trans_ref, dialog_ptr, id);
 }
 int SipServer::onack(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-    struct sip_dialog_t *dialog, int code, const void *data, int bytes) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, struct sip_dialog_t* dialog, const struct cstring_t* id, int code, const void* data, int bytes) {
     set_message_header(t);
-    GetSipSession(param);
-    RefTransaction(t);
-    RefSipMessage(req);
-    std::shared_ptr<sip_dialog_t> dialog_ptr(dialog, [](sip_dialog_t *dialog) {
-        if (dialog != nullptr)
-            sip_dialog_release(dialog);
-    });
-    if (dialog) {
-        sip_dialog_addref(dialog);
+    if (auto invite_ptr = InviteRequestImpl::get_invite(dialog)) {
+        invite_ptr->on_recv_ack();
+    } else {
+        WarnL << "not found invite request, dialog_id = " << get_dialog_id(dialog);
     }
-    return InviteRequestImpl::on_recv_ack(session_ptr, req_ptr, trans_ref, dialog_ptr);
+    return 0;
 }
 
 int SipServer::onprack(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-    struct sip_dialog_t *dialog, const void *data, int bytes) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id, const void* data, int bytes) {
     // sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::onupdate(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-    struct sip_dialog_t *dialog, const void *data, int bytes) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id, const void* data, int bytes) {
     // sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
 int SipServer::oninfo(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-    struct sip_dialog_t *dialog, const struct cstring_t *package, const void *data, int bytes) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id, const struct cstring_t* package, const void* data, int bytes) {
     set_message_header(t);
     GetSipSession(param);
     RefTransaction(t);
     RefSipMessage(req);
-    return InviteRequestImpl::on_recv_info(session_ptr, trans_ref, req_ptr, session);
+
+    if (auto invite_ptr = InviteRequestImpl::get_invite(id)) {
+        return invite_ptr->on_recv_info(session_ptr, trans_ref, req_ptr);
+    }
+    return sip_uas_reply(t, 481, nullptr, 0, param);
 }
-int SipServer::onbye(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
+int SipServer::onbye(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id) {
     set_message_header(t);
-    GetSipSession(param);
-    RefTransaction(t);
-    RefSipMessage(req);
-    return InviteRequestImpl::on_recv_bye(session_ptr, req_ptr, trans_ref, session);
+    if (auto invite_ptr = InviteRequestImpl::get_invite(id)) {
+        invite_ptr->on_recv_bye();
+    }
+    return sip_uas_reply(t, 200, nullptr, 0, param);
 }
-int SipServer::oncancel(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
+int SipServer::oncancel(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id) {
     set_message_header(t);
-    GetSipSession(param);
-    RefTransaction(t);
-    RefSipMessage(req);
-    return InviteRequestImpl::on_recv_cancel(session_ptr, req_ptr, trans_ref, session);
+    if (auto invite_ptr = InviteRequestImpl::get_invite(id)) {
+        invite_ptr->on_recv_cancel();
+    } else if (0) {
+
+    }
+    return sip_uas_reply(t, 200, nullptr, 0, param);
 }
 int SipServer::onsubscribe(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_subscribe_t *subscribe,
-    void **sub) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, struct sip_subscribe_t* subscribe, const struct cstring_t* id) {
     set_message_header(t);
     GetSipSession(param);
     RefTransaction(t);
@@ -412,50 +404,47 @@ int SipServer::onsubscribe(
         sip_subscribe_addref(subscribe);
         subscribe_ptr.reset(subscribe, sip_subscribe_release);
     }
-    return SubscribeRequestImpl::recv_subscribe_request(session_ptr, req_ptr, trans_ref, subscribe_ptr, sub);
+    return SubscribeRequestImpl::recv_subscribe_request(session_ptr, req_ptr, trans_ref, subscribe_ptr, id);
 }
 
 int SipServer::onnotify(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *sub,
-    const struct cstring_t *event) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct sip_event_t* event) {
     set_message_agent(t);
-    DebugL << "on notify , session = " << sub;
-    if (auto subscribe = SubscribeRequestImpl::get_subscribe(sub)) {
-        GetSipSession(param);
-        RefTransaction(t);
-        RefSipMessage(req);
-        // return sip_uas_reply(t, 200, nullptr, 0, param);
-        return subscribe->on_recv_notify(session_ptr, req_ptr, trans_ref);
+    cstring_t subscribe_id;
+    std::string data(256, '\0');
+    GetSipSession(param);
+    RefTransaction(t);
+    RefSipMessage(req);
+    sip_subscribe_id_with_message(&subscribe_id, req, data.data(),data.size(), 1);
+    data.resize(subscribe_id.n);
+    DebugL << "on notify , session = " << data;
+
+    if (auto subscribe_ptr = SubscribeRequestImpl::get_subscribe(&subscribe_id)) {
+        return subscribe_ptr->on_recv_notify(session_ptr, req_ptr, trans_ref);
     }
     // 如果通知负载数据，但无法找到订阅, 将notify消息降级为 message 消息处理
     if (req->payload && req->size > 0) {
-        return onmessage(param, req, t, sub, req->payload, req->size);
+        return onmessage(param, req, t, req->payload, req->size);
     }
     // 直接返回481 会话不存在
     return sip_uas_reply(t, 481, nullptr, 0, param);
 }
 int SipServer::onpublish(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const struct cstring_t *event) {
+    void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct sip_event_t* event) {
     // sip_message_destroy(const_cast<sip_message_t *>(req));
     set_message_agent(t);
     return sip_uas_reply(t, 404, nullptr, 0, param);
 }
-int SipServer::onmessage(
-    void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session, const void *data,
-    int bytes) {
+int SipServer::onmessage(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const void* data, int bytes) {
     set_message_header(t);
     GetSipSession(param);
     RefTransaction(t);
     RefSipMessage(req);
-    if (session) {
-        if (InviteRequestImpl::on_recv_message(session_ptr, trans_ref, req_ptr, session) == 0) {
-            return 0;
-        }
-    }
+
     // 设置通用 header
-    return PlatformHelper::on_recv_message(session_ptr, trans_ref, req_ptr, session);
+    return PlatformHelper::on_recv_message(session_ptr, trans_ref, req_ptr);
 }
-int SipServer::onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session) {
+int SipServer::onrefer(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t) {
     set_message_agent(t);
     // sip_message_destroy(const_cast<sip_message_t *>(req));
     return sip_uas_reply(t, 404, nullptr, 0, param);

@@ -26,7 +26,7 @@ sip_timer_t sip_timer_start(int timeout, sip_timer_handle handler, void* usrptr)
     context->task = poller->doDelayTask(timeout, [handler, usrptr, context]() {
         TraceL << "handle timer " << context;
         bool expected =  false;
-        if (context->handle_flag.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        if (context->handle_flag.compare_exchange_strong(expected, true)) {
             handler(usrptr);
         }
         return 0;
@@ -46,7 +46,7 @@ int sip_timer_stop(sip_timer_t* id) {
         return -1;
     }
     bool expected = false;
-    bool flag = context->handle_flag.compare_exchange_strong(expected, true, std::memory_order_acq_rel);
+    bool was_executed = context->handle_flag.exchange(true);
     context->poller->async([context]() {
         if (auto task = context->task.lock()) {
             task->cancel();
@@ -54,7 +54,7 @@ int sip_timer_stop(sip_timer_t* id) {
         delete context;
     });
     *id = nullptr;
-    return flag ? 0 : -1;
+    return was_executed ? -1 : 0;
 }
 
 

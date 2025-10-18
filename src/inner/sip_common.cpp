@@ -1,3 +1,4 @@
+#include "sip-subscribe.h"
 #ifdef WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -245,7 +246,7 @@ std::string get_message_contact(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_CONTACT);
-    if (cstrvalid(hv)) {
+    if (hv && cstrvalid(hv)) {
         return std::string(hv->p, hv->n);
     }
     return "";
@@ -267,7 +268,7 @@ std::string get_invite_subject(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     auto hv = sip_message_get_header_by_name(msg, SIP_HEADER_SUBJECT);
-    if (cstrvalid(hv)) {
+    if (hv && cstrvalid(hv)) {
         return std::string(hv->p, hv->n);
     }
     return "";
@@ -388,7 +389,7 @@ std::string get_www_authenticate(const struct sip_message_t *msg) {
     if (!msg)
         return "";
     auto auth_str = sip_message_get_header_by_name(msg, SIP_HEADER_WWW_AUTHENTICATE);
-    if (cstrvalid(auth_str)) {
+    if (auth_str && cstrvalid(auth_str)) {
         return std::string(auth_str->p, auth_str->n);
     }
     return "";
@@ -486,6 +487,34 @@ bool is_loopback_ip(const char *ip){
 
     // 不是有效的 IPv4 或 IPv6 地址
     return false;
+}
+std::string get_dialog_id(const struct sip_dialog_t *dialog) {
+    if (!dialog) return {};
+    std::string dialog_id_str(256, '\0');
+    struct cstring_t dialog_id{};
+    sip_dialog_id(&dialog_id, dialog, dialog_id_str.data(), dialog_id_str.size());
+    dialog_id_str.resize(dialog_id.n);
+    return dialog_id_str;
+}
+std::string get_dialog_id(const struct cstring_t *dialog_id) {
+    if (dialog_id && cstrvalid(dialog_id)) {
+        return std::string(dialog_id->p, dialog_id->n);
+    }
+    return {};
+}
+std::string get_subscribe_id(const struct sip_subscribe_t *subscribe) {
+    if (!subscribe || !subscribe->dialog) return {};
+    std::string subscribe_id_str(256, '\0');
+    struct cstring_t subscribe_id{};
+    sip_subscribe_id(&subscribe_id, subscribe, subscribe_id_str.data(), subscribe_id_str.size());
+    subscribe_id_str.resize(subscribe_id.n);
+    return subscribe_id_str;
+}
+std::string get_subscribe_id(const struct cstring_t *subscribe_id) {
+    if (subscribe_id && cstrvalid(subscribe_id)) {
+        return std::string(subscribe_id->p, subscribe_id->n);
+    }
+    return {};
 }
 
 } // namespace gb28181

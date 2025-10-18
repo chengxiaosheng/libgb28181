@@ -86,38 +86,19 @@ private:
     void init_agent();
 
 
-    static int onregister(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const char *user,
-        const char *location, int expires);
-    static int oninvite(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, struct sip_dialog_t *dialog,
-        const void *data, int bytes, void **session);
-    static int onack(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-        struct sip_dialog_t *dialog, int code, const void *data, int bytes);
-    static int onprack(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-        struct sip_dialog_t *dialog, const void *data, int bytes);
-    static int onupdate(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-        struct sip_dialog_t *dialog, const void *data, int bytes);
-    static int oninfo(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session,
-        struct sip_dialog_t *dialog, const struct cstring_t *package, const void *data, int bytes);
-    static int onbye(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session);
-    static int oncancel(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session);
-    static int onsubscribe(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t,
-        struct sip_subscribe_t *subscribe, void **sub);
-    static int onnotify(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *sub,
-        const struct cstring_t *event);
-    static int onpublish(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const struct cstring_t *event);
-    static int onmessage(
-        void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session, const void *data,
-        int bytes);
-    static int onrefer(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, void *session);
+    static int onregister(void *param, const struct sip_message_t *req, struct sip_uas_transaction_t *t, const char *user,const char *location, int expires);
+    static int oninvite(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, struct sip_dialog_t* redialog, const struct cstring_t* id, const void* data, int bytes);
+    static int onack(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, struct sip_dialog_t* dialog, const struct cstring_t* id, int code, const void* data, int bytes);
+    static int onprack(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id, const void* data, int bytes);
+    static int onupdate(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id, const void* data, int bytes);
+    static int oninfo(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id, const struct cstring_t* package, const void* data, int bytes);
+    static int onbye(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id);
+    static int oncancel(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct cstring_t* id);
+    static int onsubscribe(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, struct sip_subscribe_t* subscribe, const struct cstring_t* id);
+    static int onnotify(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct sip_event_t* event);
+    static int onpublish(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const struct sip_event_t* event);
+    static int onmessage(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t, const void* data, int bytes);
+    static int onrefer(void* param, const struct sip_message_t* req, struct sip_uas_transaction_t* t);
 
 private:
     local_account account_; // 本地账户信息

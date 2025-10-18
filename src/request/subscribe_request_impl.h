@@ -54,12 +54,15 @@ public:
 
     void send_notify(const std::shared_ptr<MessageBase> &message, SubscriberNotifyReplyCallback rcb) override;
 
-    static std::shared_ptr<SubscribeRequestImpl> get_subscribe(void *ptr);
+    static std::shared_ptr<SubscribeRequestImpl> get_subscribe(const struct  sip_subscribe_t *subscrib);
+    static std::shared_ptr<SubscribeRequestImpl> get_subscribe(const struct cstring_t * subscribe_id);
+    static std::shared_ptr<SubscribeRequestImpl> get_subscribe(const std::string &subscribe_id);
+
 
     static int recv_subscribe_request(
         const std::shared_ptr<SipSession> &sip_session, const std::shared_ptr<sip_message_t> &message,
         const std::shared_ptr<sip_uas_transaction_t> &transaction,
-        const std::shared_ptr<struct sip_subscribe_t> &sip_subscribe_ptr, void **sub);
+        const std::shared_ptr<struct sip_subscribe_t> &sip_subscribe_ptr, const struct cstring_t * subscribe_id);
 
     /**
      * 收到一个通知
@@ -78,8 +81,7 @@ protected:
 private:
     // 订阅请求的回复
     static int on_subscribe_reply(
-        void *param, const struct sip_message_t *reply, struct sip_uac_transaction_t *t,
-        struct sip_subscribe_t *subscribe, int code, void **session);
+        void* param, const struct sip_message_t* reply, struct sip_uac_transaction_t* t, struct sip_subscribe_t* subscribe, const struct cstring_t* id, int code);
 
     void add_subscribe();
     void del_subscribe();
